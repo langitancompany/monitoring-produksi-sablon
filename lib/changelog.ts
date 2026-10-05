@@ -2,7 +2,7 @@
 
 export const APP_INFO = {
   name: "LCO SuperApp",
-  version: "V.16.0",
+  version: "V.17.0",
   purpose: "Aplikasi produksi Sablon, Langitan.co.",
   creator: "abdllahmajid",
   creationDate: "13 Desember 2025",
@@ -17,7 +17,7 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-  version: "16.0",
+  version: "17.0",
   date: "2026-09-14",
   changes: [
     "Redesign visual 'LCO Flat' diterapkan ke seluruh menu PO Management (Produk, Reseller, Packing, Pengiriman): palet netral zinc, satu warna aksen teal untuk elemen interaktif/data, dan hijau tua untuk tombol aksi utama.",
