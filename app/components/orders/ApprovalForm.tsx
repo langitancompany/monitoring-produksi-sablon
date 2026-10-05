@@ -336,7 +336,7 @@ export default function ApprovalForm({ order }: { order: Order }) {
               lebarnya hanya selebar kolom kiri. File: public/header-nota.png */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/header-approval.png"
+            src="/Header-approval.png"
             alt="Langitan Company"
             style={{
               display: "block",
