@@ -56,10 +56,12 @@ export async function GET(request: Request) {
 
     // 3. Cari Token User Target (Produksi, Admin, Supervisor)
     const targetRoles = ['produksi', 'admin', 'supervisor'];
+    // Cek `role` (role utama) DAN `roles` (role ganda) — lihat lib/notificationHelper.ts
+    const targetList = targetRoles.join(',');
     const { data: targetUsers } = await supabase
       .from('users')
       .select('id')
-      .in('role', targetRoles);
+      .or(`role.in.(${targetList}),roles.ov.{${targetList}}`);
 
     if (!targetUsers || targetUsers.length === 0) {
       return NextResponse.json({ message: 'Tidak ada user dengan role target.' });

@@ -52,13 +52,19 @@ export async function requireUser(
   if (allowedRoles && allowedRoles.length > 0) {
     const { data: row } = await getSupabaseAdmin()
       .from('users')
-      .select('role')
+      .select('role, roles')
       .eq('id', user.id)
       .single();
 
     role = row?.role ?? null;
 
-    if (!role || !allowedRoles.includes(role)) {
+    // Role ganda: lolos kalau role utama ATAU salah satu isi `roles` diizinkan.
+    const owned: string[] = [
+      ...(role ? [role] : []),
+      ...(Array.isArray(row?.roles) ? row.roles : []),
+    ];
+
+    if (!owned.some((r) => allowedRoles.includes(r))) {
       return {
         ok: false,
         response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }),

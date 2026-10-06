@@ -59,11 +59,15 @@ export const sendToRoles = async (
   const supabase = createClient();
   
   try {
-    // Cari User ID yang punya role tersebut
+    // Cari User ID yang punya salah satu role tersebut.
+    // Cek DUA kolom: `role` (role utama, data lama) dan `roles` (array, role ganda).
+    // Kalau hanya cek `role`, user dengan role ganda (mis. QC + Produksi) yang role
+    // utamanya 'produksi' tidak akan menerima notifikasi untuk role 'qc'.
+    const list = roles.join(',');
     const { data: users, error: fetchError } = await supabase
       .from('users')
       .select('id')
-      .in('role', roles);
+      .or(`role.in.(${list}),roles.ov.{${list}}`);
 
     if (fetchError) {
       console.error('❌ Error fetch users by role:', fetchError);
