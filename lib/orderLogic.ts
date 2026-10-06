@@ -7,8 +7,23 @@ import { sendToRoles, sendToAllUsers } from './notificationHelper';
  * Mengatur siapa yang menerima pesan berdasarkan status dan deadline
  * ✅ UPDATED: Sekarang menyertakan order_id untuk navigasi
  */
+// ── TAMBAHAN ── antrikan pesan WhatsApp (diproses server + wa-gateway).
+// Sengaja tidak di-await & gagal diam-diam: WA bermasalah tidak boleh mengganggu alur order.
+const notifyWa = (orderId: string, event: 'created' | 'status_changed') => {
+  fetch('/api/wa/notify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderId, event }),
+  }).catch(() => {});
+};
+
 export const triggerOrderNotifications = async (orderData: Order, oldStatus?: string) => {
   const finalStatus = orderData.status;
+
+  // ── TAMBAHAN ── WhatsApp: order baru & perubahan status
+  if (!oldStatus) notifyWa(orderData.id, 'created');
+  else if (oldStatus !== finalStatus) notifyWa(orderData.id, 'status_changed');
+
   const title = `Update: ${orderData.kode_produksi}`;
   const orderId = orderData.id; // ✅ Ambil ID pesanan
 

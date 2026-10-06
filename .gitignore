@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# wagateway
+wa-gateway/node_modules
+wa-gateway/dist
+wa-gateway/auth-local

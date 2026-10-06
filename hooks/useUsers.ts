@@ -41,6 +41,7 @@ export function useUsers({ supabase, showAlert, showConfirm }: UseUsersProps) {
       role: primaryRole(roles),
       roles,
       username: u.username,
+      no_wa: u.no_wa?.trim() || null, // ── TAMBAHAN ── nomor WhatsApp untuk notifikasi
     };
     if (u.permissions) p.permissions = u.permissions;
     if (u.password?.trim()) p.password = u.password;

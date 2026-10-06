@@ -87,6 +87,8 @@ export interface UserData {
   address?: string;
   dob?: string;
   avatar_url?: string;
+  // ── TAMBAHAN ── nomor WhatsApp untuk notifikasi (08xx / 62xx)
+  no_wa?: string | null;
 }
 
 // ─── Announcment ─────────────────────────────────────────────────────────────
