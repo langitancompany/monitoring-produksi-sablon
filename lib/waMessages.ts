@@ -74,6 +74,15 @@ export const pesanRevisiGrup = (o: WaOrder, catatanQC: string, mention: string[]
     mention.length ? `\nMohon diperbaiki: ${sebut(mention)}` : '',
   ].join('\n');
 
+// 4b) Pesanan selesai sepenuhnya → grup (info saja, tanpa mention)
+export const pesanSelesaiGrup = (o: WaOrder, pj?: string, helper?: string) =>
+  [
+    '✅ *PESANAN SELESAI*',
+    '',
+    baris(o),
+    `PJ: ${pj ?? '-'}${helper ? ` • Helper: ${helper}` : ''}`,
+  ].join('\n');
+
 // 5) Pengingat deadline → personal (rangkum semua order orang itu jadi 1 pesan)
 export interface ItemDeadline { order: WaOrder; sisaHari: number } // sisaHari<0 = telat
 const labelSisa = (d: number) =>

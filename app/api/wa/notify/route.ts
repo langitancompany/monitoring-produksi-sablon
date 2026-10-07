@@ -9,7 +9,7 @@ import { enqueueWa, orang, ORDER_WITH_PEOPLE, type WaItem } from '@/lib/waQueue'
 import { getWaSettings } from '@/lib/waSettings';
 import {
   pesanOrderBaruGrup, pesanOrderBaruPersonal, pesanTahapPersonal, adaPesanTahap,
-  pesanKendalaGrup, pesanRevisiGrup,
+  pesanKendalaGrup, pesanRevisiGrup, pesanSelesaiGrup,
 } from '@/lib/waMessages';
 
 export const dynamic = 'force-dynamic';
@@ -36,11 +36,18 @@ export async function POST(request: NextRequest) {
 
     const { pj, helper, mention } = orang(o);
     const grup = cfg.groupJid;
-    const bucket = Math.floor(Date.now() / 60_000); // cegah dobel klik dalam 1 menit
+    // Jendela 10 menit: cegah dobel klik / dobel panggilan dari browser. (Dulu 1 menit, sehingga
+    // panggilan berulang tiap menit bisa membanjiri PJ & helper dengan pesan yang sama.)
+    const bucket = Math.floor(Date.now() / (10 * 60_000));
     const items: WaItem[] = [];
     const base = { order_id: o.id as string };
 
     if (event === 'created') {
+      // Hanya untuk order yang benar-benar baru dibuat; order lama tidak boleh "diumumkan ulang"
+      const umurMenit = (Date.now() - Date.parse(o.created_at)) / 60_000;
+      if (!Number.isFinite(umurMenit) || umurMenit > 15) {
+        return NextResponse.json({ success: true, queued: 0, skipped: 'bukan_order_baru' });
+      }
       if (grup) items.push({
         ...base, target_type: 'group', target: grup, event_type: 'order_baru',
         message: pesanOrderBaruGrup(o, pj?.nama, helper?.nama, mention), mentions: mention,
@@ -72,6 +79,12 @@ export async function POST(request: NextRequest) {
           ...base, target_type: 'group', target: grup, event_type: 'revisi',
           message: pesanRevisiGrup(o, o.finishing_qc?.notes ?? '', mention), mentions: mention,
           dedupe_key: `revisi:${o.id}:${bucket}`,
+        });
+      } else if (status === 'Selesai' && grup) {
+        items.push({
+          ...base, target_type: 'group', target: grup, event_type: 'selesai',
+          message: pesanSelesaiGrup(o, pj?.nama, helper?.nama),
+          dedupe_key: `selesai:${o.id}`, // order selesai sekali saja → 1 pesan seumur order
         });
       } else if (adaPesanTahap(status)) {
         for (const [peran, p] of [['pj', pj], ['helper', helper]] as const) {

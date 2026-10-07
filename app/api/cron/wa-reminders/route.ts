@@ -15,6 +15,10 @@ export const dynamic = 'force-dynamic';
 // Kirim pengingat kalau sisa hari ≤ ini (termasuk yang sudah telat)
 const BATAS_HARI = 2;
 
+// Berhenti mengingatkan order yang sudah telat lebih dari ini (hari). Mencegah order lama/terlupa/
+// data uji mengirim pengingat setiap pagi selamanya. Ubah angka ini kalau ingin lebih lama/pendek.
+const BATAS_TELAT_HARI = 14;
+
 // Tanggal hari ini menurut WIB (bukan UTC) → format YYYY-MM-DD
 const todayWIB = () =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
@@ -47,7 +51,9 @@ export async function GET(request: Request) {
 
     for (const o of orders ?? []) {
       const sisaHari = selisihHari(o.deadline, today);
-      if (sisaHari > BATAS_HARI) continue;
+      if (!Number.isFinite(sisaHari)) continue;          // deadline kosong / format salah
+      if (sisaHari > BATAS_HARI) continue;               // belum mepet
+      if (sisaHari < -BATAS_TELAT_HARI) continue;        // sudah telat terlalu lama
       const item = { order: o, sisaHari };
       urgent.push(item);
 
