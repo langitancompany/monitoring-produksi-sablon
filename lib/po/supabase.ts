@@ -3,7 +3,7 @@
 
 import { createClient } from '@/lib/supabase/client';
 import { POSetting, POProduct, POOrderPayload } from '@/types/po';
-import { calculateItemPrice } from './pricing';
+import { submitOrderViaApi, updateOrderViaApi } from './order-api';
 
 /**
  * Ambil setting PO aktif
@@ -101,64 +101,17 @@ export interface POResellerOrder {
 }
 
 /**
- * Submit pesanan ke database.
- * Harga DIHITUNG ULANG di sini berdasarkan data DB, bukan dari client.
+ * Submit pesanan ke database (portal reseller).
+ * Harga DIHITUNG ULANG di server (/api/po/orders) berdasarkan data DB —
+ * bukan dari browser. Parameter `products` dipertahankan agar pemanggil
+ * lama tidak berubah, tapi tidak dipakai lagi.
  */
 export async function submitOrder(
   payload: POOrderPayload,
   setting: POSetting,
-  products: POProduct[]
-): Promise<{ success: boolean; po_number?: string; error?: string }> {
-  const supabase = createClient();
-
-  // Hitung ulang total (validasi harga dari server)
-  const pricingSettings = {
-    sleeveSurcharge: setting.sleeve_surcharge ?? 0,
-    xxlSurcharge: setting.xxl_surcharge ?? 0,
-    sweaterXxlSurcharge: setting.sweater_xxl_surcharge ?? 0,
-  };
-
-  let totalAmount = 0;
-  const validatedItems = payload.order_items.map((item) => {
-    const product = products.find((p) => p.id === item.product_id);
-    const basePrice = product ? product.base_price : 0;
-
-    const hargaSatuan = calculateItemPrice(
-      basePrice,
-      item.ukuran,
-      item.lengan,
-      product || {},
-      pricingSettings
-    );
-
-    const subtotal = hargaSatuan * item.qty;
-    totalAmount += subtotal;
-
-    return { ...item, harga_satuan: hargaSatuan, subtotal };
-  });
-
-  // Generate nomor PO
-  const { data: poNumber } = await supabase.rpc('generate_po_number', {
-    p_type: payload.customer_type,
-  });
-
-  // Insert pesanan
-  const { error } = await supabase.from('po_orders').insert({
-  po_number:        poNumber,
-  customer_type:    payload.customer_type,
-  reseller_id:      payload.reseller_id ?? null,
-  customer_name:    payload.customer_name,
-  customer_wa:      payload.customer_wa,
-  delivery_method:  payload.delivery_method,
-  shipping_address: payload.shipping_address ?? null,
-  order_items:      validatedItems,
-  notes:            payload.notes ?? null,
-  total_amount:     totalAmount,
-  po_setting_id:    setting.id,   // ← WAJIB ditambahkan
-});
-
-  if (error) return { success: false, error: error.message };
-  return { success: true, po_number: poNumber };
+  _products?: POProduct[]
+): Promise<{ success: boolean; po_number?: string; total_amount?: number; error?: string }> {
+  return submitOrderViaApi(payload, setting.id);
 }
 
 // 1. Fungsi Hapus Order
@@ -178,26 +131,14 @@ export async function deleteResellerOrder(poNumber: string, resellerId: string) 
 export async function updateResellerOrder(
   poNumber: string,
   payload: any,
-  setting: POSetting,
-  products: POProduct[]
-): Promise<{ success: boolean; error?: string }> {
-  const total_amount = payload.order_items.reduce(
-    (sum: number, item: any) => sum + item.subtotal, 0
-  );
-
-  const res = await fetch('/api/po/orders', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      po_number: poNumber,
-      reseller_id: payload.reseller_id,
-      notes: payload.notes,
-      order_items: payload.order_items,
-      total_amount,
-    }),
+  _setting?: POSetting,
+  _products?: POProduct[]
+): Promise<{ success: boolean; total_amount?: number; error?: string }> {
+  // Total & harga item dihitung ulang di server; yang dikirim hanya varian + qty.
+  return updateOrderViaApi({
+    po_number: poNumber,
+    reseller_id: payload.reseller_id,
+    notes: payload.notes,
+    order_items: payload.order_items,
   });
-
-  const json = await res.json();
-  if (!res.ok) return { success: false, error: json.error };
-  return { success: true };
 }

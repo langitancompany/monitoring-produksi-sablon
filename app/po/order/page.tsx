@@ -153,7 +153,7 @@ function OrderFormContent() {
 
       setSuccessData({
         kodePO: result.po_number || "ERROR",
-        total: grandTotal,
+        total: result.total_amount ?? grandTotal,
         items: cart, // ✅ simpan dulu isi keranjang sebelum dikosongkan
       });
       clearCart();

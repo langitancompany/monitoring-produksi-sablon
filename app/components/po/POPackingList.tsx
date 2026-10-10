@@ -9,6 +9,7 @@ import {
 } from "@/lib/po/admin";
 import { POOrder, POOrderItem, POSetting } from "@/types/po";
 import POOrderPrintSlip from "./POOrderPrintSlip";
+import { printHtmlPages } from "@/lib/po/print-frame";
 import {
   Search,
   Printer,
@@ -301,81 +302,27 @@ export default function POPackingList({ poId }: POPackingListProps) {
       )
       .join("");
 
-    // Dokumen HTML BERDIRI SENDIRI, terpisah total dari halaman utama —
-    // sama seperti mekanisme cetak resi di tab Pengiriman, supaya tidak
-    // pernah "kosong" gara-gara CSS/layout halaman utama berubah.
-    const printDocument = `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Cetak Invoice</title>
-    <style>
-      * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { font-family: Arial, Helvetica, sans-serif; }
-      .po-print-page {
-        page-break-after: always;
-        break-after: page;
-        page-break-inside: avoid;
-        break-inside: avoid;
-      }
-      .po-print-page:last-child {
-        page-break-after: auto;
-        break-after: auto;
-      }
-      @page {
-        size: 210mm 297mm portrait;
-        margin: 0;
-      }
-    </style>
-  </head>
-  <body>${pagesHtml}</body>
-</html>`;
-
-    // Buat iframe tersembunyi khusus untuk cetak.
-    const iframe = document.createElement("iframe");
-    iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
-    iframe.style.border = "0";
-    iframe.setAttribute("aria-hidden", "true");
-    document.body.appendChild(iframe);
-
-    const cleanup = () => {
-      setPrinting(false);
-      setTimeout(() => {
-        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-      }, 500);
-    };
-
-    const iframeDoc = iframe.contentWindow?.document;
-    if (!iframeDoc) {
-      setPrinting(false);
-      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-      alert("Gagal menyiapkan dokumen cetak. Coba lagi.");
-      return;
-    }
-
-    iframeDoc.open();
-    iframeDoc.write(printDocument);
-    iframeDoc.close();
-
-    let hasPrinted = false;
-    const triggerPrint = () => {
-      if (hasPrinted) return;
-      hasPrinted = true;
-      iframe.contentWindow?.focus();
-      iframe.contentWindow?.print();
-    };
-
-    iframe.onload = triggerPrint;
-    setTimeout(triggerPrint, 400);
-
-    if (iframe.contentWindow) {
-      iframe.contentWindow.onafterprint = cleanup;
-    }
-    setTimeout(cleanup, 5000);
+    // Dicetak lewat iframe terpisah; stylesheet aplikasi (Tailwind) disalin
+    // ke dalamnya oleh helper supaya tampilan invoice sama seperti aslinya.
+    printHtmlPages({
+      title: "Cetak Invoice",
+      pagesHtml,
+      pageCss: `
+        .po-print-page {
+          page-break-after: always;
+          break-after: page;
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
+        .po-print-page:last-child {
+          page-break-after: auto;
+          break-after: auto;
+        }
+        @page { size: 210mm 297mm portrait; margin: 0; }
+      `,
+      onDone: () => setPrinting(false),
+      onError: (msg) => alert(msg),
+    });
   };
 
   if (loading) {

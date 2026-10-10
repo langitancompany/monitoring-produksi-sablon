@@ -2,6 +2,7 @@
 // Fungsi Supabase khusus untuk admin PO — semua perlu auth
 
 import { thumbPath } from './images';
+import { submitOrderViaApi } from './order-api';
 import { createClient } from '@/lib/supabase/client';
 import { POSetting, POProduct, POOrder, POResellerFull,POOrderItem } from '@/types/po';
 
@@ -199,46 +200,19 @@ export async function deleteReseller(
 // ORDERS
 // ─────────────────────────────────────────────
 
+/**
+ * Kirim pesanan baru (dipakai halaman pesanan publik).
+ * Harga, total, nomor PO, dan status PO (aktif/periode) divalidasi di server
+ * lewat /api/po/orders — nilai harga dari browser tidak dipercaya.
+ * Parameter `products` dipertahankan agar pemanggil lama tidak berubah,
+ * tapi tidak dipakai lagi.
+ */
 export async function submitOrder(
   payload: any,
   setting: POSetting,
-  products: POProduct[]
-): Promise<{ success: boolean; po_number?: string; error?: string }> {
-  const supabase = createClient();
-
-  const total_amount = payload.order_items.reduce(
-    (sum: number, item: any) => sum + item.subtotal,
-    0
-  );
-
-  const dateStr = new Date().toISOString().slice(2, 10).replace(/-/g, '');
-  const randomStr = Math.floor(1000 + Math.random() * 9000).toString();
-  const po_number = `PO-${dateStr}-${randomStr}`;
-
-  const orderData = {
-    po_number: po_number,
-    customer_type: payload.customer_type,
-    customer_name: payload.customer_name,
-    customer_wa: payload.customer_wa,
-    delivery_method: payload.delivery_method,
-    shipping_address: payload.shipping_address,
-    order_items: payload.order_items,
-    total_amount: total_amount,
-    reseller_id: payload.reseller_id || null,
-    po_setting_id: setting.id,   // ← WAJIB ditambahkan
-  };
-
-  const { data, error } = await supabase
-    .from('po_orders')
-    .insert(orderData)
-    .select('po_number')
-    .single();
-
-  if (error) {
-    return { success: false, error: error.message };
-  }
-
-  return { success: true, po_number: data.po_number };
+  _products?: POProduct[]
+): Promise<{ success: boolean; po_number?: string; total_amount?: number; error?: string }> {
+  return submitOrderViaApi(payload, setting.id);
 }
 
 export async function getAllPOOrders(poId?: string): Promise<POOrder[]> {

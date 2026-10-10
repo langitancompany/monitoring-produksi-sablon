@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { getAllPOOrders, getPOSettingAdmin } from "@/lib/po/admin";
 import { POOrder, POSetting } from "@/types/po";
 import POOrderReceiptA6 from "./POOrderReceiptA6";
+import { printHtmlPages } from "@/lib/po/print-frame";
 import {
   Search,
   Printer,
@@ -105,92 +106,31 @@ export default function POShippingList({ poId }: POShippingListProps) {
       )
       .join("");
 
-    // Dokumen HTML BERDIRI SENDIRI, terpisah total dari halaman utama.
-    // Tidak ada yang perlu disembunyikan/di-hidden — iframe ini isinya
-    // memang cuma resi yang mau dicetak, jadi tidak mungkin "kosong" gara-gara
-    // CSS/layout halaman utama berubah atau bentrok.
-    const printDocument = `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Cetak Resi</title>
-    <style>
-      * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { font-family: Arial, Helvetica, sans-serif; }
-      .po-print-page {
-        width: 105mm;
-        min-height: 148mm;
-        padding: 7mm;
-        box-sizing: border-box;
-        page-break-after: always;
-        break-after: page;
-        page-break-inside: avoid;
-        break-inside: avoid;
-      }
-      .po-print-page:last-child {
-        page-break-after: auto;
-        break-after: auto;
-      }
-      @page {
-        size: 105mm 148mm portrait;
-        margin: 0;
-      }
-    </style>
-  </head>
-  <body>${pagesHtml}</body>
-</html>`;
-
-    // Buat iframe tersembunyi khusus untuk cetak.
-    const iframe = document.createElement("iframe");
-    iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
-    iframe.style.border = "0";
-    iframe.setAttribute("aria-hidden", "true");
-    document.body.appendChild(iframe);
-
-    const cleanup = () => {
-      setPrinting(false);
-      // Beri jeda sebelum melepas iframe, supaya proses print sempat
-      // benar-benar selesai diproses browser.
-      setTimeout(() => {
-        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-      }, 500);
-    };
-
-    const iframeDoc = iframe.contentWindow?.document;
-    if (!iframeDoc) {
-      setPrinting(false);
-      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-      alert("Gagal menyiapkan dokumen cetak. Coba lagi.");
-      return;
-    }
-
-    iframeDoc.open();
-    iframeDoc.write(printDocument);
-    iframeDoc.close();
-
-    let hasPrinted = false;
-    const triggerPrint = () => {
-      if (hasPrinted) return;
-      hasPrinted = true;
-      iframe.contentWindow?.focus();
-      iframe.contentWindow?.print();
-    };
-
-    iframe.onload = triggerPrint;
-    // Fallback: beberapa browser tidak konsisten memicu onload setelah
-    // document.write, jadi kita jaga-jaga dengan timeout singkat.
-    setTimeout(triggerPrint, 400);
-
-    if (iframe.contentWindow) {
-      iframe.contentWindow.onafterprint = cleanup;
-    }
-    // Fallback pembersihan kalau 'afterprint' tidak pernah terpicu
-    // (mis. dialog print dibatalkan di beberapa browser lama).
-    setTimeout(cleanup, 5000);
+    // Dicetak lewat iframe terpisah; stylesheet aplikasi (Tailwind) disalin
+    // ke dalamnya oleh helper supaya tampilan resi sama seperti aslinya.
+    printHtmlPages({
+      title: "Cetak Resi",
+      pagesHtml,
+      pageCss: `
+        .po-print-page {
+          width: 105mm;
+          min-height: 148mm;
+          padding: 7mm;
+          box-sizing: border-box;
+          page-break-after: always;
+          break-after: page;
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
+        .po-print-page:last-child {
+          page-break-after: auto;
+          break-after: auto;
+        }
+        @page { size: 105mm 148mm portrait; margin: 0; }
+      `,
+      onDone: () => setPrinting(false),
+      onError: (msg) => alert(msg),
+    });
   };
 
   if (loading) {
