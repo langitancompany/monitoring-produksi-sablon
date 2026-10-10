@@ -1,37 +1,88 @@
 import React from "react";
-import { Clock, CheckCircle2, AlertCircle } from "lucide-react";
-import { PaymentStatus } from "./types";
+import {
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  Ban,
+  XCircle,
+  FileQuestion,
+  ArrowUpRight,
+} from "lucide-react";
+import type { OrderPaymentStatus, PaymentStatus } from "@/lib/finance/types";
 
-const STATUS_CONFIG: Record<
-  PaymentStatus,
-  { cls: string; icon: React.ReactNode; label: string }
+const BASE =
+  "inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap";
+
+const ORDER_STATUS: Record<
+  OrderPaymentStatus,
+  { cls: string; icon: React.ReactNode }
 > = {
-  "Belum DP": {
-    cls: "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-100 dark:border-red-900/40",
+  "Belum Ditagih": {
+    cls: "bg-zinc-50 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800",
+    icon: <FileQuestion className="w-3 h-3" />,
+  },
+  "Belum Bayar": {
+    cls: "bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-red-100 dark:border-red-900/50",
     icon: <AlertCircle className="w-3 h-3" />,
-    label: "Belum DP",
   },
   DP: {
-    cls: "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900/40",
+    cls: "bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900/50",
     icon: <Clock className="w-3 h-3" />,
-    label: "DP",
   },
   Lunas: {
-    cls: "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/40",
+    cls: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/50",
     icon: <CheckCircle2 className="w-3 h-3" />,
-    label: "Lunas",
+  },
+  "Kelebihan Bayar": {
+    cls: "bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400 border-violet-100 dark:border-violet-900/50",
+    icon: <ArrowUpRight className="w-3 h-3" />,
   },
 };
 
-export function StatusBadge({ status }: { status?: PaymentStatus }) {
-  const { cls, icon, label } = STATUS_CONFIG[status ?? "Belum DP"];
-
+/** Status tagihan order (dihitung otomatis oleh database). */
+export function StatusBadge({ status }: { status: OrderPaymentStatus }) {
+  const cfg = ORDER_STATUS[status] ?? ORDER_STATUS["Belum Ditagih"];
   return (
-    <span
-      className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${cls}`}
-    >
-      {icon}
-      {label}
+    <span className={`${BASE} ${cfg.cls}`}>
+      {cfg.icon}
+      {status}
+    </span>
+  );
+}
+
+const PAY_STATUS: Record<
+  PaymentStatus,
+  { label: string; cls: string; icon: React.ReactNode }
+> = {
+  pending: {
+    label: "Menunggu verifikasi",
+    cls: "bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900/50",
+    icon: <Clock className="w-3 h-3" />,
+  },
+  verified: {
+    label: "Terverifikasi",
+    cls: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/50",
+    icon: <CheckCircle2 className="w-3 h-3" />,
+  },
+  rejected: {
+    label: "Ditolak",
+    cls: "bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-red-100 dark:border-red-900/50",
+    icon: <XCircle className="w-3 h-3" />,
+  },
+  void: {
+    label: "Dibatalkan",
+    cls: "bg-zinc-100 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800",
+    icon: <Ban className="w-3 h-3" />,
+  },
+};
+
+/** Status satu transaksi pembayaran. */
+export function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
+  const cfg = PAY_STATUS[status];
+  return (
+    <span className={`${BASE} ${cfg.cls}`}>
+      {cfg.icon}
+      {cfg.label}
     </span>
   );
 }

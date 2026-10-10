@@ -11,8 +11,8 @@ import DetailGesut from "./detail/DetailGesut"; // ── TAMBAHAN ──
 import StepApproval from "./detail/StepApproval";
 import StepProduksi from "./detail/StepProduksi";
 import StepFinishing from "./detail/StepFinishing";
-import StepPembayaran from "./detail/StepPembayaran"; // ── TAMBAHAN ──
-import { PaymentData } from "../finance/types"; // ── TAMBAHAN ──
+import OrderFinancePanel from "../finance/OrderFinancePanel";
+import { getFinanceCaps } from "@/lib/finance/caps";
 
 interface OrderDetailProps {
   currentUser: UserData;
@@ -29,7 +29,6 @@ interface OrderDetailProps {
   onDelete: (id: string) => void;
   isDeleting?: boolean; // ── TAMBAHAN ──
   onConfirm: (title: string, msg: string, action: () => void) => void;
-  onUpdatePayment: (orderId: string, data: PaymentData) => Promise<void>; // ── TAMBAHAN ──
   writeLog: (params: {
     order: Order;
     category: "STATUS" | "FILE" | "KENDALA" | "QC" | "REVISI" | "SISTEM";
@@ -52,7 +51,6 @@ export default function OrderDetail({
   onDelete,
   isDeleting = false, // ── TAMBAHAN ──
   onConfirm,
-  onUpdatePayment, // ── TAMBAHAN ──
   writeLog, // 🟢 TAMBAHAN
 }: OrderDetailProps) {
   const labelRef = useRef<HTMLDivElement>(null);
@@ -113,8 +111,7 @@ export default function OrderDetail({
   const canDeleteApprovalFile = isSupervisor || perms?.produksi?.delete;
   const canResetQC = isSupervisor || perms?.finishing?.create;
   const canDeleteFinishingFile = isSupervisor || perms?.finishing?.delete;
-  const canEditHarga = isSupervisor || !!perms?.harga_pesanan?.edit; // ── TAMBAHAN ──
-  const canDeleteBukti = isSupervisor || !!perms?.harga_pesanan?.delete; // ── TAMBAHAN ──
+  const financeCaps = getFinanceCaps(currentUser);
 
   // ─── Hook ─────────────────────────────────────────────────────────────────
   const {
@@ -138,7 +135,6 @@ export default function OrderDetail({
     handleResolveKendala,
     handleDeleteKendala,
     handleFileDelete,
-    handleDeleteBuktiPembayaran, // ── TAMBAHAN ──
   } = useOrderDetail({
     order,
     currentUser,
@@ -253,16 +249,10 @@ export default function OrderDetail({
         onFileDelete={handleFileDelete}
       />
 
-      {/* ── TAMBAHAN ── */}
-      <StepPembayaran
-        order={order}
-        currentUser={currentUser}
-        canEditHarga={!!canEditHarga}
-        canDeleteBukti={!!canDeleteBukti}
-        onSubmitPayment={(data) => onUpdatePayment(order.id, data)}
-        onTriggerUpload={onTriggerUpload}
-        onDeleteBukti={handleDeleteBuktiPembayaran}
-      />
+      {/* Harga & Pembayaran: data & aksi lewat server (/api/finance), bukan dari state order */}
+      {financeCaps.view && (
+        <OrderFinancePanel orderId={order.id} caps={financeCaps} />
+      )}
     </div>
   );
 }

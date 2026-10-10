@@ -3,6 +3,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Order, OrderStatus, UserData } from '@/types';
 import { triggerOrderNotifications } from '@/lib/orderLogic';
+import { finFetch } from '@/hooks/useFinanceApi';
 
 interface UseOrdersProps {
   supabase: SupabaseClient;
@@ -138,6 +139,15 @@ export function useOrders({
     delete payload.helper_user;
     delete payload.id;
     delete payload.created_at;
+    // Kolom harga/pembayaran lama JANGAN ikut ditulis: data di state bisa usang dan akan menimpa
+    // angka keuangan yang baru. Keuangan sekarang hanya diubah lewat /api/finance.
+    delete payload.harga_per_pcs;
+    delete payload.biaya_ukuran_besar;
+    delete payload.biaya_lengan_panjang;
+    delete payload.total_harga;
+    delete payload.dp_masuk;
+    delete payload.status_pembayaran;
+    delete payload.bukti_pembayaran;
 
     const { error } = await supabase.from('orders').update(payload).eq('id', orderData.id);
 
@@ -201,12 +211,7 @@ export function useOrders({
       finishing_packing: { isPacked: false },
       shipping: {},
       kendala: [],
-      // ── TAMBAHAN ── harga boleh diisi langsung saat create (opsional).
-      // Kalau admin belum tahu harga fix, dibiarkan 0 dan dilengkapi nanti
-      // dari section "Harga & Pembayaran" di Order Detail.
-      harga_per_pcs: formData.harga_per_pcs || 0,
-      biaya_ukuran_besar: formData.biaya_ukuran_besar || 0,
-      biaya_lengan_panjang: formData.biaya_lengan_panjang || 0,
+      // Harga & pembayaran tidak lagi ditulis di sini: diterbitkan sebagai tagihan lewat menu Keuangan.
     };
 
     const { data, error } = await supabase.from('orders').insert([payload]).select().single();
@@ -306,8 +311,35 @@ export function useOrders({
   }, [supabase, fetchOrders, showAlert, orders, writeLog]);
 
   const handlePermanentDelete = useCallback(async (id: string) => {
-    showConfirm('Hapus Permanen?', 'Data dan semua file lampiran akan hilang selamanya.', async () => {
+    // Cek dulu data keuangan order ini: untuk pesan konfirmasi, dan agar user tanpa izin
+    // ditolak SEBELUM file/log apa pun dihapus.
+    let fin = { invoices: 0, payments: 0, can_purge: true };
+    try {
+      fin = await finFetch<typeof fin>(`/api/finance/orders/${id}/purge`);
+    } catch {
+      // Gagal mengecek: lanjut dengan pesan umum; penghapusan tetap dicek ulang di server.
+    }
+    const hasFin = fin.invoices + fin.payments > 0;
+
+    if (hasFin && !fin.can_purge) {
+      showAlert(
+        'Tidak Bisa Dihapus',
+        'Order ini punya data keuangan. Hanya supervisor atau user dengan izin Keuangan → Void yang boleh menghapusnya permanen.',
+        'error',
+      );
+      return;
+    }
+
+    const confirmMsg = hasFin
+      ? `Data, semua file lampiran, dan DATA KEUANGAN order ini (${fin.invoices} tagihan, ${fin.payments} pembayaran) akan hilang selamanya. Tindakan ini tidak bisa dibatalkan.`
+      : 'Data dan semua file lampiran akan hilang selamanya.';
+
+    showConfirm('Hapus Permanen?', confirmMsg, async () => {
       try {
+        // Data keuangan dihapus lebih dulu (server + database). Bila ditolak (mis. periode sudah
+        // ditutup), error dilempar dan file/log pesanan belum disentuh.
+        await finFetch(`/api/finance/orders/${id}/purge`, { method: 'POST' });
+
         const { data: orderData } = await supabase
           .from('orders')
           // ── TAMBAHAN ── sertakan bukti_pembayaran supaya file-nya ikut
@@ -350,40 +382,17 @@ export function useOrders({
           throw dbError;
         }
       } catch (err: any) {
-        showAlert('Gagal Hapus', err.message, 'error');
+        const hasFinance = err?.code === '23503'; // foreign key: order punya tagihan/pembayaran
+        showAlert(
+          'Gagal Hapus',
+          hasFinance
+            ? 'Order ini punya catatan keuangan (tagihan/pembayaran) sehingga tidak bisa dihapus permanen. Data keuangan sengaja dipertahankan sebagai arsip.'
+            : err.message,
+          'error',
+        );
       }
     });
   }, [showConfirm, supabase, fetchOrders, showAlert]);
-
-  // ── UBAH ── type diperluas eksplisit (tadinya cuma 4 field). Field
-  // biaya_ukuran_besar/biaya_lengan_panjang sebenarnya sudah kekirim juga
-  // sebelumnya (structural typing, TS tidak strip extra props dari variabel),
-  // tapi sekarang dibikin eksplisit supaya jelas di typing & enak dipanggil
-  // dari StepPembayaran.tsx (Order module) maupun PaymentModal (Finance).
-  const handleUpdatePayment = useCallback(async (
-    orderId: string,
-    paymentData: {
-      harga_per_pcs: number;
-      total_harga: number;
-      dp_masuk: number;
-      status_pembayaran: 'Belum DP' | 'DP' | 'Lunas';
-      biaya_ukuran_besar: number;
-      biaya_lengan_panjang: number;
-    }
-  ) => {
-    const { error } = await supabase
-      .from('orders')
-      .update(paymentData)
-      .eq('id', orderId);
-
-    if (error) {
-      showAlert('Gagal', error.message, 'error');
-      return;
-    }
-
-    showAlert('Sukses', 'Data keuangan berhasil disimpan');
-    await fetchOrders();
-  }, [supabase, fetchOrders, showAlert]);
 
   return {
     orders,
@@ -398,6 +407,5 @@ export function useOrders({
     handleDeleteOrder,
     handleRestoreOrder,
     handlePermanentDelete,
-    handleUpdatePayment,
   };
 }

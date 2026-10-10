@@ -37,7 +37,9 @@ export interface UserPermissions {
   config_harga:  ModuleViewEdit;
   trash:         ModuleTrash;
   nota:          ModuleView;
-  keuangan:      ModuleViewEdit;
+  // Menu Keuangan v2: view=lihat · create=terbitkan tagihan & catat pembayaran ·
+  // edit=verifikasi pembayaran · delete=void (koreksi). Lihat lib/finance/caps.ts.
+  keuangan:      ModuleFull;
   po_management: ModuleFull;
   // ── TAMBAHAN ──
   // Kontrol khusus untuk input harga & status pembayaran DI DALAM modul Order
@@ -48,6 +50,7 @@ export interface UserPermissions {
   // Pakai ModuleFull (bukan ModuleViewEdit) karena butuh slot `delete`
   // terpisah untuk hapus bukti pembayaran (create tidak dipakai/disembunyikan
   // di Settings lewat hasCreate:false).
+  /** @deprecated Digantikan permission `keuangan` (menu Keuangan v2). Tidak lagi dipakai UI. */
   harga_pesanan: ModuleFull;
 }
 
@@ -66,7 +69,7 @@ export const DEFAULT_PERMISSIONS: UserPermissions = {
   config_harga:  { view: false, edit: false },
   trash:         { view: false, delete: false },
   nota:          { view: false },
-  keuangan:      { view: false, edit: false },
+  keuangan:      { view: false, create: false, edit: false, delete: false },
   po_management: { view: false, create: false, edit: false, delete: false },
   // ── TAMBAHAN ──
   harga_pesanan: { view: false, create: false, edit: false, delete: false },

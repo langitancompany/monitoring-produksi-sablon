@@ -71,10 +71,12 @@ const MODULES: ModuleDef[] = [
   {
     key: "keuangan",
     label: "Keuangan",
-    hasCreate: false,
+    hasCreate: true,
     hasEdit: true,
-    hasDelete: false,
-    editLabel: "Edit data pembayaran",
+    hasDelete: true,
+    createLabel: "Terbitkan tagihan & catat pembayaran",
+    editLabel: "Verifikasi / tolak pembayaran",
+    deleteLabel: "Void (batalkan) transaksi",
   },
   {
     key: "harga_pesanan",

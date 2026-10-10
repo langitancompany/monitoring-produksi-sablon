@@ -31,15 +31,15 @@ export function CurrencyInput({
       : "";
 
   const baseCls =
-    "w-full border rounded-xl px-3 py-2.5 text-sm font-mono transition outline-none focus:ring-2 focus:ring-blue-500";
+    "w-full border rounded-md px-3 py-2 text-sm font-mono tabular-nums transition-colors duration-150 outline-none focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600";
   const editCls =
-    "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400";
+    "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500";
   const readonlyCls =
-    "border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 cursor-not-allowed";
+    "border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 cursor-not-allowed";
 
   return (
     <div>
-      <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">
+      <label className="block text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-[0.12em] mb-1">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       {readOnly ? (

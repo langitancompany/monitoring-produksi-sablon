@@ -1,5 +1,5 @@
 export const formatRupiah = (value: number): string => {
-  if (!value || value === 0) return "Rp 0";
+  if (!value) return "Rp 0";
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
@@ -12,23 +12,32 @@ export const parseRupiah = (value: string): number => {
   return parseInt(value.replace(/[^0-9]/g, ""), 10) || 0;
 };
 
-export const formatDateShort = (dateStr: string): string => {
+/** "2026-10-10" atau ISO timestamp -> "10 Okt 26". Date-only diparse sebagai tanggal lokal (tanpa geser hari). */
+export const formatDateShort = (dateStr?: string | null): string => {
   if (!dateStr) return "-";
-  return new Date(dateStr).toLocaleDateString("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "2-digit",
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(dateStr)
+    ? new Date(`${dateStr}T00:00:00`)
+    : new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "2-digit" });
+};
+
+export const formatDateTime = (iso?: string | null): string => {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleString("id-ID", {
+    day: "numeric", month: "short", year: "2-digit", hour: "2-digit", minute: "2-digit",
   });
 };
 
-/** Angka total/DP/sisa tagihan turunan dari sebuah order, dipakai bareng
- *  oleh baris tabel, kartu mobile, dan ringkasan di atas. */
-export const getPaymentFigures = (order: {
-  total_harga?: number;
-  dp_masuk?: number;
-}) => {
-  const totalHarga = order.total_harga ?? 0;
-  const dpMasuk = order.dp_masuk ?? 0;
-  const sisaTagihan = Math.max(0, totalHarga - dpMasuk);
-  return { totalHarga, dpMasuk, sisaTagihan };
+/** YYYY-MM-DD menurut jam lokal perangkat (bukan UTC). */
+export const toYmd = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+export const todayYmd = (): string => toYmd(new Date());
+
+export const monthStartYmd = (): string => {
+  const d = new Date();
+  return toYmd(new Date(d.getFullYear(), d.getMonth(), 1));
 };

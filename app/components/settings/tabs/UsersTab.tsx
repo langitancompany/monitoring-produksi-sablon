@@ -106,7 +106,9 @@ export default function UsersTab({
       nota: { view: false, ...((u.permissions as any)?.nota || {}) },
       keuangan: {
         view: false,
+        create: false,
         edit: false,
+        delete: false,
         ...((u.permissions as any)?.keuangan || {}),
       },
       po_management: {

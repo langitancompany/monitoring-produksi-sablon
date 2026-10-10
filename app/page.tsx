@@ -87,8 +87,8 @@ const SettingsPage = dynamic(
 const WeeklyNotesView = dynamic(
   () => import("@/app/components/apps/WeeklyNotesView"),
 );
-const FinanceView = dynamic(
-  () => import("@/app/components/finance/FinanceView"),
+const FinanceModule = dynamic(
+  () => import("@/app/components/finance/FinanceModule"),
   {
     loading: () => (
       <div className="flex items-center justify-center h-64">
@@ -294,7 +294,6 @@ export default function ProductionApp() {
     handleDeleteOrder,
     handleRestoreOrder,
     handlePermanentDelete,
-    handleUpdatePayment,
   } = useOrders({
     supabase,
     currentUser,
@@ -667,7 +666,6 @@ export default function ProductionApp() {
                       onDelete={handleDeleteOrder}
                       isDeleting={deletingOrderId === selectedOrderId}
                       onConfirm={showConfirm}
-                      onUpdatePayment={handleUpdatePayment}
                       writeLog={writeLog}
                     />
                   ) : (
@@ -742,12 +740,8 @@ export default function ProductionApp() {
             {activeTab === "weekly_notes" && p?.logs?.view && (
               <WeeklyNotesView />
             )}
-            {activeTab === "finance" && (p?.keuangan?.view ?? true) && (
-              <FinanceView
-                orders={activeOrders}
-                currentUser={currentUser}
-                onUpdatePayment={handleUpdatePayment}
-              />
+            {activeTab === "finance" && p?.keuangan?.view && (
+              <FinanceModule currentUser={currentUser} />
             )}
             {activeTab === "po_management" &&
               (selectedPoId ? (

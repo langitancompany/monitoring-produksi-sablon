@@ -270,25 +270,6 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
     });
   }, [order, isManual, onConfirm, onUpdateOrder, writeLog]);
 
-  // ── TAMBAHAN ── Hapus SATU bukti pembayaran dari array (bukan seluruh
-  // field seperti handleFileDelete di atas, makanya dipisah jadi handler
-  // sendiri — polanya sama seperti handleDeleteKendala yang filter by id).
-  const handleDeleteBuktiPembayaran = useCallback((attachmentId: string) => {
-    onConfirm('Hapus Bukti Pembayaran?', 'Bukti ini tidak bisa dikembalikan.', () => {
-      const updated = JSON.parse(JSON.stringify(order));
-      updated.bukti_pembayaran = (updated.bukti_pembayaran || []).filter(
-        (b: any) => b.id !== attachmentId
-      );
-      onUpdateOrder(updated);
-      writeLog({
-        order: updated,
-        category: 'FILE',
-        event: 'Bukti Pembayaran Dihapus',
-        ket: 'Salah satu lampiran bukti pembayaran dihapus',
-      });
-    });
-  }, [order, onConfirm, onUpdateOrder, writeLog]);
-
   return {
     // State
     qcNote, setQcNote,
@@ -307,6 +288,5 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
     handleResolveKendala,
     handleDeleteKendala,
     handleFileDelete,
-    handleDeleteBuktiPembayaran, // ── TAMBAHAN ──
   };
 }

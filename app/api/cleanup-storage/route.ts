@@ -20,7 +20,12 @@ export async function GET(request: Request) {
     'steps_manual',       
     'steps_dtf',          
     'finishing_packing',  
-    'shipping'            
+    'shipping',
+    // Kolom di bawah ini dulu TIDAK dicek -> file bukti pembayaran & bukti kendala dianggap
+    // "yatim" lalu ikut terhapus permanen. Bukti keuangan baru ada di bucket 'finance-proofs'
+    // (tidak disentuh endpoint ini), tapi bukti lama masih di bucket ini.
+    'kendala',
+    'bukti_pembayaran'
   ];
 
   try {
