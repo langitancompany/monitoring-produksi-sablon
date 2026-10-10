@@ -1,6 +1,7 @@
 // app/components/po/POOrderEditForm.tsx
 "use client";
 
+import { useDialog } from "@/app/components/ui/DialogProvider";
 import { useState } from "react";
 import { updatePOOrderFull } from "@/lib/po/admin";
 import { calculateItemPrice, formatRupiah } from "@/lib/po/pricing";
@@ -39,6 +40,7 @@ function AddItemRow({
   onAdd: (item: POOrderItem) => void;
   onCancel: () => void;
 }) {
+  const { notify } = useDialog();
   const [productId, setProductId] = useState("");
   const [ukuran, setUkuran] = useState("");
   const [lengan, setLengan] = useState("");
@@ -73,23 +75,23 @@ function AddItemRow({
 
   function handleAdd() {
     if (!product) {
-      alert("Pilih produk terlebih dahulu.");
+      notify("Pilih produk terlebih dahulu.");
       return;
     }
     if (product.available_sizes.length > 0 && !ukuran) {
-      alert("Pilih ukuran terlebih dahulu.");
+      notify("Pilih ukuran terlebih dahulu.");
       return;
     }
     if (product.sleeve_types.length > 0 && !lengan) {
-      alert("Pilih jenis lengan terlebih dahulu.");
+      notify("Pilih jenis lengan terlebih dahulu.");
       return;
     }
     if (product.colors.length > 0 && !warna) {
-      alert("Pilih warna terlebih dahulu.");
+      notify("Pilih warna terlebih dahulu.");
       return;
     }
     if (qty <= 0) {
-      alert("Qty harus lebih dari 0.");
+      notify("Qty harus lebih dari 0.");
       return;
     }
 
@@ -231,6 +233,7 @@ export default function POOrderEditForm({
   onCancel: () => void;
   onSaved: (updated: POOrder) => void;
 }) {
+  const { notify } = useDialog();
   const [customerName, setCustomerName] = useState(order.customer_name);
   const [customerWa, setCustomerWa] = useState(order.customer_wa);
   const [deliveryMethod, setDeliveryMethod] = useState<"Diambil" | "Dikirim">(
@@ -268,15 +271,15 @@ export default function POOrderEditForm({
 
   async function handleSave() {
     if (!customerName.trim() || !customerWa.trim()) {
-      alert("Nama dan WhatsApp pemesan wajib diisi.");
+      notify("Nama dan WhatsApp pemesan wajib diisi.");
       return;
     }
     if (deliveryMethod === "Dikirim" && !shippingAddress.trim()) {
-      alert("Alamat pengiriman wajib diisi untuk metode Dikirim.");
+      notify("Alamat pengiriman wajib diisi untuk metode Dikirim.");
       return;
     }
     if (items.length === 0) {
-      alert("Pesanan harus memiliki minimal 1 item.");
+      notify("Pesanan harus memiliki minimal 1 item.");
       return;
     }
 
@@ -294,7 +297,7 @@ export default function POOrderEditForm({
     setSaving(false);
 
     if (!result.success) {
-      alert("Gagal menyimpan perubahan: " + result.error);
+      notify("Gagal menyimpan perubahan: " + result.error);
       return;
     }
 

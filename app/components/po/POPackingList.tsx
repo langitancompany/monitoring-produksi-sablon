@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import {
-  getAllPOOrders,
-  getPOSettingAdmin,
-  updateItemShortage,
-} from "@/lib/po/admin";
-import { POOrder, POOrderItem, POSetting } from "@/types/po";
+import { updateItemShortage } from "@/lib/po/admin";
+import { POOrder, POOrderItem } from "@/types/po";
+import { usePOAdminData } from "./POAdminDataContext";
+import { useDialog } from "@/app/components/ui/DialogProvider";
+import { usePagedList } from "@/hooks/usePagedList";
+import { getStoreInfo } from "@/lib/po/store-info";
+import LoadMore from "./LoadMore";
 import POOrderPrintSlip from "./POOrderPrintSlip";
 import { printHtmlPages } from "@/lib/po/print-frame";
 import {
@@ -34,6 +35,7 @@ function PackingDetailModal({
   onClose: () => void;
   onOrderUpdated: (updated: POOrder) => void;
 }) {
+  const { notify } = useDialog();
   const [items, setItems] = useState<POOrderItem[]>([...order.order_items]);
   const [savingIndex, setSavingIndex] = useState<number | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -59,7 +61,7 @@ function PackingDetailModal({
     const result = await updateItemShortage(order.id, index, clamped);
     setSavingIndex(null);
     if (!result.success) {
-      alert("Gagal menyimpan status stok: " + result.error);
+      notify("Gagal menyimpan status stok: " + result.error);
       return;
     }
     const updatedItems = items.map((it, i) =>
@@ -75,7 +77,7 @@ function PackingDetailModal({
     const result = await updateItemShortage(order.id, index, 0);
     setSavingIndex(null);
     if (!result.success) {
-      alert("Gagal reset status stok: " + result.error);
+      notify("Gagal reset status stok: " + result.error);
       return;
     }
     const updatedItems = items.map((it, i) =>
@@ -207,14 +209,9 @@ function PackingDetailModal({
   );
 }
 
-interface POPackingListProps {
-  poId: string;
-}
-
-export default function POPackingList({ poId }: POPackingListProps) {
-  const [orders, setOrders] = useState<POOrder[]>([]);
-  const [setting, setSetting] = useState<POSetting | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function POPackingList() {
+  const { orders, setOrders, setting, loading } = usePOAdminData();
+  const { notify } = useDialog();
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<"ALL" | "PUBLIC" | "RESELLER">(
     "ALL",
@@ -234,20 +231,6 @@ export default function POPackingList({ poId }: POPackingListProps) {
     setDetailOrder(updated);
   }
 
-  useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      const [ords, st] = await Promise.all([
-        getAllPOOrders(poId),
-        getPOSettingAdmin(poId),
-      ]);
-      setOrders(ords || []);
-      setSetting(st);
-      setLoading(false);
-    }
-    loadData();
-  }, [poId]);
-
   // Filter Data — sengaja cuma satu filter: Tipe Customer
   const filtered = orders.filter((o) => {
     const matchType = filterType === "ALL" || o.customer_type === filterType;
@@ -256,6 +239,13 @@ export default function POPackingList({ poId }: POPackingListProps) {
       o.customer_name.toLowerCase().includes(search.toLowerCase());
     return matchType && matchSearch;
   });
+
+  // Tampilan bertahap; pilih-semua & cetak tetap memakai seluruh `filtered`.
+  const { visible, remaining, showMore, showAll } = usePagedList(
+    filtered,
+    50,
+    `${search}|${filterType}`,
+  );
 
   // Handle Checkbox
   const toggleSelect = (id: string) => {
@@ -275,7 +265,7 @@ export default function POPackingList({ poId }: POPackingListProps) {
 
   const handlePrintMassal = () => {
     if (selectedIds.size === 0) {
-      alert("Pilih minimal satu pesanan untuk dicetak.");
+      notify("Pilih minimal satu pesanan untuk dicetak.");
       return;
     }
 
@@ -293,8 +283,7 @@ export default function POPackingList({ poId }: POPackingListProps) {
           <div className="po-print-page">
             <POOrderPrintSlip
               order={order}
-              storeName="Langitan.co"
-              storeAddress="Mandungan, Widang, Tuban, Jawa Timur"
+              {...getStoreInfo(setting)}
               logoUrl={setting?.logo_image_url || undefined}
             />
           </div>,
@@ -321,7 +310,7 @@ export default function POPackingList({ poId }: POPackingListProps) {
         @page { size: 210mm 297mm portrait; margin: 0; }
       `,
       onDone: () => setPrinting(false),
-      onError: (msg) => alert(msg),
+      onError: (msg) => notify(msg),
     });
   };
 
@@ -426,7 +415,7 @@ export default function POPackingList({ poId }: POPackingListProps) {
                 </td>
               </tr>
             ) : (
-              filtered.map((order) => {
+              visible.map((order) => {
                 const isSelected = selectedIds.has(order.id);
                 const totalQty = order.order_items.reduce(
                   (sum, item) => sum + item.qty,
@@ -510,6 +499,11 @@ export default function POPackingList({ poId }: POPackingListProps) {
           </tbody>
         </table>
       </div>
+      <LoadMore
+        remaining={remaining}
+        onShowMore={showMore}
+        onShowAll={showAll}
+      />
 
       {detailOrder && (
         <PackingDetailModal

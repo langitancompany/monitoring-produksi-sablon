@@ -25,6 +25,7 @@ import { ThemeProvider } from "next-themes";
 
 // ✅ 1. IMPORT KOMPONEN FCM MANAGER DI SINI
 import FCMManager from "@/app/components/misc/FCMManager";
+import { DialogProvider } from "@/app/components/ui/DialogProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -57,7 +58,7 @@ export default function RootLayout({
           {/* ✅ 2. PASANG KOMPONEN DI SINI AGAR BERJALAN OTOMATIS */}
           <FCMManager />
 
-          {children}
+          <DialogProvider>{children}</DialogProvider>
         </ThemeProvider>
       </body>
     </html>

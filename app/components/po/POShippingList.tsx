@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { getAllPOOrders, getPOSettingAdmin } from "@/lib/po/admin";
-import { POOrder, POSetting } from "@/types/po";
+import { usePOAdminData } from "./POAdminDataContext";
+import { useDialog } from "@/app/components/ui/DialogProvider";
+import { usePagedList } from "@/hooks/usePagedList";
+import LoadMore from "./LoadMore";
+import { getStoreInfo } from "@/lib/po/store-info";
 import POOrderReceiptA6 from "./POOrderReceiptA6";
 import { printHtmlPages } from "@/lib/po/print-frame";
 import {
@@ -15,14 +18,9 @@ import {
   Loader2,
 } from "lucide-react";
 
-interface POShippingListProps {
-  poId: string;
-}
-
-export default function POShippingList({ poId }: POShippingListProps) {
-  const [orders, setOrders] = useState<POOrder[]>([]);
-  const [setting, setSetting] = useState<POSetting | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function POShippingList() {
+  const { orders, setting, loading } = usePOAdminData();
+  const { notify } = useDialog();
   const [search, setSearch] = useState("");
   const [filterMetode, setFilterMetode] = useState<
     "ALL" | "Dikirim" | "Diambil"
@@ -36,20 +34,6 @@ export default function POShippingList({ poId }: POShippingListProps) {
   // State loading saat menyiapkan dokumen cetak (mirip "Menyiapkan dokumen..." di Shopee)
   const [printing, setPrinting] = useState(false);
 
-  useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      const [ords, st] = await Promise.all([
-        getAllPOOrders(poId),
-        getPOSettingAdmin(poId),
-      ]);
-      setOrders(ords || []);
-      setSetting(st);
-      setLoading(false);
-    }
-    loadData();
-  }, [poId]);
-
   // Filter Data
   const filtered = orders.filter((o) => {
     const matchMetode =
@@ -60,6 +44,13 @@ export default function POShippingList({ poId }: POShippingListProps) {
       o.customer_name.toLowerCase().includes(search.toLowerCase());
     return matchMetode && matchType && matchSearch;
   });
+
+  // Tampilan bertahap; pilih-semua & cetak tetap memakai seluruh `filtered`.
+  const { visible, remaining, showMore, showAll } = usePagedList(
+    filtered,
+    50,
+    `${search}|${filterMetode}|${filterType}`,
+  );
 
   // Handle Checkbox
   const toggleSelect = (id: string) => {
@@ -79,7 +70,7 @@ export default function POShippingList({ poId }: POShippingListProps) {
 
   const handlePrintMassal = () => {
     if (selectedIds.size === 0) {
-      alert("Pilih minimal satu pesanan untuk dicetak.");
+      notify("Pilih minimal satu pesanan untuk dicetak.");
       return;
     }
 
@@ -96,8 +87,7 @@ export default function POShippingList({ poId }: POShippingListProps) {
           <div className="po-print-page">
             <POOrderReceiptA6
               order={order}
-              storeName="Langitan.co"
-              storeAddress="Mandungan, Widang, Tuban, Jawa Timur"
+              {...getStoreInfo(setting)}
               adminPhone={setting?.wa_admin_phone || ""}
               logoUrl={setting?.logo_image_url || undefined}
             />
@@ -129,7 +119,7 @@ export default function POShippingList({ poId }: POShippingListProps) {
         @page { size: 105mm 148mm portrait; margin: 0; }
       `,
       onDone: () => setPrinting(false),
-      onError: (msg) => alert(msg),
+      onError: (msg) => notify(msg),
     });
   };
 
@@ -251,7 +241,7 @@ export default function POShippingList({ poId }: POShippingListProps) {
                 </td>
               </tr>
             ) : (
-              filtered.map((order) => {
+              visible.map((order) => {
                 const isSelected = selectedIds.has(order.id);
                 return (
                   <tr
@@ -300,6 +290,11 @@ export default function POShippingList({ poId }: POShippingListProps) {
           </tbody>
         </table>
       </div>
+      <LoadMore
+        remaining={remaining}
+        onShowMore={showMore}
+        onShowAll={showAll}
+      />
 
       {/* Area cetak resi TIDAK LAGI dirender di sini. Saat tombol "Cetak"
           diklik, dokumen cetak dibuat langsung di dalam iframe tersembunyi

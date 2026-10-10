@@ -1,5 +1,6 @@
 "use client";
 
+import { DEFAULT_STORE_NAME } from "@/lib/po/store-info";
 import { POOrder } from "@/types/po";
 
 /**
@@ -26,7 +27,7 @@ const PAYMENT_LABEL: Record<string, string> = {
 
 export default function POOrderReceiptA6({
   order,
-  storeName = "Langitan.co",
+  storeName = DEFAULT_STORE_NAME,
   storeAddress,
   adminPhone,
   logoUrl,

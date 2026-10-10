@@ -1,5 +1,6 @@
 "use client";
 
+import { useDialog } from "@/app/components/ui/DialogProvider";
 import { useEffect, useState } from "react";
 import { getAllPOSettings, createPOSetting } from "@/lib/po/admin";
 import { POSetting } from "@/types/po";
@@ -10,6 +11,7 @@ interface POListSelectorProps {
 }
 
 export default function POListSelector({ onSelect }: POListSelectorProps) {
+  const { notify } = useDialog();
   const [list, setList] = useState<POSetting[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -41,7 +43,7 @@ export default function POListSelector({ onSelect }: POListSelectorProps) {
 
   async function handleCreate() {
     if (!title.trim() || !slug.trim()) {
-      alert("Judul dan slug URL wajib diisi.");
+      notify("Judul dan slug URL wajib diisi.");
       return;
     }
     setCreating(true);
@@ -51,7 +53,7 @@ export default function POListSelector({ onSelect }: POListSelectorProps) {
     });
     setCreating(false);
     if (!result.success || !result.id) {
-      alert("Gagal membuat PO: " + result.error);
+      notify("Gagal membuat PO: " + result.error);
       return;
     }
     setShowCreate(false);

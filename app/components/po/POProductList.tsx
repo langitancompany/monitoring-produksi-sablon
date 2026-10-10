@@ -1,5 +1,7 @@
 "use client";
 
+import { useMarkPODataStaleOnLeave } from "./POAdminDataContext";
+import { useDialog } from "@/app/components/ui/DialogProvider";
 import { useEffect, useState } from "react";
 import {
   getAllPOProducts,
@@ -78,6 +80,8 @@ interface POProductListProps {
 }
 
 export default function POProductList({ poId }: POProductListProps) {
+  const { notify, confirmAsync } = useDialog();
+  useMarkPODataStaleOnLeave();
   const [products, setProducts] = useState<POProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -122,12 +126,11 @@ export default function POProductList({ poId }: POProductListProps) {
   async function handleOptimizeOld() {
     const total = countOldImages(products);
     if (total === 0) return;
-    if (
-      !confirm(
-        `Ada ${total} foto lama yang belum dioptimasi.\n\nFoto akan dikecilkan otomatis dan file lama diganti. Proses bisa beberapa menit — jangan tutup halaman ini sampai selesai.\n\nLanjutkan?`,
-      )
-    )
-      return;
+    const okOptimize = await confirmAsync(
+      `Ada ${total} foto lama yang belum dioptimasi.\n\nFoto akan dikecilkan otomatis dan file lama diganti. Proses bisa beberapa menit — jangan tutup halaman ini sampai selesai.\n\nLanjutkan?`,
+      { title: "Optimasi Foto" },
+    );
+    if (!okOptimize) return;
     setOptimizing(true);
     setOptProgress({ done: 0, total });
     try {
@@ -135,7 +138,7 @@ export default function POProductList({ poId }: POProductListProps) {
         setOptProgress({ done, total: tot }),
       );
       const mb = (r.savedBytes / 1024 / 1024).toFixed(1);
-      alert(
+      notify(
         `Selesai.\n${r.done} foto berhasil dioptimasi (hemat ± ${mb} MB)` +
           (r.failed > 0
             ? `\n${r.failed} foto dilewati/gagal (tetap memakai file lama).`
@@ -143,7 +146,7 @@ export default function POProductList({ poId }: POProductListProps) {
       );
     } catch (err) {
       console.error(err);
-      alert(
+      notify(
         "Terjadi kesalahan saat optimasi. Foto yang belum diproses tetap aman.",
       );
     } finally {
@@ -216,7 +219,7 @@ export default function POProductList({ poId }: POProductListProps) {
 
   async function handleSave() {
     if (!form.name || !form.product_code || form.base_price <= 0) {
-      alert("Nama, kode produk, dan harga wajib diisi.");
+      notify("Nama, kode produk, dan harga wajib diisi.");
       return;
     }
     setSaving(true);
@@ -242,7 +245,7 @@ export default function POProductList({ poId }: POProductListProps) {
           .upload(filePath, file, { cacheControl: "31536000" });
         if (error) {
           console.error("Gagal upload gambar:", error);
-          alert(`Gagal upload ${file.name}. Lanjut menyimpan data lainnya.`);
+          notify(`Gagal upload ${file.name}. Lanjut menyimpan data lainnya.`);
         } else if (data) {
           const { data: publicUrlData } = supabase.storage
             .from("po_assets")
@@ -271,7 +274,7 @@ export default function POProductList({ poId }: POProductListProps) {
       }
     } catch (err) {
       console.error(err);
-      alert("Terjadi kesalahan saat menyimpan data.");
+      notify("Terjadi kesalahan saat menyimpan data.");
     } finally {
       setSaving(false);
       setShowForm(false);
@@ -287,7 +290,7 @@ export default function POProductList({ poId }: POProductListProps) {
   }
 
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`Hapus produk "${name}"?`)) return;
+    if (!(await confirmAsync(`Hapus produk "${name}"?`))) return;
     await deletePOProduct(id);
     setProducts((prev) => prev.filter((p) => p.id !== id));
   }

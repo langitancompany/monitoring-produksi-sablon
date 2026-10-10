@@ -2,7 +2,7 @@
 // Semua query Supabase untuk fitur PO dikumpulkan di sini
 
 import { createClient } from '@/lib/supabase/client';
-import { POSetting, POProduct, POOrderPayload } from '@/types/po';
+import { POSetting, POProduct, POOrderPayload, POResellerOrderUpdatePayload } from '@/types/po';
 import { submitOrderViaApi, updateOrderViaApi } from './order-api';
 
 /**
@@ -130,7 +130,7 @@ export async function deleteResellerOrder(poNumber: string, resellerId: string) 
 
 export async function updateResellerOrder(
   poNumber: string,
-  payload: any,
+  payload: POResellerOrderUpdatePayload,
   _setting?: POSetting,
   _products?: POProduct[]
 ): Promise<{ success: boolean; total_amount?: number; error?: string }> {

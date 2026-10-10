@@ -1,12 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  getAllPOOrders,
-  getAllPOProducts,
-  getPOSettingAdmin,
-} from "@/lib/po/admin";
-import { POOrder, POProduct, POSetting } from "@/types/po";
+import { useMemo, useState } from "react";
+import { usePOAdminData } from "./POAdminDataContext";
+import { useDialog } from "@/app/components/ui/DialogProvider";
 import {
   RefreshCw,
   ClipboardList,
@@ -38,38 +34,13 @@ type RekapProduk = {
   totalJumlah: number;
 };
 
-// Tambahkan ini di PORekapList.tsx
-interface PORekapListProps {
-  poId: string;
-}
-export default function PORekapList({ poId }: PORekapListProps) {
-  const [orders, setOrders] = useState<POOrder[]>([]);
-  const [products, setProducts] = useState<POProduct[]>([]);
-  const [setting, setSetting] = useState<POSetting | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+export default function PORekapList() {
+  const { orders, products, setting, loading, refreshing, reload } =
+    usePOAdminData();
+  const { notify } = useDialog();
   const [exporting, setExporting] = useState(false);
   const [exportingShortage, setExportingShortage] = useState(false);
   const [subTab, setSubTab] = useState<"produksi" | "kekurangan">("produksi");
-
-  useEffect(() => {
-    load();
-  }, [poId]);
-
-  async function load(isRefresh = false) {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    const [ordersData, productsData, settingData] = await Promise.all([
-      getAllPOOrders(poId),
-      getAllPOProducts(poId),
-      getPOSettingAdmin(poId),
-    ]);
-    setOrders(ordersData);
-    setProducts(productsData);
-    setSetting(settingData);
-    if (isRefresh) setRefreshing(false);
-    else setLoading(false);
-  }
 
   /* ── Olah data pesanan menjadi rekap per produk ── */
   const rekapList: RekapProduk[] = useMemo(() => {
@@ -395,7 +366,7 @@ export default function PORekapList({ poId }: PORekapListProps) {
   /* ── Export Excel: gabung jadi 2 sheet (Belanja & Produksi) ── */
   async function handleExportExcel() {
     if (rekapList.length === 0) {
-      alert("Tidak ada data rekap untuk diexport.");
+      notify("Tidak ada data rekap untuk diexport.");
       return;
     }
     setExporting(true);
@@ -482,7 +453,7 @@ export default function PORekapList({ poId }: PORekapListProps) {
       XLSX.writeFile(wb, `Rekap-${namaPO}-${tanggalFile}.xlsx`);
     } catch (err) {
       console.error(err);
-      alert(
+      notify(
         "Gagal membuat file Excel. Pastikan package 'xlsx' sudah terinstall.",
       );
     } finally {
@@ -493,7 +464,7 @@ export default function PORekapList({ poId }: PORekapListProps) {
   /* ── Export Excel: Rekap Kekurangan Stok ── */
   async function handleExportShortageExcel() {
     if (shortageList.length === 0) {
-      alert("Tidak ada data kekurangan untuk diexport.");
+      notify("Tidak ada data kekurangan untuk diexport.");
       return;
     }
     setExportingShortage(true);
@@ -570,7 +541,7 @@ export default function PORekapList({ poId }: PORekapListProps) {
       XLSX.writeFile(wb, `Kekurangan-${namaPO}-${tanggalFile}.xlsx`);
     } catch (err) {
       console.error(err);
-      alert(
+      notify(
         "Gagal membuat file Excel. Pastikan package 'xlsx' sudah terinstall.",
       );
     } finally {
@@ -604,7 +575,7 @@ export default function PORekapList({ poId }: PORekapListProps) {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => load(true)}
+            onClick={() => void reload()}
             disabled={refreshing}
             className="flex justify-center items-center gap-2 text-sm px-4 py-2.5 border border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors duration-150"
           >

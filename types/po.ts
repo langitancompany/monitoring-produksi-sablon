@@ -17,6 +17,10 @@ export interface POSetting {
   url_slug?: string;
   qris_image_url?: string | null;
   logo_image_url?: string | null;
+  // Identitas toko untuk invoice/resi. Opsional: kalau kosong dipakai default
+  // di lib/po/store-info.ts. Butuh kolom baru di tabel po_setting (lihat SQL).
+  store_name?: string | null;
+  store_address?: string | null;
 }
 
 export type POProductCategory = 'dewasa' | 'kids';
@@ -88,25 +92,6 @@ export interface CartState {
   items: CartItem[];
 }
 
-// Tambahkan di bawah interface yang sudah ada di types/po.ts
-
-export interface POOrder {
-  id: string;
-  po_number: string;
-  customer_type: 'PUBLIC' | 'RESELLER';
-  reseller_id: string | null;
-  customer_name: string;
-  customer_wa: string;
-  delivery_method: 'Diambil' | 'Dikirim';
-  shipping_address: string | null;
-  order_items: POOrderItem[];
-  notes: string | null;
-  total_amount: number;
-  created_at: string;
-  // Join data
-  po_resellers?: { nama: string; kode: string } | null;
-}
-
 export interface POResellerFull {
   id: string;
   kode: string;
@@ -124,11 +109,9 @@ export interface POProductFull extends POProduct {
   // sudah lengkap di POProduct, alias ini untuk kejelasan di admin context
 }
 
-// ─── Tambahkan ke types/po.ts ───
-
 export type PaymentStatus = 'BELUM_BAYAR' | 'DP' | 'LUNAS';
 
-// Update interface POOrder yang sudah ada, tambahkan 3 field ini:
+// Satu-satunya definisi POOrder (sebelumnya ditulis dua kali).
 export interface POOrder {
   id: string;
   po_number: string;
@@ -143,8 +126,15 @@ export interface POOrder {
   total_amount: number;
   created_at: string;
   po_resellers?: { nama: string; kode: string } | null;
-  // ── Field baru ──
+  // ── Status pembayaran ──
   payment_status: PaymentStatus;
   paid_amount: number;
   payment_updated_at: string | null;
+}
+
+// Payload edit pesanan oleh reseller (dikirim ke /api/po/orders lewat PUT).
+export interface POResellerOrderUpdatePayload {
+  reseller_id: string;
+  notes?: string;
+  order_items: POOrderItem[];
 }

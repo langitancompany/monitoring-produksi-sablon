@@ -1,5 +1,6 @@
 "use client";
 
+import { useDialog } from "@/app/components/ui/DialogProvider";
 import { useState } from "react";
 import { CartItem, POProduct, POSetting } from "@/types/po";
 import { POResellerOrder } from "@/lib/po/supabase";
@@ -47,6 +48,7 @@ export function EditOrderModal({
   onCancel,
   onSave,
 }: EditOrderModalProps) {
+  const { notify } = useDialog();
   const total = cart.reduce((s, i) => s + i.subtotal, 0);
 
   // ── State untuk tambah item baru ─────────────────────────────────
@@ -145,7 +147,7 @@ export function EditOrderModal({
     });
 
     if (newItems.length === 0) {
-      alert("Isi QTY minimal satu sel.");
+      notify("Isi QTY minimal satu sel.");
       return;
     }
 

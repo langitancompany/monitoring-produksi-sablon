@@ -1,5 +1,6 @@
 "use client";
 
+import { useDialog } from "@/app/components/ui/DialogProvider";
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -40,6 +41,7 @@ function buildVarianList(p: POProduct) {
 
 // ── Main Page ────────────────────────────────────────────────────
 export default function ResellerPortalPage() {
+  const { notify, confirmAsync } = useDialog();
   const router = useRouter();
 
   // ── Core state ──────────────────────────────────────────────────
@@ -150,7 +152,8 @@ export default function ResellerPortalPage() {
   };
 
   const handleDeleteOrder = async (poNumber: string) => {
-    if (!confirm("Apakah Anda yakin ingin menghapus pesanan ini?")) return;
+    if (!(await confirmAsync("Apakah Anda yakin ingin menghapus pesanan ini?")))
+      return;
     if (!reseller) return;
 
     setLoadingOrders(true);
@@ -159,7 +162,7 @@ export default function ResellerPortalPage() {
     if (res?.success) {
       setOrders((prev) => prev.filter((o) => o.po_number !== poNumber));
     } else {
-      alert("Gagal menghapus: " + (res?.error || "Unknown error"));
+      notify("Gagal menghapus: " + (res?.error || "Unknown error"));
     }
     setLoadingOrders(false);
   };
@@ -204,7 +207,7 @@ export default function ResellerPortalPage() {
     });
 
     if (newItems.length === 0) {
-      alert("Isi QTY minimal satu sel.");
+      notify("Isi QTY minimal satu sel.");
       return;
     }
     setCart([...cart, ...newItems]);
@@ -214,7 +217,7 @@ export default function ResellerPortalPage() {
 
   const handleSubmit = async () => {
     if (cart.length === 0) {
-      alert("Keranjang kosong.");
+      notify("Keranjang kosong.");
       return;
     }
     if (!reseller) return;
@@ -244,7 +247,7 @@ export default function ResellerPortalPage() {
     }
 
     if (!result.success) {
-      alert("Gagal memproses pesanan: " + result.error);
+      notify("Gagal memproses pesanan: " + result.error);
       setSubmitting(false);
       return;
     }
@@ -292,9 +295,12 @@ export default function ResellerPortalPage() {
     loadOrders(reseller.id, setting?.id);
   };
 
-  const handleLogout = () => {
-    if (!confirm("Yakin ingin keluar? Keranjang belum dikirim akan hilang."))
-      return;
+  const handleLogout = async () => {
+    const ok = await confirmAsync(
+      "Yakin ingin keluar? Keranjang belum dikirim akan hilang.",
+      { title: "Keluar" },
+    );
+    if (!ok) return;
     sessionStorage.removeItem("po_reseller");
     router.push(slug ? `/po/reseller?slug=${slug}` : "/po/reseller");
   };

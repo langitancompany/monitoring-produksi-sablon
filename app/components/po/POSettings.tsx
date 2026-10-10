@@ -1,5 +1,7 @@
 "use client";
 
+import { useMarkPODataStaleOnLeave } from "./POAdminDataContext";
+import { useDialog } from "@/app/components/ui/DialogProvider";
 import { useEffect, useState } from "react";
 import { getPOSettingAdmin, updatePOSetting } from "@/lib/po/admin";
 import { formatRupiah } from "@/lib/po/pricing";
@@ -23,6 +25,8 @@ import {
   Loader2,
   Save,
   Link as LinkIcon,
+  Store,
+  MapPin,
 } from "lucide-react";
 
 /* ── Reusable field wrapper ──────────────────────────────────────── */
@@ -70,6 +74,8 @@ interface POSettingsProps {
   poId: string;
 }
 export default function POSettings({ poId }: POSettingsProps) {
+  const { notify, confirmAsync } = useDialog();
+  useMarkPODataStaleOnLeave();
   const [setting, setSetting] = useState<POSetting | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -90,6 +96,12 @@ export default function POSettings({ poId }: POSettingsProps) {
     wa_admin_phone: "",
     bank_account_info: "",
   });
+  // Identitas toko (invoice & resi) dipisah dari `form` supaya tidak ikut
+  // terkirim ke database kalau kolomnya belum dibuat (lihat SQL migrasi).
+  const [storeForm, setStoreForm] = useState({
+    store_name: "",
+    store_address: "",
+  });
 
   // ✅ Semua useEffect di atas, sebelum early return apapun
   useEffect(() => {
@@ -108,6 +120,10 @@ export default function POSettings({ poId }: POSettingsProps) {
           sweater_xxl_surcharge: data.sweater_xxl_surcharge ?? 0,
           wa_admin_phone: data.wa_admin_phone || "",
           bank_account_info: data.bank_account_info || "",
+        });
+        setStoreForm({
+          store_name: data.store_name || "",
+          store_address: data.store_address || "",
         });
         // ✅ Set preview QRIS langsung di sini, tidak perlu useEffect terpisah
         if (data.qris_image_url) {
@@ -132,13 +148,21 @@ export default function POSettings({ poId }: POSettingsProps) {
       periode_selesai: form.periode_selesai || undefined,
       wa_admin_phone: form.wa_admin_phone || undefined,
       bank_account_info: form.bank_account_info || undefined,
+      // Kirim hanya kalau kolomnya sudah ada di database, atau admin
+      // memang mengisi nilainya. Kosong = pakai default di kode.
+      ...(("store_name" in setting || storeForm.store_name.trim()) && {
+        store_name: storeForm.store_name.trim() || null,
+      }),
+      ...(("store_address" in setting || storeForm.store_address.trim()) && {
+        store_address: storeForm.store_address.trim() || null,
+      }),
     });
 
     setSaving(false);
     if (result.success) {
-      alert("Pengaturan berhasil disimpan.");
+      notify("Pengaturan berhasil disimpan.");
     } else {
-      alert("Gagal: " + result.error);
+      notify("Gagal: " + result.error);
     }
   }
 
@@ -147,11 +171,11 @@ export default function POSettings({ poId }: POSettingsProps) {
     if (!file || !setting) return;
 
     if (!file.type.startsWith("image/")) {
-      alert("Hanya file gambar yang diizinkan.");
+      notify("Hanya file gambar yang diizinkan.");
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      alert("Ukuran file maksimal 2MB.");
+      notify("Ukuran file maksimal 2MB.");
       return;
     }
 
@@ -175,7 +199,7 @@ export default function POSettings({ poId }: POSettingsProps) {
       .upload(filePath, file, { upsert: true });
 
     if (uploadError) {
-      alert("Gagal upload: " + uploadError.message);
+      notify("Gagal upload: " + uploadError.message);
       setUploadingQris(false);
       return;
     }
@@ -192,7 +216,7 @@ export default function POSettings({ poId }: POSettingsProps) {
       .eq("id", setting.id);
 
     if (dbError) {
-      alert("Gagal simpan URL: " + dbError.message);
+      notify("Gagal simpan URL: " + dbError.message);
     } else {
       setQrisPreview(publicUrl);
       setSetting({ ...setting, qris_image_url: publicUrl });
@@ -203,7 +227,7 @@ export default function POSettings({ poId }: POSettingsProps) {
 
   async function handleQrisDelete() {
     if (!setting?.qris_image_url) return;
-    if (!confirm("Hapus gambar QRIS?")) return;
+    if (!(await confirmAsync("Hapus gambar QRIS?"))) return;
 
     const supabase = createClient();
     const oldPath = setting.qris_image_url.split("/po_assets/")[1];
@@ -226,11 +250,11 @@ export default function POSettings({ poId }: POSettingsProps) {
     if (!file || !setting) return;
 
     if (!file.type.startsWith("image/")) {
-      alert("Hanya file gambar yang diizinkan.");
+      notify("Hanya file gambar yang diizinkan.");
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      alert("Ukuran file maksimal 2MB.");
+      notify("Ukuran file maksimal 2MB.");
       return;
     }
 
@@ -254,7 +278,7 @@ export default function POSettings({ poId }: POSettingsProps) {
       .upload(filePath, file, { upsert: true });
 
     if (uploadError) {
-      alert("Gagal upload: " + uploadError.message);
+      notify("Gagal upload: " + uploadError.message);
       setUploadingLogo(false);
       return;
     }
@@ -271,7 +295,7 @@ export default function POSettings({ poId }: POSettingsProps) {
       .eq("id", setting.id);
 
     if (dbError) {
-      alert("Gagal simpan URL: " + dbError.message);
+      notify("Gagal simpan URL: " + dbError.message);
     } else {
       setLogoPreview(publicUrl);
       setSetting({ ...setting, logo_image_url: publicUrl });
@@ -282,7 +306,7 @@ export default function POSettings({ poId }: POSettingsProps) {
 
   async function handleLogoDelete() {
     if (!setting?.logo_image_url) return;
-    if (!confirm("Hapus logo toko?")) return;
+    if (!(await confirmAsync("Hapus logo toko?"))) return;
 
     const supabase = createClient();
     const oldPath = setting.logo_image_url.split("/po_assets/")[1];
@@ -582,6 +606,40 @@ export default function POSettings({ poId }: POSettingsProps) {
             }
             rows={2}
             placeholder="BCA 1234567890 a/n Langitan Store"
+            className={`${INPUT} resize-none h-full min-h-20`}
+          />
+        </Field>
+      </div>
+
+      <SectionHeading>Identitas Toko (Invoice &amp; Resi)</SectionHeading>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
+        <Field
+          label="Nama Toko"
+          icon={Store}
+          hint="Kosongkan untuk memakai default (Langitan.co)."
+        >
+          <input
+            type="text"
+            value={storeForm.store_name}
+            onChange={(e) =>
+              setStoreForm({ ...storeForm, store_name: e.target.value })
+            }
+            placeholder="Langitan.co"
+            className={INPUT}
+          />
+        </Field>
+        <Field
+          label="Alamat Toko"
+          icon={MapPin}
+          hint="Tampil di kop invoice dan resi. Kosongkan untuk default."
+        >
+          <textarea
+            value={storeForm.store_address}
+            onChange={(e) =>
+              setStoreForm({ ...storeForm, store_address: e.target.value })
+            }
+            rows={2}
+            placeholder="Mandungan, Widang, Tuban, Jawa Timur"
             className={`${INPUT} resize-none h-full min-h-20`}
           />
         </Field>

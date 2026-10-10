@@ -9,6 +9,8 @@ import POSettings from "./POSettings";
 import PORekapList from "./PORekapList";
 import POShippingList from "./POShippingList";
 import POPackingList from "./POPackingList"; // <-- IMPORT BARU (Pengemasan)
+import { POAdminDataProvider } from "./POAdminDataContext";
+import { useDialog } from "@/app/components/ui/DialogProvider";
 import { deletePOSetting, getPOSettingAdmin } from "@/lib/po/admin";
 import { downloadPOArchive } from "@/lib/po/archive-export";
 import {
@@ -67,6 +69,7 @@ export default function POManagementView({
   const [archiving, setArchiving] = useState(false);
   const [archiveProgress, setArchiveProgress] = useState<string>("");
   const [hasArchived, setHasArchived] = useState(false);
+  const { notify } = useDialog();
 
   const ActiveIcon =
     tabs.find((t) => t.id === activeTab)?.icon ?? LayoutDashboard;
@@ -91,7 +94,7 @@ export default function POManagementView({
       setHasArchived(true);
     } catch (err) {
       console.error(err);
-      alert(
+      notify(
         "Gagal membuat arsip. Pastikan package 'jszip' sudah terinstall (npm install jszip), lalu coba lagi.",
       );
     } finally {
@@ -200,14 +203,16 @@ export default function POManagementView({
 
       {/* ── Konten tab ── */}
       <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 sm:p-6 min-h-[420px] overflow-x-auto">
-        {activeTab === "overview" && <POOverview poId={poId} />}
-        {activeTab === "orders" && <POOrderList poId={poId} />}
-        {activeTab === "products" && <POProductList poId={poId} />}
-        {activeTab === "resellers" && <POResellerList poId={poId} />}
-        {activeTab === "packing" && <POPackingList poId={poId} />}
-        {activeTab === "shipping" && <POShippingList poId={poId} />}
-        {activeTab === "settings" && <POSettings poId={poId} />}
-        {activeTab === "rekap" && <PORekapList poId={poId} />}
+        <POAdminDataProvider key={poId} poId={poId}>
+          {activeTab === "overview" && <POOverview poId={poId} />}
+          {activeTab === "orders" && <POOrderList />}
+          {activeTab === "products" && <POProductList poId={poId} />}
+          {activeTab === "resellers" && <POResellerList poId={poId} />}
+          {activeTab === "packing" && <POPackingList />}
+          {activeTab === "shipping" && <POShippingList />}
+          {activeTab === "settings" && <POSettings poId={poId} />}
+          {activeTab === "rekap" && <PORekapList />}
+        </POAdminDataProvider>
       </div>
 
       {/* ── Modal Konfirmasi Hapus PO ── */}

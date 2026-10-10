@@ -1,18 +1,17 @@
 "use client";
 
 import POOrderPrintSlip from "./POOrderPrintSlip";
-import { useRef, useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import POOrderEditForm from "./POOrderEditForm";
 
-import {
-  getAllPOOrders,
-  deletePOOrder,
-  updatePaymentStatus,
-  getAllPOProducts,
-  getPOSettingAdmin,
-} from "@/lib/po/admin";
+import { deletePOOrder, updatePaymentStatus } from "@/lib/po/admin";
+import { usePOAdminData } from "./POAdminDataContext";
+import { useDialog } from "@/app/components/ui/DialogProvider";
+import { usePagedList } from "@/hooks/usePagedList";
+import { getStoreInfo } from "@/lib/po/store-info";
+import LoadMore from "./LoadMore";
 import { formatRupiah } from "@/lib/po/pricing";
-import { POOrder, PaymentStatus, POProduct, POSetting } from "@/types/po";
+import { POOrder, PaymentStatus } from "@/types/po";
 import {
   buildWaLink,
   buildOrderConfirmationMessage,
@@ -169,18 +168,12 @@ function PaymentStatusBadge({
   );
 }
 
-interface POOrderListProps {
-  poId: string;
-}
-
-export default function POOrderList({ poId }: POOrderListProps) {
-  const [orders, setOrders] = useState<POOrder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+export default function POOrderList() {
+  const { orders, setOrders, products, setting, loading, refreshing, reload } =
+    usePOAdminData();
+  const { notify, confirmAsync } = useDialog();
   const [selected, setSelected] = useState<POOrder | null>(null);
   const [editing, setEditing] = useState(false);
-  const [products, setProducts] = useState<POProduct[]>([]);
-  const [setting, setSetting] = useState<POSetting | null>(null);
   const [loadingMeta, setLoadingMeta] = useState(false);
   const [filterType, setFilterType] = useState<"ALL" | "PUBLIC" | "RESELLER">(
     "ALL",
@@ -272,50 +265,18 @@ export default function POOrderList({ poId }: POOrderListProps) {
       pdf.save(`Struk-${order.po_number}.pdf`);
     } catch (err) {
       console.error(err);
-      alert("Gagal membuat PDF.");
+      notify("Gagal membuat PDF.");
     } finally {
       setDownloadingPdf(false);
     }
   }
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [poId]);
-
-  async function load(isRefresh = false) {
-    if (isRefresh) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
-
-    const [ords, prods, st] = await Promise.all([
-      getAllPOOrders(poId),
-      getAllPOProducts(poId),
-      getPOSettingAdmin(poId),
-    ]);
-
-    setOrders(ords || []);
-    setProducts(prods || []);
-    setSetting(st);
-
-    if (isRefresh) {
-      setRefreshing(false);
-    } else {
-      setLoading(false);
-    }
-  }
-
+  // Produk & pengaturan sudah dimuat bersama pesanan; hanya muat ulang
+  // kalau sebelumnya gagal terambil.
   async function openEditMode() {
     if (products.length === 0 || !setting) {
       setLoadingMeta(true);
-      const [prods, set] = await Promise.all([
-        getAllPOProducts(poId), // ← tambahkan poId
-        getPOSettingAdmin(poId), // ← tambahkan poId
-      ]);
-      setProducts(prods);
-      setSetting(set);
+      await reload();
       setLoadingMeta(false);
     }
     setEditing(true);
@@ -328,18 +289,17 @@ export default function POOrderList({ poId }: POOrderListProps) {
   }
 
   async function handleDelete(id: string, po_number: string) {
-    if (
-      !confirm(
-        `Hapus pesanan ${po_number}? Tindakan ini tidak bisa dibatalkan.`,
-      )
-    )
-      return;
+    const ok = await confirmAsync(
+      `Hapus pesanan ${po_number}? Tindakan ini tidak bisa dibatalkan.`,
+      { title: "Hapus Pesanan" },
+    );
+    if (!ok) return;
     const result = await deletePOOrder(id);
     if (result.success) {
       setOrders((prev) => prev.filter((o) => o.id !== id));
       if (selected?.id === id) setSelected(null);
     } else {
-      alert("Gagal menghapus: " + result.error);
+      notify("Gagal menghapus: " + result.error);
     }
   }
 
@@ -376,8 +336,8 @@ export default function POOrderList({ poId }: POOrderListProps) {
 
     const result = await updatePaymentStatus(id, status, resolvedAmount);
     if (!result.success) {
-      alert("Gagal update status pembayaran: " + result.error);
-      load(true); // rollback dengan reload data asli dari server
+      notify("Gagal update status pembayaran: " + result.error);
+      void reload(); // rollback dengan reload data asli dari server
     }
   }
 
@@ -391,10 +351,18 @@ export default function POOrderList({ poId }: POOrderListProps) {
     return matchType && matchPayment && matchSearch;
   });
 
+  // Tabel hanya menampilkan sebagian dulu supaya ringan; ekspor Excel
+  // tetap memakai seluruh `filtered`.
+  const { visible, remaining, showMore, showAll } = usePagedList(
+    filtered,
+    50,
+    `${search}|${filterType}|${filterPayment}`,
+  );
+
   /* ── Export Excel (sesuai data yang sedang ter-filter) ──────── */
   async function handleExportExcel() {
     if (filtered.length === 0) {
-      alert("Tidak ada data untuk diexport.");
+      notify("Tidak ada data untuk diexport.");
       return;
     }
     setExporting(true);
@@ -528,7 +496,7 @@ export default function POOrderList({ poId }: POOrderListProps) {
       );
     } catch (err) {
       console.error(err);
-      alert(
+      notify(
         "Gagal membuat file Excel. Pastikan package 'xlsx' sudah terinstall.",
       );
     } finally {
@@ -538,7 +506,7 @@ export default function POOrderList({ poId }: POOrderListProps) {
 
   async function handleExportExcelAll() {
     if (orders.length === 0) {
-      alert("Tidak ada data untuk diexport.");
+      notify("Tidak ada data untuk diexport.");
       return;
     }
     setExporting(true);
@@ -622,7 +590,7 @@ export default function POOrderList({ poId }: POOrderListProps) {
       XLSX.writeFile(wb, `Rekap-PO-SEMUA-${tanggalFile}.xlsx`);
     } catch (err) {
       console.error(err);
-      alert("Gagal membuat file Excel.");
+      notify("Gagal membuat file Excel.");
     } finally {
       setExporting(false);
     }
@@ -891,8 +859,7 @@ export default function POOrderList({ poId }: POOrderListProps) {
         >
           <POOrderPrintSlip
             order={selected}
-            storeName="Langitan.co"
-            storeAddress="Mandungan, Widang, Tuban, Jawa Timur"
+            {...getStoreInfo(setting)}
             logoUrl={setting?.logo_image_url || undefined}
           />
         </div>
@@ -923,7 +890,7 @@ export default function POOrderList({ poId }: POOrderListProps) {
         {/* Refresh & Export */}
         <div className="flex flex-row gap-2 sm:gap-3">
           <button
-            onClick={() => load(true)}
+            onClick={() => void reload()}
             disabled={refreshing}
             className="flex-1 sm:w-auto flex justify-center items-center gap-2 text-sm px-3 sm:px-5 py-3 border border-zinc-300 dark:border-zinc-700 rounded-md text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors duration-150"
           >
@@ -1007,7 +974,7 @@ export default function POOrderList({ poId }: POOrderListProps) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((order) => (
+              {visible.map((order) => (
                 <tr
                   key={order.id}
                   onClick={() => setSelected(order)}
@@ -1067,6 +1034,11 @@ export default function POOrderList({ poId }: POOrderListProps) {
           </table>
         </div>
       )}
+      <LoadMore
+        remaining={remaining}
+        onShowMore={showMore}
+        onShowAll={showAll}
+      />
     </div>
   );
 }

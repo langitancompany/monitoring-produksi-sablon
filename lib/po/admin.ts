@@ -4,7 +4,7 @@
 import { thumbPath } from './images';
 import { submitOrderViaApi } from './order-api';
 import { createClient } from '@/lib/supabase/client';
-import { POSetting, POProduct, POOrder, POResellerFull,POOrderItem } from '@/types/po';
+import { POSetting, POProduct, POOrder, POResellerFull, POOrderItem, POOrderPayload } from '@/types/po';
 
 // ─────────────────────────────────────────────
 // SETTING
@@ -208,25 +208,44 @@ export async function deleteReseller(
  * tapi tidak dipakai lagi.
  */
 export async function submitOrder(
-  payload: any,
+  payload: POOrderPayload,
   setting: POSetting,
   _products?: POProduct[]
 ): Promise<{ success: boolean; po_number?: string; total_amount?: number; error?: string }> {
   return submitOrderViaApi(payload, setting.id);
 }
 
+// Supabase/PostgREST membatasi satu request maksimal 1000 baris (bawaan).
+// Tanpa pengambilan bertahap, pesanan ke-1001 dan seterusnya hilang diam-diam
+// dari daftar, rekap, dan cetak massal.
+const ORDER_PAGE_SIZE = 1000;
+
 export async function getAllPOOrders(poId?: string): Promise<POOrder[]> {
   const supabase = createClient();
-  let query = supabase
-    .from('po_orders')
-    .select('*, po_resellers(nama, kode)');
+  const all: POOrder[] = [];
 
-  if (poId) {
-    query = query.eq('po_setting_id', poId);
+  for (let from = 0; ; from += ORDER_PAGE_SIZE) {
+    let query = supabase
+      .from('po_orders')
+      .select('*, po_resellers(nama, kode)');
+
+    if (poId) {
+      query = query.eq('po_setting_id', poId);
+    }
+
+    // id sebagai pembeda urutan supaya halaman tidak tumpang-tindih
+    // saat banyak pesanan punya created_at yang sama.
+    const { data, error } = await query
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, from + ORDER_PAGE_SIZE - 1);
+
+    if (error || !data) break;
+    all.push(...(data as POOrder[]));
+    if (data.length < ORDER_PAGE_SIZE) break;
   }
 
-  const { data } = await query.order('created_at', { ascending: false });
-  return data || [];
+  return all;
 }
 
 export async function getPOOrderById(id: string): Promise<POOrder | null> {
@@ -576,7 +595,8 @@ export async function deletePOSetting(
     }
 
     return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Gagal menghapus PO' };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : '';
+    return { success: false, error: message || 'Gagal menghapus PO' };
   }
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useDialog } from "@/app/components/ui/DialogProvider";
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -50,6 +51,7 @@ function clearCart() {
 }
 
 function OrderFormContent() {
+  const { notify } = useDialog();
   const searchParams = useSearchParams();
   const slug = searchParams.get("slug");
   const katalogHref = slug ? `/po/${slug}` : "/po";
@@ -110,15 +112,17 @@ function OrderFormContent() {
 
   const submitOrderHandler = async () => {
     if (!nama || !whatsapp) {
-      alert("Mohon lengkapi Nama dan No. WhatsApp.");
+      notify("Mohon lengkapi Nama dan No. WhatsApp.");
       return;
     }
     if (metodeKirim === "Dikirim" && !alamat.trim()) {
-      alert("Mohon isi alamat lengkap pengiriman.");
+      notify("Mohon isi alamat lengkap pengiriman.");
       return;
     }
     if (cart.length === 0) {
-      alert("Keranjang kosong! Tambahkan produk dari katalog terlebih dahulu.");
+      notify(
+        "Keranjang kosong! Tambahkan produk dari katalog terlebih dahulu.",
+      );
       return;
     }
 
@@ -146,7 +150,7 @@ function OrderFormContent() {
       const result = await submitOrder(payload, setting!, products);
 
       if (!result.success) {
-        alert("Gagal memproses pesanan: " + result.error);
+        notify("Gagal memproses pesanan: " + result.error);
         setSubmitting(false);
         return;
       }
@@ -162,7 +166,7 @@ function OrderFormContent() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
       console.error(error);
-      alert("Terjadi kesalahan pada server saat menyimpan pesanan.");
+      notify("Terjadi kesalahan pada server saat menyimpan pesanan.");
       setSubmitting(false);
     }
   };

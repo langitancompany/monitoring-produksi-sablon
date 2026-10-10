@@ -1,5 +1,7 @@
 "use client";
 
+import { useMarkPODataStaleOnLeave } from "./POAdminDataContext";
+import { useDialog } from "@/app/components/ui/DialogProvider";
 import { useEffect, useState } from "react";
 import {
   getAllResellers,
@@ -37,6 +39,8 @@ interface POResellerListProps {
 }
 
 export default function POResellerList({ poId }: POResellerListProps) {
+  const { notify, confirmAsync } = useDialog();
+  useMarkPODataStaleOnLeave();
   const [resellers, setResellers] = useState<POResellerFull[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -84,11 +88,11 @@ export default function POResellerList({ poId }: POResellerListProps) {
 
   async function handleSave() {
     if (!form.kode || !form.nama) {
-      alert("Kode dan nama wajib diisi.");
+      notify("Kode dan nama wajib diisi.");
       return;
     }
     if (!editTarget && !form.pin_hash) {
-      alert("PIN wajib diisi untuk reseller baru.");
+      notify("PIN wajib diisi untuk reseller baru.");
       return;
     }
     setSaving(true);
@@ -124,7 +128,7 @@ export default function POResellerList({ poId }: POResellerListProps) {
   }
 
   async function handleDelete(id: string, nama: string) {
-    if (!confirm(`Hapus reseller "${nama}"?`)) return;
+    if (!(await confirmAsync(`Hapus reseller "${nama}"?`))) return;
     await deleteReseller(id);
     setResellers((prev) => prev.filter((r) => r.id !== id));
   }
