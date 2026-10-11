@@ -2,11 +2,11 @@
 
 export const APP_INFO = {
   name: "LCO SuperApp",
-  version: "V.17.0",
+  version: "V.18.0",
   purpose: "Aplikasi produksi Sablon, Langitan.co.",
   creator: "abdllahmajid",
   creationDate: "13 Desember 2025",
-  notes: 'Penambahan menu baru + Perbaikan bug',
+  notes: 'Perombakan total menu Keuangan (v2) + Perbaikan bug',
 };
 
 export interface ChangelogEntry {
@@ -16,6 +16,29 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "18.0",
+    date: "2026-10-11",
+    changes: [
+      "Perombakan total menu Keuangan (v2): konsep lama yang berbasis daftar order dan form harga di Order Detail diganti dengan alur Tagihan → Pembayaran → Verifikasi. Fase 1 berfokus pada uang masuk.",
+      "Navigasi tab baru: Ringkasan, Tagihan, Transaksi, Verifikasi, Pengeluaran (segera hadir), dan Pengaturan. Tab bisa dipindah dengan panah kiri/kanan, dan tab Verifikasi menampilkan badge jumlah antrean.",
+      "Ringkasan: kas masuk terverifikasi, total tagihan diterbitkan, piutang beserta piutang jatuh tempo, grafik umur piutang (aging), dan daftar pelanggan dengan piutang terbesar, dengan filter rentang tanggal.",
+      "Tagihan: terbitkan tagihan per order dengan harga dasar per pcs, tambahan ukuran besar (otomatis per tingkat mulai XXL, penulisan 2XL/XXL dianggap sama), tambahan lengan panjang, diskon, dan jatuh tempo. Total final selalu dihitung ulang di server.",
+      "Revisi tagihan dengan alasan wajib. Versi lama tetap tersimpan sebagai riwayat dan versi aktif ditandai (v1, v2, dst.).",
+      "Status pembayaran dihitung otomatis oleh database: Belum Ditagih, Belum Bayar, DP, Lunas, dan Kelebihan Bayar. Daftar tagihan bisa dicari dan difilter berdasarkan status.",
+      "Invoice untuk customer: pratinjau, unduh PDF (A5 landscape), bagikan file di HP, kirim lewat WhatsApp dengan pesan siap kirim, atau cetak langsung.",
+      "Pencatatan pembayaran: nominal, metode (Transfer, Tunai, QRIS, Lainnya), akun kas/bank, tanggal diterima, nomor referensi, nama pengirim, catatan, dan unggah bukti pembayaran. Tersedia juga pencatatan refund.",
+      "Verifikasi pembayaran: pembayaran baru masuk antrean 'Menunggu verifikasi', lalu diverifikasi atau ditolak dengan alasan. Hanya pembayaran terverifikasi yang dihitung sebagai kas masuk.",
+      "Void (koreksi) transaksi dengan alasan wajib, sehingga data tidak pernah dihapus permanen. Bukti pembayaran dapat dibuka langsung dari daftar transaksi.",
+      "Transaksi: riwayat semua pembayaran dengan filter status (menunggu, terverifikasi, ditolak) dan rentang tanggal.",
+      "Ekspor Excel untuk daftar tagihan sesuai filter aktif. Setiap ekspor tercatat di log audit.",
+      "Pengaturan invoice (khusus supervisor): nama usaha, alamat, hingga beberapa rekening pembayaran, catatan di bawah rekening, tanda tangan (gambar, nama, dan jabatan penandatangan), dilengkapi pratinjau langsung.",
+      "Hak akses keuangan yang lebih rinci: lihat, buat (terbitkan tagihan dan catat pembayaran), edit (verifikasi/tolak), dan hapus (void). Supervisor memiliki semua hak, dan penegakan hak akses dilakukan di server serta database.",
+      "Semua perubahan data keuangan tercatat di log audit (siapa, kapan, sebelum dan sesudah). Operasi uang kini hanya lewat API server, tidak langsung dari browser.",
+      "Order Detail: panel keuangan per order untuk terbitkan/revisi tagihan dan melihat status pembayaran, menggantikan section 'Harga & Pembayaran' yang lama.",
+      "Pembersihan: komponen keuangan lama (FinanceView, OrderCard, OrderRow, PaymentForm, PaymentModal, dan StepPembayaran) dihapus. Perbaikan bug.",
+    ],
+  },
   {
   version: "17.0",
   date: "2026-09-14",
