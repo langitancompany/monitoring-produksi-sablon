@@ -16,7 +16,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ orderId: st
   const admin = getSupabaseAdmin();
   const [fin, order, inv, pay] = await Promise.all([
     admin.from('v_order_finance').select('*').eq('order_id', orderId).maybeSingle(),
-    admin.from('orders').select('id, kode_produksi, nama_pemesan, jumlah, detail_ukuran').eq('id', orderId).maybeSingle(),
+    admin.from('orders').select('id, kode_produksi, nama_pemesan, no_hp, alamat_pemesan, jumlah, detail_ukuran, jenis_produksi, tanggal_masuk').eq('id', orderId).maybeSingle(),
     admin.from('order_invoices')
       .select('id, order_id, version, status, harga_dasar, biaya_ukuran_besar, biaya_lengan_panjang, total_pcs, subtotal, discount, total, reason, due_date, is_legacy, issued_by_name, issued_at')
       .eq('order_id', orderId).order('version', { ascending: false }),

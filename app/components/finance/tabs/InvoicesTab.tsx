@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Download } from "lucide-react";
+import { Download, Send } from "lucide-react";
 import { useDialog } from "@/app/components/ui/DialogProvider";
 import { finFetch, postJson, errMsg } from "@/hooks/useFinanceApi";
 import type { FinCaps } from "@/lib/finance/caps";
@@ -9,6 +9,7 @@ import type { OrderFinanceRow, OrderPaymentStatus } from "@/lib/finance/types";
 import { StatusBadge } from "../StatusBadge";
 import OrderFinancePanel from "../OrderFinancePanel";
 import RecordPaymentModal from "../RecordPaymentModal";
+import InvoiceShareModal from "../InvoiceShareModal";
 import { ModalShell, SearchInput, toolbarCls } from "../ui";
 import { formatDateShort, formatRupiah } from "../utils";
 
@@ -37,6 +38,7 @@ export default function InvoicesTab({
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("Semua");
   const [detailId, setDetailId] = useState<string | null>(null);
   const [recordRow, setRecordRow] = useState<OrderFinanceRow | null>(null);
+  const [invoiceId, setInvoiceId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -242,6 +244,14 @@ export default function InvoicesTab({
                     >
                       Rincian
                     </button>
+                    {r.invoice_id && (
+                      <button
+                        onClick={() => setInvoiceId(r.order_id)}
+                        className="flex items-center gap-1 text-[11px] font-semibold px-3 py-1.5 rounded-md border border-[#124540] dark:border-[#49bfb4] text-[#124540] dark:text-[#49bfb4] hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors duration-150"
+                      >
+                        <Send className="w-3 h-3" /> Invoice
+                      </button>
+                    )}
                     {caps.create && r.invoice_id && r.balance > 0 && (
                       <button
                         onClick={() => setRecordRow(r)}
@@ -271,6 +281,12 @@ export default function InvoicesTab({
             onChanged={onChanged}
           />
         </ModalShell>
+      )}
+      {invoiceId && (
+        <InvoiceShareModal
+          orderId={invoiceId}
+          onClose={() => setInvoiceId(null)}
+        />
       )}
       {recordRow && (
         <RecordPaymentModal

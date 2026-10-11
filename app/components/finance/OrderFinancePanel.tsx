@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { FileText, Plus, History } from "lucide-react";
+import { FileText, Plus, History, Send } from "lucide-react";
 import { finFetch, errMsg } from "@/hooks/useFinanceApi";
 import type { FinCaps } from "@/lib/finance/caps";
 import type { OrderFinanceDetail } from "@/lib/finance/types";
@@ -10,6 +10,7 @@ import { PaymentRow } from "./PaymentRow";
 import { usePaymentActions } from "./PaymentActions";
 import RecordPaymentModal from "./RecordPaymentModal";
 import InvoiceModal from "./InvoiceModal";
+import InvoiceShareModal from "./InvoiceShareModal";
 import { formatDateShort, formatDateTime, formatRupiah } from "./utils";
 
 /**
@@ -33,6 +34,7 @@ export default function OrderFinancePanel({
   const [showRecord, setShowRecord] = useState(false);
   const [showInvoice, setShowInvoice] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showShare, setShowShare] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -165,6 +167,15 @@ export default function OrderFinancePanel({
             <Plus className="w-3.5 h-3.5" /> Catat pembayaran
           </button>
         )}
+        {hasInvoice && (
+          <button
+            onClick={() => setShowShare(true)}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-md border border-[#124540] dark:border-[#49bfb4] text-[#124540] dark:text-[#49bfb4] hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors duration-150"
+          >
+            <Send className="w-3.5 h-3.5" />
+            {f.payment_status === "Lunas" ? "Invoice lunas" : "Invoice"}
+          </button>
+        )}
         {detail.invoices.length > 1 && (
           <button
             onClick={() => setShowHistory((v) => !v)}
@@ -229,7 +240,17 @@ export default function OrderFinancePanel({
         <InvoiceModal
           detail={detail}
           onClose={() => setShowInvoice(false)}
-          onDone={changed}
+          onDone={() => {
+            changed();
+            // Tagihan baru/revisi langsung bisa dikirim ke customer.
+            setShowShare(true);
+          }}
+        />
+      )}
+      {showShare && (
+        <InvoiceShareModal
+          orderId={orderId}
+          onClose={() => setShowShare(false)}
         />
       )}
     </section>

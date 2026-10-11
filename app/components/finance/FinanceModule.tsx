@@ -10,6 +10,7 @@ import {
   ArrowDownToLine,
   ShieldCheck,
   ArrowUpFromLine,
+  Settings,
 } from "lucide-react";
 import type { UserData } from "@/types";
 import { getFinanceCaps } from "@/lib/finance/caps";
@@ -17,8 +18,15 @@ import { useFinanceMeta } from "@/hooks/useFinanceApi";
 import OverviewTab from "./tabs/OverviewTab";
 import InvoicesTab from "./tabs/InvoicesTab";
 import PaymentsTab from "./tabs/PaymentsTab";
+import SettingsTab from "./tabs/SettingsTab";
 
-type TabId = "overview" | "invoices" | "payments" | "verify" | "expenses";
+type TabId =
+  | "overview"
+  | "invoices"
+  | "payments"
+  | "verify"
+  | "expenses"
+  | "settings";
 
 export default function FinanceModule({
   currentUser,
@@ -85,6 +93,12 @@ export default function FinanceModule({
       show: true,
       soon: true,
     },
+    {
+      id: "settings",
+      label: "Pengaturan",
+      icon: <Settings size={14} className="shrink-0" />,
+      show: caps.isSupervisor,
+    },
   ];
 
   const visibleTabs = tabs.filter((t) => t.show);
@@ -108,8 +122,8 @@ export default function FinanceModule({
           Keuangan
         </h2>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
-          Tagihan, pembayaran masuk, dan verifikasi. Semua perubahan tercatat di
-          log audit.
+          Tagihan, invoice, pembayaran masuk, dan verifikasi. Semua perubahan
+          tercatat di log audit.
         </p>
       </div>
 
@@ -189,6 +203,7 @@ export default function FinanceModule({
             onChanged={changed}
           />
         )}
+        {tab === "settings" && caps.isSupervisor && <SettingsTab />}
         {tab === "verify" && caps.edit && (
           <PaymentsTab
             key="pending"

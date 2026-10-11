@@ -112,7 +112,17 @@ export interface OverviewData {
 
 export interface OrderFinanceDetail {
   finance: OrderFinanceRow;
-  order: { id: string; kode_produksi: string; nama_pemesan: string; jumlah: number; detail_ukuran: unknown };
+  order: {
+    id: string;
+    kode_produksi: string;
+    nama_pemesan: string;
+    no_hp?: string | null;
+    alamat_pemesan?: string | null;
+    jumlah: number;
+    detail_ukuran: unknown;
+    jenis_produksi?: string | null;
+    tanggal_masuk?: string | null;
+  };
   invoices: InvoiceRow[];
   payments: PaymentRow[];
 }

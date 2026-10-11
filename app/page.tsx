@@ -284,11 +284,14 @@ export default function ProductionApp() {
   const {
     orders,
     activeOrders,
+    ordersLoading,
+    ordersError,
     fetchOrders,
     writeLog,
     checkAutoStatus,
     isCreating,
     deletingOrderId,
+    trashBusy,
     handleCreateOrder,
     handleEditOrder,
     handleDeleteOrder,
@@ -350,6 +353,9 @@ export default function ProductionApp() {
         data: { session },
       } = await supabase.auth.getSession();
       if (session) {
+        // Mulai muat data pesanan SEKARANG, bersamaan dengan pengambilan profil di bawah
+        // (sebelumnya baru dimulai setelah profil selesai = menunggu satu putaran jaringan lagi).
+        void Promise.all([fetchOrders(), fetchUsers(), fetchProductionTypes()]);
         const { data: userData } = await supabase
           .from("users")
           .select("*")
@@ -372,14 +378,9 @@ export default function ProductionApp() {
       setLoadingUser(false);
     };
     initSession();
-  }, [supabase]);
-
-  // ─── Load Data ─────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (!currentUser) return;
-    Promise.all([fetchOrders(), fetchUsers(), fetchProductionTypes()]);
-  }, [currentUser, fetchOrders, fetchUsers, fetchProductionTypes]);
+    // fetchOrders / fetchUsers / fetchProductionTypes stabil (bergantung hanya pada supabase),
+    // jadi efek ini tetap hanya berjalan sekali.
+  }, [supabase, fetchOrders, fetchUsers, fetchProductionTypes]);
 
   // ─── Navigation ────────────────────────────────────────────────────────────
 
@@ -590,10 +591,28 @@ export default function ProductionApp() {
           className="flex-1 overflow-y-auto px-4 md:px-6 py-2 md:py-3 pb-32 relative bg-zinc-50 dark:bg-zinc-950 no-scrollbar"
         >
           <div className="w-full h-full">
+            {ordersError && (
+              <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-xs text-red-700 dark:text-red-300">
+                <span>{ordersError}</span>
+                <button
+                  onClick={() => void fetchOrders()}
+                  className="font-semibold underline shrink-0"
+                >
+                  Coba lagi
+                </button>
+              </div>
+            )}
+            {ordersLoading && activeTab !== "dashboard" && (
+              <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400 animate-pulse">
+                Memuat data pesanan…
+              </p>
+            )}
+
             {activeTab === "dashboard" && p?.dashboard?.view && (
               <Dashboard
                 role={currentUser.role}
                 orders={activeOrders}
+                loading={ordersLoading}
                 onSelectOrder={(id) => {
                   setPreviousTab(activeTab); // simpan "dashboard"
                   setSelectedOrderId(id);
@@ -616,6 +635,7 @@ export default function ProductionApp() {
                     }}
                     onNewOrder={() => setView("create")}
                     onDeleteOrder={handleDeleteOrder}
+                    deletingOrderId={deletingOrderId}
                     currentUser={currentUser}
                   />
                 )}
@@ -765,6 +785,7 @@ export default function ProductionApp() {
                 orders={orders.filter((o: Order) => o.deleted_at)}
                 onRestore={handleRestoreOrder}
                 onPermanentDelete={handlePermanentDelete}
+                busy={trashBusy}
               />
             )}
 

@@ -9,6 +9,7 @@ import {
   ClipboardList,
   Clock,
   FileText,
+  Loader2,
   Trash2,
   User,
   Users,
@@ -21,6 +22,8 @@ interface OrderListProps {
   onSelectOrder: (id: string) => void;
   onNewOrder: () => void;
   onDeleteOrder: (id: string) => void;
+  /** id pesanan yang sedang dihapus (untuk menampilkan loading di tombol sampah). */
+  deletingOrderId?: string | null;
   currentUser: UserData;
 }
 
@@ -139,6 +142,7 @@ interface MobileCardProps {
   order: Order;
   isManagement: boolean;
   canDeleteOrder: boolean;
+  isDeleting?: boolean;
   onSelectOrder: (id: string) => void;
   onDeleteOrder: (id: string) => void;
 }
@@ -147,6 +151,7 @@ function MobileCard({
   order,
   isManagement,
   canDeleteOrder,
+  isDeleting = false,
   onSelectOrder,
   onDeleteOrder,
 }: MobileCardProps) {
@@ -169,8 +174,11 @@ function MobileCard({
 
   return (
     <div
-      onClick={() => onSelectOrder(order.id)}
-      className={`block bg-white dark:bg-zinc-950 rounded-xl border ${borderAccent} p-3 transition-colors duration-150 cursor-pointer`}
+      onClick={() => {
+        if (!isDeleting) onSelectOrder(order.id);
+      }}
+      aria-busy={isDeleting}
+      className={`block bg-white dark:bg-zinc-950 rounded-xl border ${borderAccent} p-3 transition-colors duration-150 ${isDeleting ? "cursor-wait" : "cursor-pointer"}`}
     >
       {/* Row 1: kode + badge status */}
       <div className="flex items-center justify-between mb-1.5">
@@ -235,13 +243,24 @@ function MobileCard({
       {/* Tombol hapus */}
       {canDeleteOrder && (
         <button
+          disabled={isDeleting}
+          aria-busy={isDeleting}
           onClick={(e) => {
             e.stopPropagation();
+            if (isDeleting) return;
             onDeleteOrder(order.id);
           }}
-          className="mt-2 w-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 px-3 py-1.5 rounded-md text-[10px] font-semibold hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors duration-150 border border-red-200 dark:border-red-900/50 flex items-center justify-center gap-1.5"
+          className="mt-2 w-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 px-3 py-1.5 rounded-md text-[10px] font-semibold hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors duration-150 border border-red-200 dark:border-red-900/50 flex items-center justify-center gap-1.5 disabled:cursor-wait"
         >
-          <Trash2 className="w-3 h-3" /> Hapus
+          {isDeleting ? (
+            <>
+              <Loader2 className="w-3 h-3 animate-spin" /> Menghapus…
+            </>
+          ) : (
+            <>
+              <Trash2 className="w-3 h-3" /> Hapus
+            </>
+          )}
         </button>
       )}
     </div>
@@ -305,6 +324,7 @@ interface KanbanCardProps {
   order: Order;
   isManagement: boolean;
   canDeleteOrder: boolean;
+  isDeleting?: boolean;
   onSelectOrder: (id: string) => void;
   onDeleteOrder: (id: string) => void;
 }
@@ -313,6 +333,7 @@ function KanbanCard({
   order,
   isManagement,
   canDeleteOrder,
+  isDeleting = false,
   onSelectOrder,
   onDeleteOrder,
 }: KanbanCardProps) {
@@ -332,8 +353,11 @@ function KanbanCard({
 
   return (
     <div
-      onClick={() => onSelectOrder(order.id)}
-      className={`block bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 ${leftBorder} p-3 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors duration-150 group cursor-pointer`}
+      onClick={() => {
+        if (!isDeleting) onSelectOrder(order.id);
+      }}
+      aria-busy={isDeleting}
+      className={`block bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 ${leftBorder} p-3 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors duration-150 group ${isDeleting ? "cursor-wait" : "cursor-pointer"}`}
     >
       {/* Kode + Badge */}
       <div className="flex items-start justify-between gap-1 mb-1.5">
@@ -405,13 +429,26 @@ function KanbanCard({
       {/* Hapus */}
       {canDeleteOrder && (
         <button
+          disabled={isDeleting}
+          aria-busy={isDeleting}
           onClick={(e) => {
             e.stopPropagation();
+            if (isDeleting) return;
             onDeleteOrder(order.id);
           }}
-          className="mt-2 w-full bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 px-2 py-1 rounded-md text-[9px] font-semibold hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors duration-150 border border-red-100 dark:border-red-900/30 flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100"
+          className={`mt-2 w-full bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 px-2 py-1 rounded-md text-[9px] font-semibold hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors duration-150 border border-red-100 dark:border-red-900/30 flex items-center justify-center gap-1 disabled:cursor-wait ${
+            isDeleting ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          }`}
         >
-          <Trash2 className="w-2.5 h-2.5" /> Hapus
+          {isDeleting ? (
+            <>
+              <Loader2 className="w-2.5 h-2.5 animate-spin" /> Menghapus…
+            </>
+          ) : (
+            <>
+              <Trash2 className="w-2.5 h-2.5" /> Hapus
+            </>
+          )}
         </button>
       )}
     </div>
@@ -455,6 +492,7 @@ interface KanbanBoardProps {
   orders: Order[];
   isManagement: boolean;
   canDeleteOrder: boolean;
+  deletingOrderId?: string | null;
   onSelectOrder: (id: string) => void;
   onDeleteOrder: (id: string) => void;
 }
@@ -463,6 +501,7 @@ function KanbanBoard({
   orders,
   isManagement,
   canDeleteOrder,
+  deletingOrderId,
   onSelectOrder,
   onDeleteOrder,
 }: KanbanBoardProps) {
@@ -494,6 +533,7 @@ function KanbanBoard({
                   order={order}
                   isManagement={isManagement}
                   canDeleteOrder={canDeleteOrder}
+                  isDeleting={deletingOrderId === order.id}
                   onSelectOrder={onSelectOrder}
                   onDeleteOrder={onDeleteOrder}
                 />
@@ -520,6 +560,7 @@ export default function OrderList({
   onSelectOrder,
   onNewOrder,
   onDeleteOrder,
+  deletingOrderId,
   currentUser,
 }: OrderListProps) {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
@@ -666,6 +707,7 @@ export default function OrderList({
             orders={filteredOrders}
             isManagement={isManagement}
             canDeleteOrder={canDeleteOrder}
+            deletingOrderId={deletingOrderId}
             onSelectOrder={onSelectOrder}
             onDeleteOrder={onDeleteOrder}
           />
@@ -685,6 +727,7 @@ export default function OrderList({
               order={order}
               isManagement={isManagement}
               canDeleteOrder={canDeleteOrder}
+              isDeleting={deletingOrderId === order.id}
               onSelectOrder={onSelectOrder}
               onDeleteOrder={onDeleteOrder}
             />

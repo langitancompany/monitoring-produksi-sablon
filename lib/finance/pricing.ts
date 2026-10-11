@@ -6,14 +6,45 @@
 
 import type { SizeEntry } from '@/types';
 
-/** Urutan ukuran terkecil -> terbesar. Mulai XXL kena biaya tambahan berkelipatan. */
-const SIZE_ORDER = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL'] as const;
-const SURCHARGE_START_INDEX = SIZE_ORDER.indexOf('XXL');
+/**
+ * Ukuran dikenali secara generik, bukan dari daftar tetap:
+ *   XS S M L XL            -> tanpa tambahan
+ *   XXL  = 2XL             -> tingkat 1 (1x tambahan ukuran besar)
+ *   XXXL = 3XL             -> tingkat 2
+ *   XXXXL = 4XL            -> tingkat 3
+ *   dst. (5XL, 6XL, ...)   -> tingkat n-1
+ * Penulisan "2XL / XXL", "3XL / XXXL", "4XL / XXXXL" dianggap sama. Ukuran lain
+ * yang tidak dikenali (mis. ukuran anak "8", "10") tidak kena tambahan.
+ */
+const BASE_SIZE_RANK: Record<string, number> = { XS: 0, S: 1, M: 2, L: 3, XL: 4 };
+
+/** Jumlah "X" pada ukuran XL ke atas: XL=1, XXL/2XL=2, XXXL/3XL=3, 4XL=4. null = bukan ukuran XL-an. */
+function xlCount(ukuran: string): number | null {
+  const u = ukuran.toUpperCase().replace(/[\s\-_]/g, '');
+  let m = u.match(/^(\d{1,2})XL$/);
+  if (m) return Number(m[1]);
+  m = u.match(/^(X+)L$/);
+  if (m) return m[1].length;
+  return null;
+}
+
+/** Urutan tampil (kecil -> besar). Ukuran tak dikenali = -1 (ditaruh paling akhir). */
+export function sizeRank(ukuran: string): number {
+  const u = ukuran.toUpperCase().replace(/[\s\-_]/g, '');
+  if (u in BASE_SIZE_RANK) return BASE_SIZE_RANK[u];
+  const n = xlCount(u);
+  if (n !== null && n >= 2) return 3 + n; // XXL (n=2) -> 5, dst.
+  return -1;
+}
+
+/** Tingkat tambahan ukuran besar: XXL=1, XXXL=2, 4XL=3, ... ; 0 = tanpa tambahan. */
+export function getSizeTier(ukuran: string): number {
+  const n = xlCount(ukuran);
+  return n !== null && n >= 2 ? n - 1 : 0;
+}
 
 export function getSizeSurcharge(ukuran: string, biayaUkuranBesar: number): number {
-  const idx = (SIZE_ORDER as readonly string[]).indexOf(ukuran.toUpperCase());
-  if (idx === -1 || idx < SURCHARGE_START_INDEX) return 0;
-  return (idx - SURCHARGE_START_INDEX + 1) * biayaUkuranBesar;
+  return getSizeTier(ukuran) * biayaUkuranBesar;
 }
 
 export interface SizePricingRow {
@@ -93,9 +124,9 @@ export function computeInvoice(input: InvoiceInput): InvoiceCalc {
         return { ukuran, qty, hargaPerPcs, subtotal: hargaPerPcs * qty };
       })
       .sort((a, b) => {
-        const ia = (SIZE_ORDER as readonly string[]).indexOf(a.ukuran.toUpperCase());
-        const ib = (SIZE_ORDER as readonly string[]).indexOf(b.ukuran.toUpperCase());
-        if (ia === -1 && ib === -1) return a.ukuran.localeCompare(b.ukuran);
+        const ia = sizeRank(a.ukuran);
+        const ib = sizeRank(b.ukuran);
+        if (ia === -1 && ib === -1) return a.ukuran.localeCompare(b.ukuran, undefined, { numeric: true });
         if (ia === -1) return 1;
         if (ib === -1) return -1;
         return ia - ib;

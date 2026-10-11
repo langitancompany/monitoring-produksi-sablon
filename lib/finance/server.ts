@@ -65,7 +65,11 @@ export function todayWib(): string {
 }
 
 export async function loadSettings() {
-  const { data } = await getSupabaseAdmin().from('finance_settings').select('key, value');
+  // Hanya kunci yang dipakai di sini. Baris lain (mis. invoice_settings berisi gambar) tidak ikut terbaca.
+  const { data } = await getSupabaseAdmin()
+    .from('finance_settings')
+    .select('key, value')
+    .in('key', ['require_proof_non_cash', 'require_separate_verifier', 'allow_overpayment', 'auto_verify_own_payment']);
   const m = new Map<string, unknown>((data ?? []).map((r: { key: string; value: unknown }) => [r.key, r.value]));
   const b = (k: string, d: boolean) => (typeof m.get(k) === 'boolean' ? (m.get(k) as boolean) : d);
   return {

@@ -33,24 +33,55 @@ export function useOrders({
   setView,
 }: UseOrdersProps) {
   const [orders, setOrders] = useState<Order[]>([]);
+  // true sampai pemuatan pertama selesai (berhasil ATAU gagal). Dipakai UI supaya tidak
+  // menampilkan angka 0 / daftar kosong padahal data belum datang.
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
 
   // ── TAMBAHAN ── state loading untuk indikator di tombol
   const [isCreating, setIsCreating] = useState(false);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
+  // Proses di menu Sampah (pulihkan / hapus permanen): satu proses pada satu waktu.
+  const [trashBusy, setTrashBusy] = useState<{ id: string; action: 'restore' | 'purge' } | null>(null);
 
   // ─── Fetch ────────────────────────────────────────────────────────────────
 
   const fetchOrders = useCallback(async () => {
-    const { data } = await supabase
-      .from('orders')
-      .select(`*, assigned_user:users!assigned_to ( name ), helper_user:users!helper_id ( name )`)
-      .order('created_at', { ascending: false });
+    // Batas waktu per percobaan: tanpa ini, koneksi yang macet bisa menggantung sampai hitungan menit.
+    const attempt = () => {
+      const q = supabase
+        .from('orders')
+        .select(`*, assigned_user:users!assigned_to ( name ), helper_user:users!helper_id ( name )`)
+        .order('created_at', { ascending: false });
+      return typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal
+        ? q.abortSignal(AbortSignal.timeout(20000))
+        : q;
+    };
 
-    if (data) setOrders(data.map((o: any) => ({
-      ...o,
-      kendala: Array.isArray(o.kendala) ? o.kendala : [],
-      bukti_pembayaran: Array.isArray(o.bukti_pembayaran) ? o.bukti_pembayaran : [], // ── TAMBAHAN ──
-    })));
+    let data: any[] | null = null;
+    try {
+      let res = await attempt();
+      if (res.error) {
+        await new Promise((r) => setTimeout(r, 1000));
+        res = await attempt(); // satu kali coba ulang
+      }
+      data = res.error ? null : (res.data as any[] | null);
+    } catch {
+      data = null;
+    }
+
+    if (data) {
+      setOrders(data.map((o: any) => ({
+        ...o,
+        kendala: Array.isArray(o.kendala) ? o.kendala : [],
+        bukti_pembayaran: Array.isArray(o.bukti_pembayaran) ? o.bukti_pembayaran : [], // ── TAMBAHAN ──
+      })));
+      setOrdersError(null);
+    } else {
+      // Data lama (jika ada) tetap dipertahankan; hanya tampilkan pesan agar pengguna tahu.
+      setOrdersError('Data pesanan belum berhasil dimuat. Periksa koneksi internet, lalu coba lagi.');
+    }
+    setOrdersLoading(false);
   }, [supabase]);
 
   const activeOrders = useMemo(() => orders.filter(o => !o.deleted_at), [orders]);
@@ -271,8 +302,13 @@ export function useOrders({
       try {
         const { error } = await supabase.from('orders').update({ deleted_at: new Date().toISOString() }).eq('id', id);
         if (!error) {
+          // Perbarui tampilan SEKARANG (kartu langsung hilang dari daftar), lalu catat log dan
+          // sinkronkan ulang seluruh data di latar belakang. Sebelumnya menunggu muat ulang
+          // semua pesanan dulu, itu yang membuat proses terasa membeku.
+          const deletedAt = new Date().toISOString();
+          setOrders(prev => prev.map(o => (o.id === id ? { ...o, deleted_at: deletedAt } : o)));
           if (orderToDelete) {
-            await writeLog({
+            void writeLog({
               order: orderToDelete,
               category: 'STATUS',
               event: 'Pesanan Dihapus',
@@ -280,7 +316,7 @@ export function useOrders({
               newVal: 'Sampah',
             });
           }
-          await fetchOrders();
+          void fetchOrders();
           setView('list');
           showAlert('Sukses', 'Dihapus');
         } else {
@@ -293,11 +329,19 @@ export function useOrders({
   }, [showConfirm, supabase, fetchOrders, showAlert, orders, writeLog, setView]);
 
   const handleRestoreOrder = useCallback(async (id: string) => {
+    if (trashBusy) return; // cegah klik ganda / proses bersamaan
     const orderToRestore = orders.find(o => o.id === id);
-    const { error } = await supabase.from('orders').update({ deleted_at: null }).eq('id', id);
-    if (!error) {
+    setTrashBusy({ id, action: 'restore' });
+    try {
+      const { error } = await supabase.from('orders').update({ deleted_at: null }).eq('id', id);
+      if (error) {
+        showAlert('Gagal Memulihkan', error.message, 'error'); // sebelumnya gagal diam-diam
+        return;
+      }
+      // Kartu langsung pindah dari Sampah; log & sinkronisasi ulang jalan di latar belakang.
+      setOrders(prev => prev.map(o => (o.id === id ? { ...o, deleted_at: null } : o)));
       if (orderToRestore) {
-        await writeLog({
+        void writeLog({
           order: orderToRestore,
           category: 'STATUS',
           event: 'Pesanan Dipulihkan',
@@ -305,19 +349,25 @@ export function useOrders({
           newVal: orderToRestore.status,
         });
       }
-      fetchOrders();
+      void fetchOrders();
       showAlert('Sukses', 'Dipulihkan');
+    } finally {
+      setTrashBusy(null);
     }
-  }, [supabase, fetchOrders, showAlert, orders, writeLog]);
+  }, [supabase, fetchOrders, showAlert, orders, writeLog, trashBusy]);
 
   const handlePermanentDelete = useCallback(async (id: string) => {
+    if (trashBusy) return; // cegah klik ganda / proses bersamaan
     // Cek dulu data keuangan order ini: untuk pesan konfirmasi, dan agar user tanpa izin
-    // ditolak SEBELUM file/log apa pun dihapus.
+    // ditolak SEBELUM file/log apa pun dihapus. Tombol menampilkan loading selama pengecekan ini.
     let fin = { invoices: 0, payments: 0, can_purge: true };
+    setTrashBusy({ id, action: 'purge' });
     try {
       fin = await finFetch<typeof fin>(`/api/finance/orders/${id}/purge`);
     } catch {
       // Gagal mengecek: lanjut dengan pesan umum; penghapusan tetap dicek ulang di server.
+    } finally {
+      setTrashBusy(null); // dialog konfirmasi akan tampil; tombol tidak boleh berputar saat menunggu jawaban
     }
     const hasFin = fin.invoices + fin.payments > 0;
 
@@ -335,6 +385,7 @@ export function useOrders({
       : 'Data dan semua file lampiran akan hilang selamanya.';
 
     showConfirm('Hapus Permanen?', confirmMsg, async () => {
+      setTrashBusy({ id, action: 'purge' });
       try {
         // Data keuangan dihapus lebih dulu (server + database). Bila ditolak (mis. periode sudah
         // ditutup), error dilempar dan file/log pesanan belum disentuh.
@@ -376,7 +427,8 @@ export function useOrders({
 
         const { error: dbError } = await supabase.from('orders').delete().eq('id', id);
         if (!dbError) {
-          await fetchOrders();
+          setOrders(prev => prev.filter(o => o.id !== id)); // langsung hilang dari daftar
+          void fetchOrders();
           showAlert('Sukses', 'Order dan file terkait telah dihapus selamanya');
         } else {
           throw dbError;
@@ -390,15 +442,20 @@ export function useOrders({
             : err.message,
           'error',
         );
+      } finally {
+        setTrashBusy(null);
       }
     });
-  }, [showConfirm, supabase, fetchOrders, showAlert]);
+  }, [showConfirm, supabase, fetchOrders, showAlert, trashBusy]);
 
   return {
     orders,
     activeOrders,
+    ordersLoading,
+    ordersError,
     isCreating, // ── TAMBAHAN ──
     deletingOrderId, // ── TAMBAHAN ──
+    trashBusy,
     fetchOrders,
     writeLog,
     checkAutoStatus,

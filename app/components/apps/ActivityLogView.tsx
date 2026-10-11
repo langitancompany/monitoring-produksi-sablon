@@ -1,7 +1,13 @@
 // app/components/apps/ActivityLogView.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+} from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import {
   Clock,
@@ -14,10 +20,20 @@ import {
   Package,
 } from "lucide-react";
 
+// Cache di memori (hidup selama tab browser tidak di-refresh). Komponen ini di-unmount tiap pindah
+// menu, jadi tanpa cache setiap membuka "Log Aktivitas" selalu mulai dari kosong + spinner.
+// Dengan cache: data terakhir langsung tampil, lalu diperbarui di latar belakang.
+let logsCache: any[] | null = null;
+
+// Hanya kolom yang benar-benar ditampilkan tabel. `metadata`, `old_value`, `new_value`, dst. tidak dipakai.
+const LOG_COLUMNS =
+  "id, created_at, kode_produksi, category, event_name, description, oleh";
+
 export default function ActivityLogView() {
   // --- STATE DATA ---
-  const [logs, setLogs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [logs, setLogs] = useState<any[]>(logsCache ?? []);
+  const [loading, setLoading] = useState(logsCache === null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // --- STATE FILTER & SEARCH ---
   const [filterCategory, setFilterCategory] = useState("ALL");
@@ -29,14 +45,59 @@ export default function ActivityLogView() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  const supabase = useMemo(
+    () =>
+      createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      ),
+    [],
   );
 
+  const fetchLogs = useCallback(async () => {
+    // Jika sudah ada data (cache), jangan tampilkan spinner penuh: perbarui diam-diam.
+    if (logsCache === null) setLoading(true);
+
+    // Ambil 1000 log terakhir. Batas waktu 20 dtk per percobaan + 1x coba ulang,
+    // supaya koneksi macet tidak membuat spinner berputar sampai menit.
+    const attempt = () => {
+      const q = supabase
+        .from("order_logs")
+        .select(LOG_COLUMNS)
+        .order("created_at", { ascending: false })
+        .limit(1000);
+      return typeof AbortSignal !== "undefined" && "timeout" in AbortSignal
+        ? q.abortSignal(AbortSignal.timeout(20000))
+        : q;
+    };
+
+    let rows: any[] | null = null;
+    try {
+      let res = await attempt();
+      if (res.error) {
+        await new Promise((r) => setTimeout(r, 1000));
+        res = await attempt();
+      }
+      rows = res.error ? null : (res.data as any[] | null);
+    } catch {
+      rows = null;
+    }
+
+    if (rows) {
+      logsCache = rows;
+      setLogs(rows);
+      setLoadError(null);
+    } else {
+      setLoadError(
+        "Log belum berhasil dimuat. Periksa koneksi internet, lalu coba lagi.",
+      );
+    }
+    setLoading(false);
+  }, [supabase]);
+
   useEffect(() => {
-    fetchLogs();
-  }, []);
+    void fetchLogs();
+  }, [fetchLogs]);
 
   // Reset halaman ke 1 jika filter berubah
   useEffect(() => {
@@ -56,19 +117,6 @@ export default function ActivityLogView() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  const fetchLogs = async () => {
-    setLoading(true);
-    // Ambil 1000 log terakhir
-    const { data, error } = await supabase
-      .from("order_logs")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(1000);
-
-    if (data) setLogs(data);
-    setLoading(false);
-  };
 
   // --- LOGIKA FILTER & PAGINATION ---
   const filteredLogs = useMemo(() => {
@@ -179,6 +227,18 @@ export default function ActivityLogView() {
           </div>
         </div>
       </div>
+
+      {loadError && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-xs text-red-700 dark:text-red-300">
+          <span>{loadError}</span>
+          <button
+            onClick={() => void fetchLogs()}
+            className="font-semibold underline shrink-0"
+          >
+            Coba lagi
+          </button>
+        </div>
+      )}
 
       {/* STATS CARDS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
