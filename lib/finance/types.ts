@@ -315,3 +315,14 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   'export.excel': 'Ekspor Excel',
   'migration.legacy': 'Migrasi data lama',
 };
+
+// ───────────────────────── PANDUAN: "perlu tindakan" ─────────────────────────
+
+export interface TodoData {
+  pending_payments: { count: number; amount: number; oldest_days: number | null };
+  pending_expenses: { count: number; amount: number; oldest_days: number | null };
+  /** Tagihan yang sudah lewat jatuh tempo dan masih ada sisa. */
+  overdue: { count: number; amount: number };
+  /** Order masuk dalam 30 hari terakhir yang belum punya tagihan. */
+  unbilled_recent: { count: number; since: string };
+}

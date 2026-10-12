@@ -13,6 +13,7 @@ import {
   Settings,
   TrendingUp,
   History,
+  BookOpen,
 } from "lucide-react";
 import type { UserData } from "@/types";
 import { getFinanceCaps } from "@/lib/finance/caps";
@@ -24,6 +25,7 @@ import SettingsTab from "./tabs/SettingsTab";
 import ExpensesTab from "./tabs/ExpensesTab";
 import ReportTab from "./tabs/ReportTab";
 import AuditTab from "./tabs/AuditTab";
+import GuideTab from "./tabs/GuideTab";
 
 type TabId =
   | "overview"
@@ -33,6 +35,7 @@ type TabId =
   | "expenses"
   | "report"
   | "audit"
+  | "guide"
   | "settings";
 
 export default function FinanceModule({
@@ -113,6 +116,12 @@ export default function FinanceModule({
       label: "Audit",
       icon: <History size={14} className="shrink-0" />,
       show: caps.isSupervisor,
+    },
+    {
+      id: "guide",
+      label: "Panduan",
+      icon: <BookOpen size={14} className="shrink-0" />,
+      show: true,
     },
     {
       id: "settings",
@@ -242,6 +251,17 @@ export default function FinanceModule({
         )}
         {tab === "report" && caps.edit && <ReportTab version={version} />}
         {tab === "audit" && caps.isSupervisor && <AuditTab version={version} />}
+        {tab === "guide" && (
+          <GuideTab
+            caps={caps}
+            version={version}
+            userKey={currentUser.id}
+            onGo={(id, opts) => {
+              if (id === "expenses") setExpensePreset(opts?.pending ? "pending" : "");
+              setTab(id);
+            }}
+          />
+        )}
         {tab === "settings" && caps.isSupervisor && <SettingsTab />}
         {tab === "verify" && caps.edit && (
           <PaymentsTab
