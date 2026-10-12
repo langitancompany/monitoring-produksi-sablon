@@ -1,7 +1,14 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { Wallet, FileText, AlertTriangle, Hourglass } from "lucide-react";
+import {
+  Wallet,
+  FileText,
+  AlertTriangle,
+  Hourglass,
+  ArrowUpFromLine,
+  Scale,
+} from "lucide-react";
 import { finFetch, errMsg } from "@/hooks/useFinanceApi";
 import type { OverviewData } from "@/lib/finance/types";
 import { SummaryCard } from "../SummaryCard";
@@ -19,10 +26,12 @@ export default function OverviewTab({
   version,
   onGoVerify,
   canVerify,
+  onGoExpenses,
 }: {
   version: number;
   onGoVerify: () => void;
   canVerify: boolean;
+  onGoExpenses?: () => void;
 }) {
   const [from, setFrom] = useState(monthStartYmd());
   const [to, setTo] = useState(todayYmd());
@@ -116,6 +125,29 @@ export default function OverviewTab({
             />
           </div>
 
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+            <SummaryCard
+              label="Pengeluaran (disetujui)"
+              value={formatRupiah(data.cash_out)}
+              icon={<ArrowUpFromLine className="w-5 h-5 text-red-600" />}
+              color="bg-red-50 dark:bg-red-950/30"
+            />
+            <SummaryCard
+              label="Arus kas bersih"
+              value={formatRupiah(data.cash_in - data.cash_out)}
+              icon={
+                <Scale
+                  className={`w-5 h-5 ${data.cash_in - data.cash_out >= 0 ? "text-emerald-600" : "text-red-600"}`}
+                />
+              }
+              color={
+                data.cash_in - data.cash_out >= 0
+                  ? "bg-emerald-50 dark:bg-emerald-950/30"
+                  : "bg-red-50 dark:bg-red-950/30"
+              }
+            />
+          </div>
+
           {data.pending_count > 0 && (
             <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 px-4 py-3">
               <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
@@ -126,6 +158,24 @@ export default function OverviewTab({
               {canVerify && (
                 <button
                   onClick={onGoVerify}
+                  className="text-xs font-semibold text-amber-700 dark:text-amber-300 underline underline-offset-2 whitespace-nowrap"
+                >
+                  Buka antrean
+                </button>
+              )}
+            </div>
+          )}
+
+          {data.expense_pending_count > 0 && (
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 px-4 py-3">
+              <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                <b>{data.expense_pending_count} pengeluaran</b> (
+                {formatRupiah(data.expense_pending_amount)}) menunggu persetujuan
+                dan belum dihitung sebagai uang keluar.
+              </p>
+              {canVerify && onGoExpenses && (
+                <button
+                  onClick={onGoExpenses}
                   className="text-xs font-semibold text-amber-700 dark:text-amber-300 underline underline-offset-2 whitespace-nowrap"
                 >
                   Buka antrean

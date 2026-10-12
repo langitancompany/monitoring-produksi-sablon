@@ -1,7 +1,7 @@
 "use client";
 
 // Menu Keuangan v2. Fase 1 = UANG MASUK (tagihan, pembayaran, verifikasi).
-// Tab "Pengeluaran" disiapkan di navigasi; skema database & fungsinya sudah ada (lihat docs/keuangan).
+// Fase 2 = UANG KELUAR (tab Pengeluaran: catat, persetujuan, void, bukti).
 
 import React, { useCallback, useMemo, useState } from "react";
 import {
@@ -11,6 +11,8 @@ import {
   ShieldCheck,
   ArrowUpFromLine,
   Settings,
+  TrendingUp,
+  History,
 } from "lucide-react";
 import type { UserData } from "@/types";
 import { getFinanceCaps } from "@/lib/finance/caps";
@@ -19,6 +21,9 @@ import OverviewTab from "./tabs/OverviewTab";
 import InvoicesTab from "./tabs/InvoicesTab";
 import PaymentsTab from "./tabs/PaymentsTab";
 import SettingsTab from "./tabs/SettingsTab";
+import ExpensesTab from "./tabs/ExpensesTab";
+import ReportTab from "./tabs/ReportTab";
+import AuditTab from "./tabs/AuditTab";
 
 type TabId =
   | "overview"
@@ -26,6 +31,8 @@ type TabId =
   | "payments"
   | "verify"
   | "expenses"
+  | "report"
+  | "audit"
   | "settings";
 
 export default function FinanceModule({
@@ -36,6 +43,8 @@ export default function FinanceModule({
   const caps = useMemo(() => getFinanceCaps(currentUser), [currentUser]);
   const [tab, setTab] = useState<TabId>("overview");
   const [version, setVersion] = useState(0);
+  // Dari kartu Ringkasan: buka tab Pengeluaran langsung di antrean "menunggu persetujuan".
+  const [expensePreset, setExpensePreset] = useState<"" | "pending">("");
   const { meta, reload } = useFinanceMeta();
 
   // Setiap perubahan data: muat ulang tab aktif + badge antrean verifikasi.
@@ -91,7 +100,19 @@ export default function FinanceModule({
       label: "Pengeluaran",
       icon: <ArrowUpFromLine size={14} className="shrink-0" />,
       show: true,
-      soon: true,
+      badge: caps.edit ? (meta?.expense_pending_count ?? 0) : 0,
+    },
+    {
+      id: "report",
+      label: "Laporan",
+      icon: <TrendingUp size={14} className="shrink-0" />,
+      show: caps.edit,
+    },
+    {
+      id: "audit",
+      label: "Audit",
+      icon: <History size={14} className="shrink-0" />,
+      show: caps.isSupervisor,
     },
     {
       id: "settings",
@@ -122,8 +143,8 @@ export default function FinanceModule({
           Keuangan
         </h2>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
-          Tagihan, invoice, pembayaran masuk, dan verifikasi. Semua perubahan
-          tercatat di log audit.
+          Tagihan, invoice, pembayaran masuk, pengeluaran, dan verifikasi. Semua
+          perubahan tercatat di log audit.
         </p>
       </div>
 
@@ -146,7 +167,10 @@ export default function FinanceModule({
               aria-controls={`fin-panel-${t.id}`}
               tabIndex={isActive ? 0 : -1}
               disabled={t.soon}
-              onClick={() => setTab(t.id)}
+              onClick={() => {
+                if (t.id === "expenses") setExpensePreset("");
+                setTab(t.id);
+              }}
               title={t.soon ? "Segera hadir" : undefined}
               className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold rounded-md whitespace-nowrap shrink-0 transition-colors duration-150 ${
                 isActive
@@ -189,6 +213,10 @@ export default function FinanceModule({
             version={version}
             canVerify={caps.edit}
             onGoVerify={() => setTab("verify")}
+            onGoExpenses={() => {
+              setExpensePreset("pending");
+              setTab("expenses");
+            }}
           />
         )}
         {tab === "invoices" && (
@@ -203,6 +231,17 @@ export default function FinanceModule({
             onChanged={changed}
           />
         )}
+        {tab === "expenses" && (
+          <ExpensesTab
+            key={`exp-${expensePreset}`}
+            caps={caps}
+            version={version}
+            onChanged={changed}
+            initialStatus={expensePreset}
+          />
+        )}
+        {tab === "report" && caps.edit && <ReportTab version={version} />}
+        {tab === "audit" && caps.isSupervisor && <AuditTab version={version} />}
         {tab === "settings" && caps.isSupervisor && <SettingsTab />}
         {tab === "verify" && caps.edit && (
           <PaymentsTab

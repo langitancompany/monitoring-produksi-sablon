@@ -69,14 +69,21 @@ export async function loadSettings() {
   const { data } = await getSupabaseAdmin()
     .from('finance_settings')
     .select('key, value')
-    .in('key', ['require_proof_non_cash', 'require_separate_verifier', 'allow_overpayment', 'auto_verify_own_payment']);
+    .in('key', [
+      'require_proof_non_cash', 'require_separate_verifier', 'allow_overpayment', 'auto_verify_own_payment',
+      'auto_approve_own_expense', 'expense_proof_required_above',
+    ]);
   const m = new Map<string, unknown>((data ?? []).map((r: { key: string; value: unknown }) => [r.key, r.value]));
   const b = (k: string, d: boolean) => (typeof m.get(k) === 'boolean' ? (m.get(k) as boolean) : d);
+  const n = (k: string, d: number) => (typeof m.get(k) === 'number' ? (m.get(k) as number) : d);
   return {
     require_proof_non_cash: b('require_proof_non_cash', true),
     require_separate_verifier: b('require_separate_verifier', false),
     allow_overpayment: b('allow_overpayment', false),
     auto_verify_own_payment: b('auto_verify_own_payment', false),
+    // Pengeluaran: default SEMUA masuk antrean persetujuan; bukti wajib di atas ambang (0 = nonaktif).
+    auto_approve_own_expense: b('auto_approve_own_expense', false),
+    expense_proof_required_above: n('expense_proof_required_above', 500000),
   };
 }
 

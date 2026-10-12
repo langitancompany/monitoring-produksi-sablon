@@ -8,7 +8,12 @@ import {
   FileQuestion,
   ArrowUpRight,
 } from "lucide-react";
-import type { OrderPaymentStatus, PaymentStatus } from "@/lib/finance/types";
+import {
+  EXPENSE_STATUS_LABEL,
+  type ExpenseStatus,
+  type OrderPaymentStatus,
+  type PaymentStatus,
+} from "@/lib/finance/types";
 
 const BASE =
   "inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap";
@@ -83,6 +88,36 @@ export function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
     <span className={`${BASE} ${cfg.cls}`}>
       {cfg.icon}
       {cfg.label}
+    </span>
+  );
+}
+
+const EXPENSE_STATUS: Record<ExpenseStatus, { cls: string; icon: React.ReactNode }> = {
+  pending: {
+    cls: "bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900/50",
+    icon: <Clock className="w-3 h-3" />,
+  },
+  approved: {
+    cls: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/50",
+    icon: <CheckCircle2 className="w-3 h-3" />,
+  },
+  rejected: {
+    cls: "bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-red-100 dark:border-red-900/50",
+    icon: <XCircle className="w-3 h-3" />,
+  },
+  void: {
+    cls: "bg-zinc-100 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800",
+    icon: <Ban className="w-3 h-3" />,
+  },
+};
+
+/** Status satu pengeluaran. */
+export function ExpenseStatusBadge({ status }: { status: ExpenseStatus }) {
+  const cfg = EXPENSE_STATUS[status];
+  return (
+    <span className={`${BASE} ${cfg.cls}`}>
+      {cfg.icon}
+      {EXPENSE_STATUS_LABEL[status]}
     </span>
   );
 }

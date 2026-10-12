@@ -10,12 +10,13 @@ export async function GET(req: NextRequest) {
   if (!guard.ok) return guard.response;
 
   const admin = getSupabaseAdmin();
-  const [acc, pend, settings] = await Promise.all([
+  const [acc, pend, expPend, settings] = await Promise.all([
     admin.from('finance_accounts').select('id, code, name, type').eq('is_active', true).order('sort_order'),
     admin.from('order_payments').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+    admin.from('finance_expenses').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
     loadSettings(),
   ]);
   if (acc.error) return finFail(acc.error);
 
-  return NextResponse.json({ accounts: acc.data ?? [], settings, pending_count: pend.count ?? 0 });
+  return NextResponse.json({ accounts: acc.data ?? [], settings, pending_count: pend.count ?? 0, expense_pending_count: expPend.count ?? 0 });
 }

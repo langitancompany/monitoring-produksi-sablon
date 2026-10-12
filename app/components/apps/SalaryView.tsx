@@ -43,6 +43,13 @@ import {
 import SalaryPrintSlip, { SalarySlipRow } from "./SalaryPrintSlip";
 import CustomAlert, { AlertState } from "../ui/CustomAlert";
 import {
+  allocateRounded,
+  postSalaryToFinance,
+  unpostSalaryFromFinance,
+  salaryPeriodKey,
+  type SalaryLine,
+} from "@/lib/finance/salaryClient";
+import {
   KEY_GESUT_LAMA_AKTIF,
   KEY_GESUT_BARU_AKTIF,
   resolveGesutFlag,
@@ -400,6 +407,47 @@ export default function SalaryView({
   const showError = (title: string, message: string) =>
     setAlertState({ isOpen: true, title, message, type: "error" });
 
+  // Rincian gaji untuk dicatat ke Keuangan sebagai biaya langsung per order:
+  //  - manual : satu baris per order (peran PJ/Helper) dari daftar order karyawan
+  //  - qc     : satu baris per order = qty × (tarif finishing + packing) ÷ jumlah anggota tim
+  // Nominal pecahan dibulatkan (metode sisa terbesar) sehingga jumlah baris = total gaji.
+  const buildSalaryLines = (
+    userId: string,
+    kategori: "manual" | "qc",
+  ): { lines: SalaryLine[]; total: number } => {
+    const name = users.find((u) => u.id === userId)?.name || "Karyawan";
+    const items: { order: Order; exact: number; label: string; role?: string }[] =
+      kategori === "manual"
+        ? (userProductionStats[userId]?.orders ?? []).map((r) => ({
+            order: r.data,
+            exact: r.earnings,
+            role: r.role,
+            label: `Gaji borongan (${r.role}) ${name} · ${r.data.kode_produksi}`,
+          }))
+        : finishingOrders.map((o) => {
+            const d = dateOf(o);
+            const team = Math.max(dtfTeam.length, 1);
+            return {
+              order: o,
+              exact:
+                ((o.jumlah || 0) *
+                  (getRateAt("dtf_finishing", d) + getRateAt("dtf_packing", d))) /
+                team,
+              label: `Gaji tim finishing ${name} · ${o.kode_produksi}`,
+            };
+          });
+    const alloc = allocateRounded(items.map((i) => i.exact));
+    const lines: SalaryLine[] = items
+      .map((i, idx) => ({
+        order_id: i.order.id,
+        amount: alloc.amounts[idx],
+        label: i.label,
+        role: i.role,
+      }))
+      .filter((l) => l.amount > 0);
+    return { lines, total: alloc.total };
+  };
+
   const doMarkPaid = async (
     userId: string,
     kategori: "manual" | "qc",
@@ -407,6 +455,29 @@ export default function SalaryView({
   ) => {
     const key = paymentKey(userId, kategori);
     setMarkingPaidKey(key);
+    // Catat dulu ke Keuangan (pengeluaran masuk antrean persetujuan). Gagal = jangan tandai
+    // lunas, supaya status "lunas" selalu berarti sudah tercatat di Keuangan.
+    const { lines, total: postTotal } = buildSalaryLines(userId, kategori);
+    let posted = false;
+    if (postTotal > 0) {
+      try {
+        await postSalaryToFinance({
+          kind: kategori,
+          userId,
+          period: salaryPeriodKey(selectedYear, selectedMonth),
+          total: postTotal,
+          lines,
+        });
+        posted = true;
+      } catch (e) {
+        setMarkingPaidKey(null);
+        showError(
+          "Gagal Mencatat ke Keuangan",
+          e instanceof Error ? e.message : "Terjadi kesalahan tak terduga.",
+        );
+        return;
+      }
+    }
     const { data, error } = await supabase
       .from("salary_payments")
       .upsert(
@@ -424,6 +495,14 @@ export default function SalaryView({
       .single();
     setMarkingPaidKey(null);
     if (error || !data) {
+      // Pencatatan ke Keuangan sudah terjadi: batalkan agar tidak ada biaya "menggantung".
+      if (posted) {
+        await unpostSalaryFromFinance({
+          kind: kategori,
+          userId,
+          period: salaryPeriodKey(selectedYear, selectedMonth),
+        }).catch(() => {});
+      }
       showError(
         "Gagal Menandai Lunas",
         error?.message || "Terjadi kesalahan tak terduga.",
@@ -448,6 +527,21 @@ export default function SalaryView({
   const doUnmarkPaid = async (userId: string, kategori: "manual" | "qc") => {
     const key = paymentKey(userId, kategori);
     setMarkingPaidKey(key);
+    // Void pengeluaran gaji di Keuangan lebih dulu. Gagal (mis. periode sudah ditutup) = batal.
+    try {
+      await unpostSalaryFromFinance({
+        kind: kategori,
+        userId,
+        period: salaryPeriodKey(selectedYear, selectedMonth),
+      });
+    } catch (e) {
+      setMarkingPaidKey(null);
+      showError(
+        "Gagal Membatalkan di Keuangan",
+        e instanceof Error ? e.message : "Terjadi kesalahan tak terduga.",
+      );
+      return;
+    }
     const { error } = await supabase.from("salary_payments").delete().match({
       user_id: userId,
       period_month: selectedMonth,

@@ -17,13 +17,15 @@ export async function GET(req: NextRequest) {
   if (!isDate(from) || !isDate(to) || from > to) return bad('Rentang tanggal tidak valid');
 
   const admin = getSupabaseAdmin();
-  const [paid, invoiced, aging, pending] = await Promise.all([
+  const [paid, invoiced, aging, pending, spent, expPending] = await Promise.all([
     admin.from('order_payments').select('amount, kind').eq('status', 'verified').gte('paid_at', from).lte('paid_at', to).limit(5000),
     admin.from('v_order_finance').select('total').not('invoice_id', 'is', null).gte('tanggal_masuk', from).lte('tanggal_masuk', to).limit(5000),
     admin.from('v_receivable_aging').select('order_id, kode_produksi, nama_pemesan, balance, days_overdue, bucket').limit(5000),
     admin.from('order_payments').select('amount, kind').eq('status', 'pending').limit(5000),
+    admin.from('finance_expenses').select('amount').eq('status', 'approved').gte('spent_at', from).lte('spent_at', to).limit(5000),
+    admin.from('finance_expenses').select('amount').eq('status', 'pending').limit(5000),
   ]);
-  const err = paid.error || invoiced.error || aging.error || pending.error;
+  const err = paid.error || invoiced.error || aging.error || pending.error || spent.error || expPending.error;
   if (err) return finFail(err);
 
   type Amt = { amount: number; kind: string };
@@ -48,6 +50,9 @@ export async function GET(req: NextRequest) {
     piutang_overdue: agingOut.filter((a) => a.bucket !== 'belum_jatuh_tempo').reduce((n, a) => n + a.amount, 0),
     pending_count: (pending.data as Amt[]).length,
     pending_amount: pendingRows.reduce((n, r) => n + r.amount, 0),
+    cash_out: (spent.data as { amount: number }[]).reduce((n, r) => n + r.amount, 0),
+    expense_pending_count: (expPending.data as { amount: number }[]).length,
+    expense_pending_amount: (expPending.data as { amount: number }[]).reduce((n, r) => n + r.amount, 0),
     aging: agingOut,
     top_debtors: [...ageRows].sort((a, b) => b.balance - a.balance).slice(0, 5),
   };

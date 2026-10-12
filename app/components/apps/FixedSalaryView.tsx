@@ -26,6 +26,13 @@ import {
 import type { UserData, Order } from "@/types";
 import type { SalarySlipRow } from "./SalaryPrintSlip";
 import { getUserRoles, hasRole, roleLabel } from "@/lib/roles";
+import {
+  allocateRounded,
+  postSalaryToFinance,
+  unpostSalaryFromFinance,
+  salaryPeriodKey,
+  type SalaryLine,
+} from "@/lib/finance/salaryClient";
 
 export interface FixedSlip {
   userId: string;
@@ -347,6 +354,46 @@ export default function FixedSalaryView({
       "Tandai Sudah Dibayar",
       `Tandai gaji ${u.name} sebesar ${currency(total)} sebagai SUDAH DIBAYAR?`,
       async () => {
+        // Catat dulu ke Keuangan (antrean persetujuan). Gaji tetap & bonus manual = biaya umum;
+        // bonus closing terikat order = biaya langsung per order. Gagal = jangan tandai lunas.
+        const s = summary(u);
+        const items: { order_id: string | null; exact: number; label: string }[] = [
+          { order_id: null, exact: s.fixed, label: `Gaji tetap ${u.name} · ${periodLabel}` },
+          { order_id: null, exact: s.manualTotal, label: `Bonus manual ${u.name} · ${periodLabel}` },
+          ...s.closings
+            .filter((c) => c.order && c.bonus > 0)
+            .map((c) => ({
+              order_id: c.order!.id as string,
+              exact: c.bonus,
+              label: `Bonus closing ${u.name} · ${c.order!.kode_produksi}`,
+            })),
+        ];
+        const alloc = allocateRounded(items.map((i) => i.exact));
+        const lines: SalaryLine[] = items
+          .map((i, idx) => ({
+            order_id: i.order_id,
+            amount: alloc.amounts[idx],
+            label: i.label,
+          }))
+          .filter((l) => l.amount > 0);
+        let posted = false;
+        if (alloc.total > 0) {
+          try {
+            await postSalaryToFinance({
+              kind: "tetap",
+              userId: u.id,
+              period: salaryPeriodKey(selectedYear, selectedMonth),
+              total: alloc.total,
+              lines,
+            });
+            posted = true;
+          } catch (e) {
+            return fail(
+              "Gagal Mencatat ke Keuangan",
+              e instanceof Error ? e.message : "Terjadi kesalahan tak terduga.",
+            );
+          }
+        }
         const { error } = await supabase.from("salary_fixed_payments").upsert(
           {
             user_id: u.id,
@@ -357,7 +404,17 @@ export default function FixedSalaryView({
           },
           { onConflict: "user_id,period_month,period_year" },
         );
-        if (error) return fail("Gagal Menandai Lunas", error.message);
+        if (error) {
+          // Pencatatan ke Keuangan sudah terjadi: batalkan agar tidak ada biaya "menggantung".
+          if (posted) {
+            await unpostSalaryFromFinance({
+              kind: "tetap",
+              userId: u.id,
+              period: salaryPeriodKey(selectedYear, selectedMonth),
+            }).catch(() => {});
+          }
+          return fail("Gagal Menandai Lunas", error.message);
+        }
         await loadData(true);
       },
     );
@@ -367,6 +424,19 @@ export default function FixedSalaryView({
       "Batalkan Status Lunas",
       `Batalkan status lunas gaji ${u.name}?`,
       async () => {
+        // Void pengeluaran gaji di Keuangan lebih dulu. Gagal (mis. periode ditutup) = batal.
+        try {
+          await unpostSalaryFromFinance({
+            kind: "tetap",
+            userId: u.id,
+            period: salaryPeriodKey(selectedYear, selectedMonth),
+          });
+        } catch (e) {
+          return fail(
+            "Gagal Membatalkan di Keuangan",
+            e instanceof Error ? e.message : "Terjadi kesalahan tak terduga.",
+          );
+        }
         const { error } = await supabase
           .from("salary_fixed_payments")
           .delete()

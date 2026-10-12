@@ -111,7 +111,7 @@ export default function InvoiceModal({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <CurrencyInput
-              label="Tambahan ukuran besar (per tingkat, mulai XXL)"
+              label="Tambahan ukuran besar (mulai XXL)"
               value={besar}
               onChange={setBesar}
             />
