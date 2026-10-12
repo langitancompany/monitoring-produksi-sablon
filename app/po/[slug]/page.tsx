@@ -10,6 +10,7 @@ import {
 } from "@/lib/po/admin";
 import { formatRupiah, calculateItemPrice } from "@/lib/po/pricing";
 import { thumbUrl, fallbackToOriginal } from "@/lib/po/images";
+import PixelTrail from "@/app/components/po/PixelTrail";
 import { POSetting, POProduct } from "@/types/po";
 import {
   Package,
@@ -329,6 +330,7 @@ export default function CatalogPage() {
               "radial-gradient(circle at 72% 30%, #1f2937 0%, transparent 52%), radial-gradient(circle at 20% 80%, #111827 0%, transparent 45%)",
           }}
         />
+        <PixelTrail />
         <div className="max-w-2xl relative z-10">
           <div className="inline-flex items-center gap-2 text-[11px] font-bold tracking-widest uppercase text-white/55 mb-5">
             <div
