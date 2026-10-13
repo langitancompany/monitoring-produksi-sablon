@@ -15,6 +15,7 @@ import {
 import { POSetting, POProduct, POReseller, CartItem } from "@/types/po";
 import { calculateItemPrice, formatRupiah } from "@/lib/po/pricing";
 import PixelTrail from "@/app/components/po/PixelTrail";
+import { usePOTabIdentity } from "@/hooks/usePOTabIdentity";
 
 // ── Sub-components ───────────────────────────────────────────────
 import { SuccessToast } from "@/app/po/reseller/portal/SuccessToast";
@@ -88,6 +89,9 @@ export default function ResellerPortalPage() {
   const [headerSolid, setHeaderSolid] = useState(false);
   const heroRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
+
+  // Judul & ikon tab = sama seperti katalog, ditambah "Reseller"
+  usePOTabIdentity(setting);
 
   // ── Load orders ──────────────────────────────────────────────────
   const loadOrders = useCallback(

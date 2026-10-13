@@ -6,6 +6,7 @@ import { loginReseller, getPOSettingBySlug } from "@/lib/po/supabase";
 import { POSetting } from "@/types/po";
 import { Package, Eye, EyeOff, MessageCircle } from "lucide-react";
 import PixelTrail from "@/app/components/po/PixelTrail";
+import { usePOTabIdentity } from "@/hooks/usePOTabIdentity";
 
 // Tinggi header (px) & seberapa "tertinggal" teks hero saat scroll (0 = ikut scroll normal)
 const HEADER_H = 58;
@@ -29,6 +30,9 @@ function ResellerLoginContent() {
   const [setting, setSetting] = useState<POSetting | null>(null);
   const [settingReady, setSettingReady] = useState(!slug);
   const brandName = setting?.title?.trim() || "Portal Reseller";
+
+  // Judul & ikon tab = sama seperti katalog, ditambah "Reseller"
+  usePOTabIdentity(setting);
 
   // Link WhatsApp admin (08xx → 628xx), sama seperti footer katalog
   const waDigits = (setting?.wa_admin_phone || "").replace(/\D/g, "");
