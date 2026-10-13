@@ -10,6 +10,7 @@ import {
 } from "@/lib/po/admin";
 import { formatRupiah, calculateItemPrice } from "@/lib/po/pricing";
 import { thumbUrl, fallbackToOriginal } from "@/lib/po/images";
+import { getStoreInfo } from "@/lib/po/store-info";
 import PixelTrail from "@/app/components/po/PixelTrail";
 import { POSetting, POProduct } from "@/types/po";
 import {
@@ -34,6 +35,9 @@ import {
   Check,
   Baby,
   PersonStanding,
+  MapPin,
+  MessageCircle,
+  ArrowUp,
 } from "lucide-react";
 
 // ── Tipe keranjang yang disimpan di sessionStorage ──
@@ -162,6 +166,16 @@ export default function CatalogPage() {
   }, [brandName]);
   const periode = `${setting?.periode_mulai || "-"} — ${setting?.periode_selesai || "-"}`;
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
+
+  // Data footer: identitas toko + link WhatsApp admin (08xx → 628xx)
+  const { storeName, storeAddress } = getStoreInfo(setting);
+  const waDigits = (setting?.wa_admin_phone || "").replace(/\D/g, "");
+  const waNumber = waDigits.startsWith("0")
+    ? `62${waDigits.slice(1)}`
+    : waDigits;
+  const waLink = waNumber
+    ? `https://wa.me/${waNumber}?text=${encodeURIComponent(`Halo admin ${brandName}, saya ingin bertanya tentang PO.`)}`
+    : "";
 
   // Produk yang sesuai filter kategori aktif
   const filteredProducts = products.filter(
@@ -331,22 +345,22 @@ export default function CatalogPage() {
           }}
         />
         <PixelTrail />
-        <div className="max-w-2xl relative z-10">
-          <div className="inline-flex items-center gap-2 text-[11px] font-bold tracking-widest uppercase text-white/55 mb-5">
+        <div className="max-w-2xl mx-auto text-center relative z-10">
+          <div className="inline-flex items-center justify-center gap-2 text-[11px] font-bold tracking-widest uppercase text-white/55 mb-5">
             <div
               className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-green-400" : "bg-red-400"}`}
             />
             <span>{isActive ? "Pre-Order Aktif" : "PO Ditutup"}</span>
           </div>
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-[1.08] tracking-tight mb-5">
-            Temukan produk <em className="not-italic text-white/40">favorit</em>{" "}
+            Temukan produk <em className="not-italic text-zinc-400">favorit</em>{" "}
             kamu di sini
           </h1>
-          <p className="text-sm md:text-base text-white/60 max-w-md mb-9 leading-relaxed">
+          <p className="text-sm md:text-base text-white max-w-md mx-auto mb-9 leading-relaxed">
             Periode PO: {periode}. Pilih produk, tambahkan ke keranjang, lalu
             lanjut ke form pemesanan.
           </p>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap justify-center gap-3">
             <button
               onClick={() =>
                 document
@@ -370,7 +384,6 @@ export default function CatalogPage() {
           </div>
         </div>
       </section>
-
       {/* ── KATALOG ── */}
       <section
         id="sec-catalog"
@@ -551,7 +564,6 @@ export default function CatalogPage() {
           )}
         </div>
       </section>
-
       {/* ── CTA BOTTOM ── */}
       <section className="bg-zinc-950 text-white px-5 md:px-10 lg:px-16 py-14 md:py-20 text-center">
         <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight mb-2.5">
@@ -583,10 +595,141 @@ export default function CatalogPage() {
       </section>
 
       {/* ── FOOTER ── */}
-      <footer className="bg-white border-t border-gray-200 text-center px-5 py-6 text-xs text-gray-400">
-        <p>© {new Date().getFullYear()} Katalog PO — Langitan.co</p>
-      </footer>
+      <footer className="bg-zinc-950 text-white border-t border-white/10">
+        <div className="max-w-7xl mx-auto px-5 md:px-10 lg:px-16 pt-14 pb-8">
+          <div className="grid gap-10 md:grid-cols-[1.5fr_1fr_1fr]">
+            {/* Brand */}
+            <div>
+              <div className="flex items-center gap-2.5 mb-4">
+                {setting?.logo_image_url ? (
+                  <img
+                    src={setting.logo_image_url}
+                    alt={brandName}
+                    className="w-9 h-9 rounded-lg object-cover bg-white/10"
+                  />
+                ) : (
+                  <span className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
+                    <Package size={18} />
+                  </span>
+                )}
+                <span className="text-base font-extrabold tracking-tight">
+                  {brandName}
+                </span>
+              </div>
+              <p className="text-sm text-zinc-400 leading-relaxed max-w-xs mb-5">
+                Pilih produk favoritmu, tambahkan ke keranjang, lalu selesaikan
+                pesanan lewat form pemesanan.
+              </p>
+              <span className="inline-flex items-center gap-2 text-[11px] font-bold tracking-widest uppercase text-zinc-300 border border-white/15 rounded-full px-3 py-1.5">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-green-400" : "bg-red-400"}`}
+                />
+                {isActive ? "Pre-Order Aktif" : "PO Ditutup"}
+              </span>
+            </div>
 
+            {/* Menu */}
+            <nav aria-label="Menu footer">
+              <h3 className="text-[11px] font-bold tracking-widest uppercase text-zinc-500 mb-4">
+                Menu
+              </h3>
+              <ul className="space-y-3 text-sm">
+                <li>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      document
+                        .getElementById("sec-catalog")
+                        ?.scrollIntoView({ behavior: "smooth" })
+                    }
+                    className="text-zinc-400 hover:text-white transition-colors"
+                  >
+                    Katalog Produk
+                  </button>
+                </li>
+                {isActive && (
+                  <li>
+                    <Link
+                      href={withSlug("/po/order")}
+                      className="text-zinc-400 hover:text-white transition-colors"
+                    >
+                      {cartCount > 0
+                        ? `Keranjang (${cartCount})`
+                        : "Form Pemesanan"}
+                    </Link>
+                  </li>
+                )}
+                <li>
+                  <Link
+                    href={withSlug("/po/reseller")}
+                    className="text-zinc-400 hover:text-white transition-colors"
+                  >
+                    Portal Reseller
+                  </Link>
+                </li>
+                {slug && (
+                  <li>
+                    <Link
+                      href={`/po/${slug}/daftar-reseller`}
+                      className="text-zinc-400 hover:text-white transition-colors"
+                    >
+                      Daftar Jadi Reseller
+                    </Link>
+                  </li>
+                )}
+              </ul>
+            </nav>
+
+            {/* Informasi & kontak */}
+            <div>
+              <h3 className="text-[11px] font-bold tracking-widest uppercase text-zinc-500 mb-4">
+                Informasi
+              </h3>
+              <ul className="space-y-3 text-sm text-zinc-400">
+                <li className="flex items-start gap-2.5">
+                  <CalendarDays size={15} className="mt-0.5 shrink-0" />
+                  <span>
+                    <span className="block text-zinc-500 text-xs mb-0.5">
+                      Periode PO
+                    </span>
+                    {periode}
+                  </span>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <MapPin size={15} className="mt-0.5 shrink-0" />
+                  <span>{storeAddress}</span>
+                </li>
+              </ul>
+              {waLink && (
+                <a
+                  href={waLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-5 inline-flex items-center gap-2 bg-white text-zinc-950 px-5 py-2.5 rounded-full font-extrabold text-xs hover:opacity-90 hover:-translate-y-px transition-all"
+                >
+                  <MessageCircle size={15} />
+                  Hubungi Admin
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* Bar bawah */}
+          <div className="mt-12 pt-6 border-t border-white/10 flex flex-col-reverse sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500">
+            <p>
+              © {new Date().getFullYear()} {storeName}. Hak cipta dilindungi.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              className="inline-flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors"
+            >
+              <ArrowUp size={14} />
+              Kembali ke atas
+            </button>
+          </div>
+        </div>
+      </footer>
       {/* ══════════════════════════════════════════════════
           MODAL DETAIL + VARIAN PICKER
       ══════════════════════════════════════════════════ */}
