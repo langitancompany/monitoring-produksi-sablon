@@ -550,7 +550,7 @@ export async function deletePOSetting(
     // baris-barisnya dihapus dari database.
     const { data: setting } = await supabase
       .from('po_setting')
-      .select('logo_image_url, qris_image_url')
+      .select('logo_image_url, qris_image_url, icon_image_url')
       .eq('id', poId)
       .single();
 
@@ -563,6 +563,7 @@ export async function deletePOSetting(
       ...(products || []).flatMap((p) => p.image_urls || []),
       ...(setting?.logo_image_url ? [setting.logo_image_url] : []),
       ...(setting?.qris_image_url ? [setting.qris_image_url] : []),
+      ...(setting?.icon_image_url ? [setting.icon_image_url] : []),
     ];
 
     // 2. Hapus semua order milik PO ini (reseller-nya TIDAK ikut dihapus).

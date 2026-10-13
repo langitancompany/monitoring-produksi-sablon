@@ -83,6 +83,8 @@ export default function POSettings({ poId }: POSettingsProps) {
   const [qrisPreview, setQrisPreview] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [uploadingIcon, setUploadingIcon] = useState(false);
+  const [iconPreview, setIconPreview] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     is_active: false,
@@ -131,6 +133,9 @@ export default function POSettings({ poId }: POSettingsProps) {
         }
         if (data.logo_image_url) {
           setLogoPreview(data.logo_image_url);
+        }
+        if (data.icon_image_url) {
+          setIconPreview(data.icon_image_url);
         }
       }
       setLoading(false);
@@ -324,6 +329,85 @@ export default function POSettings({ poId }: POSettingsProps) {
     setSetting({ ...setting, logo_image_url: null });
   }
 
+  async function handleIconUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // supaya memilih file yang sama bisa dipicu lagi
+    if (!file || !setting) return;
+
+    if (!file.type.startsWith("image/")) {
+      notify("Hanya file gambar yang diizinkan.");
+      return;
+    }
+    if (file.size > 1 * 1024 * 1024) {
+      notify("Ukuran file maksimal 1MB.");
+      return;
+    }
+
+    setUploadingIcon(true);
+    const supabase = createClient();
+
+    // Nama file memakai timestamp supaya browser/CDN tidak menampilkan ikon lama dari cache.
+    const ext = (file.name.split(".").pop() || "png").toLowerCase();
+    const filePath = `icon/icon-${setting.id}-${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("po_assets")
+      .upload(filePath, file, { upsert: true });
+
+    if (uploadError) {
+      notify("Gagal upload: " + uploadError.message);
+      setUploadingIcon(false);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage
+      .from("po_assets")
+      .getPublicUrl(filePath);
+    const publicUrl = urlData.publicUrl;
+
+    const { error: dbError } = await supabase
+      .from("po_setting")
+      .update({ icon_image_url: publicUrl })
+      .eq("id", setting.id);
+
+    if (dbError) {
+      // Simpan URL gagal → buang file yang baru diupload agar tidak jadi sampah.
+      await supabase.storage.from("po_assets").remove([filePath]);
+      notify("Gagal simpan ikon: " + dbError.message);
+      setUploadingIcon(false);
+      return;
+    }
+
+    // Berhasil → baru hapus ikon lama.
+    if (setting.icon_image_url) {
+      const oldPath = setting.icon_image_url.split("/po_assets/")[1];
+      if (oldPath) await supabase.storage.from("po_assets").remove([oldPath]);
+    }
+
+    setIconPreview(publicUrl);
+    setSetting({ ...setting, icon_image_url: publicUrl });
+    setUploadingIcon(false);
+  }
+
+  async function handleIconDelete() {
+    if (!setting?.icon_image_url) return;
+    if (!(await confirmAsync("Hapus ikon PO?"))) return;
+
+    const supabase = createClient();
+    const oldPath = setting.icon_image_url.split("/po_assets/")[1];
+    if (oldPath) {
+      await supabase.storage.from("po_assets").remove([oldPath]);
+    }
+
+    await supabase
+      .from("po_setting")
+      .update({ icon_image_url: null })
+      .eq("id", setting.id);
+
+    setIconPreview(null);
+    setSetting({ ...setting, icon_image_url: null });
+  }
+
   // ✅ Early return SETELAH semua hooks
   if (loading) {
     return (
@@ -448,6 +532,76 @@ export default function POSettings({ poId }: POSettingsProps) {
 
             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 max-w-[200px]">
               Format: JPG, PNG, atau WebP. Upload langsung tersimpan otomatis.
+            </p>
+          </div>
+        </div>
+      </Field>
+
+      <Field
+        label="Ikon PO"
+        icon={ImageIcon}
+        hint="Tampil di header, footer, dan tab browser halaman katalog PO ini. Gambar persegi (1:1), disarankan 512×512 px. Maks. 1MB."
+      >
+        <div className="flex flex-col sm:flex-row gap-4 items-start">
+          {/* Preview */}
+          <div className="w-24 h-24 rounded-2xl border-2 border-dashed border-zinc-200 dark:border-zinc-800 flex items-center justify-center overflow-hidden bg-zinc-50 dark:bg-zinc-900 shrink-0">
+            {iconPreview ? (
+              <img
+                src={iconPreview}
+                alt="Ikon PO"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="text-center text-zinc-400 dark:text-zinc-500">
+                <ImageIcon size={24} className="mx-auto mb-1" />
+                <p className="text-[11px]">Belum ada ikon</p>
+              </div>
+            )}
+          </div>
+
+          {/* Tombol aksi */}
+          <div className="flex flex-col gap-2">
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={handleIconUpload}
+                disabled={uploadingIcon}
+              />
+              <span
+                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-md border text-sm font-semibold transition-colors duration-150 ${
+                  uploadingIcon
+                    ? "bg-zinc-100 dark:bg-zinc-900 text-zinc-400 border-zinc-200 dark:border-zinc-800 cursor-not-allowed"
+                    : "bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-[#49bfb4] hover:text-[#49bfb4] cursor-pointer"
+                }`}
+              >
+                {uploadingIcon ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    Mengupload...
+                  </>
+                ) : (
+                  <>
+                    <Upload size={14} />
+                    {iconPreview ? "Ganti Ikon" : "Upload Ikon"}
+                  </>
+                )}
+              </span>
+            </label>
+
+            {iconPreview && (
+              <button
+                onClick={handleIconDelete}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 text-sm font-semibold hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors duration-150"
+              >
+                <Trash2 size={14} />
+                Hapus Ikon
+              </button>
+            )}
+
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500 max-w-[200px]">
+              Format: PNG, JPG, atau WebP. Upload langsung tersimpan otomatis.
             </p>
           </div>
         </div>

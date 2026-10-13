@@ -277,7 +277,15 @@ export default function CatalogPage() {
       {/* ── HEADER ── */}
       <header className="sticky top-0 z-40 bg-white border-b border-gray-200 px-5 md:px-10 lg:px-16 h-[60px] flex items-center justify-between">
         <div className="text-base font-extrabold tracking-tight text-zinc-950 flex items-center gap-2">
-          <Package size={18} />
+          {setting?.icon_image_url ? (
+            <img
+              src={setting.icon_image_url}
+              alt=""
+              className="w-7 h-7 rounded-md object-cover"
+            />
+          ) : (
+            <Package size={18} />
+          )}
           <span>{brandName}</span>
         </div>
         <div className="flex items-center gap-2.5">
@@ -344,7 +352,7 @@ export default function CatalogPage() {
               "radial-gradient(circle at 72% 30%, #1f2937 0%, transparent 52%), radial-gradient(circle at 20% 80%, #111827 0%, transparent 45%)",
           }}
         />
-        <PixelTrail />
+        <PixelTrail water={false} ambientAlpha={0.2} />
         <div className="max-w-2xl mx-auto text-center relative z-10">
           <div className="inline-flex items-center justify-center gap-2 text-[11px] font-bold tracking-widest uppercase text-white/55 mb-5">
             <div
@@ -353,10 +361,10 @@ export default function CatalogPage() {
             <span>{isActive ? "Pre-Order Aktif" : "PO Ditutup"}</span>
           </div>
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-[1.08] tracking-tight mb-5">
-            Temukan produk <em className="not-italic text-zinc-400">favorit</em>{" "}
+            Temukan produk <em className="not-italic text-zinc-500">favorit</em>{" "}
             kamu di sini
           </h1>
-          <p className="text-sm md:text-base text-white max-w-md mx-auto mb-9 leading-relaxed">
+          <p className="text-sm md:text-base text-white/60 max-w-md mx-auto mb-9 leading-relaxed">
             Periode PO: {periode}. Pilih produk, tambahkan ke keranjang, lalu
             lanjut ke form pemesanan.
           </p>
@@ -384,6 +392,7 @@ export default function CatalogPage() {
           </div>
         </div>
       </section>
+
       {/* ── KATALOG ── */}
       <section
         id="sec-catalog"
@@ -564,6 +573,7 @@ export default function CatalogPage() {
           )}
         </div>
       </section>
+
       {/* ── CTA BOTTOM ── */}
       <section className="bg-zinc-950 text-white px-5 md:px-10 lg:px-16 py-14 md:py-20 text-center">
         <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight mb-2.5">
@@ -601,9 +611,9 @@ export default function CatalogPage() {
             {/* Brand */}
             <div>
               <div className="flex items-center gap-2.5 mb-4">
-                {setting?.logo_image_url ? (
+                {setting?.icon_image_url ? (
                   <img
-                    src={setting.logo_image_url}
+                    src={setting.icon_image_url}
                     alt={brandName}
                     className="w-9 h-9 rounded-lg object-cover bg-white/10"
                   />
@@ -730,6 +740,7 @@ export default function CatalogPage() {
           </div>
         </div>
       </footer>
+
       {/* ══════════════════════════════════════════════════
           MODAL DETAIL + VARIAN PICKER
       ══════════════════════════════════════════════════ */}

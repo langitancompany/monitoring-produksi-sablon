@@ -1,24 +1,40 @@
 "use client";
 
-// PixelTrail — latar piksel abstrak bergaya "PixelBlast", tanpa library (murni canvas 2D).
+// PixelTrail — latar piksel interaktif untuk hero, TANPA library (murni canvas 2D).
 //
 // Cara pakai: taruh <PixelTrail /> sebagai anak langsung dari elemen
 // yang `relative` (mis. <section>). Canvas mengisi seluruh elemen induk,
 // mendengarkan pointer di induknya, dan tidak menghalangi klik ke konten.
 //
-// - Ambient : gumpalan piksel abstrak yang berubah bentuk pelan terus-menerus.
-//             Pola kotak-kotaknya berasal dari ordered dithering (matriks Bayer 8×8),
-//             sama seperti shader PixelBlast.
-// - Kursor  : saat kursor / jari bergerak di hero, gumpalan di sekitarnya ikut
-//             terseret searah gerakan ("liquid") dan sedikit menyala.
-// - Klik/tap: memunculkan ledakan + riak piksel yang melebar lalu menghilang.
-// - Trail   : (opsional, `trail`) piksel acak di jalur kursor — kode lama dipertahankan.
-// - Hemat   : berhenti menggambar saat hero tidak terlihat / tab tidak aktif,
-//             dan turun ke ±30 fps saat tidak ada interaksi.
+// ═══ DUA PILIHAN ANIMASI — pilih lewat prop `water` ═══════════════════════════
+//
+//   <PixelTrail />                 → ANIMASI AIR (baru)         (water = true, bawaan)
+//   <PixelTrail water={false} />   → ANIMASI GUMPALAN (sebelumnya)
+//
+//   water = true   Air tenang yang beriak karena angin. Kursor digerakkan →
+//                  jejak riak V. Klik → tetesan air dengan riak lingkar.
+//                  Memakai simulasi persamaan gelombang sungguhan.
+//   water = false  Gumpalan dot abstrak yang berubah bentuk pelan. Kursor
+//                  digerakkan → gumpalan terseret & menyala. Klik → ledakan
+//                  + riak. Pola kotak-kotak dari ordered dithering (Bayer 8×8).
+//
+//   Trail piksel acak yang paling awal (kode lama) tetap tersedia dan bisa
+//   ditumpuk di atas kedua animasi:  <PixelTrail trail />
+//
+// ═══ Hemat ════════════════════════════════════════════════════════════════════
+//   Berhenti menggambar saat hero tidak terlihat / tab tidak aktif, dan turun ke
+//   ±30 fps saat tidak ada interaksi.
 
 import { useEffect, useRef } from "react";
 
 type PixelTrailProps = {
+  /**
+   * PILIHAN ANIMASI.
+   * true (bawaan) = animasi air  |  false = animasi gumpalan (sebelumnya).
+   */
+  water?: boolean;
+
+  // ── Trail piksel acak (kode lama, opsional) ──
   /** Warna piksel TRAIL dalam format "r,g,b". Default putih. */
   color?: string;
   /** Ukuran satu kotak piksel trail (px) di layar lebar. */
@@ -31,51 +47,68 @@ type PixelTrailProps = {
   maxAlpha?: number;
   /** Lama piksel trail memudar sampai hilang (ms). */
   fadeMs?: number;
-  /** Nyalakan trail piksel acak di jalur kursor (kode lama). Default mati. */
+  /** Nyalakan trail piksel acak di jalur kursor. Default mati. */
   trail?: boolean;
 
-  /** Warna piksel ambient "r,g,b". Default putih (cocok untuk latar gelap hero). */
+  // ── Umum (berlaku untuk air maupun gumpalan) ──
+  /** Warna dot "r,g,b". Default putih. */
   ambientColor?: string;
-  /** Opasitas maksimum piksel ambient (0–1). 0 = matikan ambient. */
+  /** Opasitas maksimum dot (0–1). 0 = matikan animasi. Bawaan: air 0.7, gumpalan 0.5. */
   ambientAlpha?: number;
-  /** Kecepatan perubahan bentuk gumpalan. */
-  ambientSpeed?: number;
-  /** Skala pola: kecil = gumpalan lebih besar & lebar. */
-  ambientScale?: number;
-  /** Kepadatan: besar = lebih banyak piksel menyala (sekitar 0.6–1.4). */
-  ambientDensity?: number;
-  /** Ukuran 1 piksel dither (px CSS) di layar lebar. */
+  /** Ukuran 1 dot (px CSS) di layar lebar. */
   pixelSize?: number;
-  /** Ukuran 1 piksel dither (px CSS) di layar < 640px. */
+  /** Ukuran 1 dot (px CSS) di layar < 640px. */
   mobilePixelSize?: number;
-  /** Seberapa jauh tepi canvas memudar (0–0.5). */
+  /** Seberapa jauh tepi area memudar (0–0.5). */
   edgeFade?: number;
 
-  /** Radius pengaruh kursor, dalam jumlah blok (1 blok = 8 piksel dither). */
-  pointerRadius?: number;
-  /** Kekuatan gumpalan terseret kursor. */
+  // ── Khusus AIR (water = true) ──
+  /** Kepadatan dot dasar saat air datar (0–0.3). */
+  baseDensity?: number;
+  /** Kuatnya riak akibat angin. 0 = air benar-benar tenang. */
+  windStrength?: number;
+  /** Kecepatan gelombang angin merambat. */
+  windSpeed?: number;
+  /** Arah angin dalam derajat (0 = ke kanan, 90 = ke bawah). */
+  windAngle?: number;
+  /** Kecepatan rambat riak (0.1–0.5; jangan > 0.5 agar simulasi stabil). */
+  waveSpeed?: number;
+  /** Seberapa lama riak bertahan (0.98–0.999). Besar = riak lebih lama. */
+  waveDamping?: number;
+  /** Kekuatan jejak riak saat kursor digerakkan. */
   pointerStrength?: number;
-  /** Seberapa kuat area di bawah kursor menyala (0 = tidak). */
-  pointerGlow?: number;
+  /** Lebar jejak kursor, dalam jumlah dot. */
+  pointerRadius?: number;
+  /** Kekuatan tetesan saat klik. */
+  dropStrength?: number;
+  /** Lebar tetesan saat klik, dalam jumlah dot. */
+  dropRadius?: number;
 
+  // ── Khusus GUMPALAN (water = false) ──
+  /** Kecepatan gumpalan berubah bentuk. */
+  blobSpeed?: number;
+  /** Skala pola: kecil = gumpalan lebih besar & lebar. */
+  blobScale?: number;
+  /** Kepadatan: besar = lebih banyak dot menyala (sekitar 0.6–2). */
+  blobDensity?: number;
+  /** Radius pengaruh kursor, dalam jumlah blok (1 blok = 8 dot). */
+  blobPointerRadius?: number;
+  /** Kekuatan gumpalan terseret kursor. */
+  blobPointerStrength?: number;
+  /** Seberapa kuat area di bawah kursor menyala. */
+  blobPointerGlow?: number;
   /** Kecepatan riak saat klik. */
-  rippleSpeed?: number;
+  blobRippleSpeed?: number;
   /** Ketebalan cincin riak. */
-  rippleThickness?: number;
+  blobRippleThickness?: number;
   /** Kekuatan riak saat klik. */
-  rippleIntensity?: number;
+  blobRippleIntensity?: number;
 
   className?: string;
 };
 
-/* ───────────────────────── Dither field (murni, tanpa DOM) ───────────────────────── */
+/* ───────────────────────── Mesin air (murni, tanpa DOM) ───────────────────────── */
 
-const BLOCK = 8; // 1 blok = 8×8 piksel dither (sama dengan shader: cellPixelSize = 8 * pixelSize)
-const MAX_RIPPLES = 10;
-
-type Ripple = { x: number; y: number; t0: number };
-
-// Matriks Bayer 8×8 — port dari Bayer2/Bayer4/Bayer8 di shader PixelBlast.
 const bayer2 = (x: number, y: number) => {
   x = Math.floor(x);
   y = Math.floor(y);
@@ -86,12 +119,293 @@ const bayer4 = (x: number, y: number) =>
   bayer2(0.5 * x, 0.5 * y) * 0.25 + bayer2(x, y);
 const bayer8 = (x: number, y: number) =>
   bayer4(0.5 * x, 0.5 * y) * 0.25 + bayer2(x, y);
-// threshold per posisi dalam blok: piksel menyala jika feed + BAYER[i] >= 0.5
-const BAYER = new Float32Array(64);
+export const BAYER = new Float32Array(64);
 for (let y = 0; y < 8; y++)
   for (let x = 0; x < 8; x++) BAYER[y * 8 + x] = bayer8(x, y) - 0.5;
 
-// Value-noise 3D + fBm — port dari vnoise / fbm2 di shader.
+const smooth = (e0: number, e1: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+  return t * t * (3 - 2 * t);
+};
+
+const WAVES = [
+  { len: 22, dir: -1.35, amp: 0.3, ph: 0.0 },
+  { len: 16, dir: -0.8, amp: 0.3, ph: 1.7 },
+  { len: 30, dir: -0.3, amp: 0.35, ph: 3.1 },
+  { len: 19, dir: 0.2, amp: 0.3, ph: 4.6 },
+  { len: 13, dir: 0.75, amp: 0.22, ph: 2.2 },
+  { len: 36, dir: 1.3, amp: 0.3, ph: 5.4 },
+];
+const K = WAVES.length;
+const AMPS = new Float32Array(WAVES.map((w) => w.amp));
+const GUST_LEN = 170;
+
+export type Water = {
+  dw: number;
+  dh: number;
+  u: Float32Array;
+  v: Float32Array;
+  damp: Float32Array;
+  H: Float32Array;
+  u32: Uint32Array;
+  sx: Float32Array;
+  sy: Float32Array;
+  active: boolean;
+  kx: Float32Array;
+  ky: Float32Array;
+  om: Float32Array;
+  rowS: Float32Array;
+  rowC: Float32Array;
+  colS: Float32Array;
+  colC: Float32Array;
+  gkx: number;
+  gom: number;
+  gRowS: Float32Array;
+  gRowC: Float32Array;
+  gColS: Float32Array;
+  gColC: Float32Array;
+};
+
+export function createWater(
+  dw: number,
+  dh: number,
+  edgeFade: number,
+  windAngle: number,
+  windSpeed: number,
+  damping: number,
+): Water {
+  const n = dw * dh;
+  const sx = new Float32Array(dw),
+    sy = new Float32Array(dh);
+  for (let x = 0; x < dw; x++) {
+    const t = (x + 0.5) / dw;
+    sx[x] = edgeFade > 0 ? smooth(0, edgeFade, Math.min(t, 1 - t)) : 1;
+  }
+  for (let y = 0; y < dh; y++) {
+    const t = (y + 0.5) / dh;
+    sy[y] = edgeFade > 0 ? smooth(0, edgeFade, Math.min(t, 1 - t)) : 1;
+  }
+  // spons peredam di tepi supaya gelombang tidak memantul balik
+  const damp = new Float32Array(n);
+  const SP = 14;
+  for (let y = 0; y < dh; y++)
+    for (let x = 0; x < dw; x++) {
+      const d = Math.min(x, y, dw - 1 - x, dh - 1 - y);
+      const s = d < SP ? 1 - d / SP : 0;
+      damp[y * dw + x] = damping * (1 - 0.14 * s * s);
+    }
+  const kx = new Float32Array(K),
+    ky = new Float32Array(K),
+    om = new Float32Array(K);
+  const rowS = new Float32Array(K * dh),
+    rowC = new Float32Array(K * dh);
+  for (let k = 0; k < K; k++) {
+    const w = WAVES[k];
+    const th = windAngle + w.dir;
+    const kk = (2 * Math.PI) / w.len;
+    kx[k] = kk * Math.cos(th);
+    ky[k] = kk * Math.sin(th);
+    om[k] = kk * 2.6 * Math.sqrt(w.len) * windSpeed;
+    for (let y = 0; y < dh; y++) {
+      rowS[k * dh + y] = Math.sin(ky[k] * y);
+      rowC[k * dh + y] = Math.cos(ky[k] * y);
+    }
+  }
+  const gk = (2 * Math.PI) / GUST_LEN;
+  const gkx = gk * Math.cos(windAngle),
+    gky = gk * Math.sin(windAngle);
+  const gRowS = new Float32Array(dh),
+    gRowC = new Float32Array(dh);
+  for (let y = 0; y < dh; y++) {
+    gRowS[y] = Math.sin(gky * y);
+    gRowC[y] = Math.cos(gky * y);
+  }
+  return {
+    dw,
+    dh,
+    u: new Float32Array(n),
+    v: new Float32Array(n),
+    damp,
+    H: new Float32Array(n),
+    u32: new Uint32Array(n),
+    sx,
+    sy,
+    active: false,
+    kx,
+    ky,
+    om,
+    rowS,
+    rowC,
+    colS: new Float32Array(K * dw),
+    colC: new Float32Array(K * dw),
+    gkx,
+    gom: gk * 26 * windSpeed,
+    gRowS,
+    gRowC,
+    gColS: new Float32Array(dw),
+    gColC: new Float32Array(dw),
+  };
+}
+
+/** Satu langkah persamaan gelombang (dipanggil ±60x per detik). */
+export function stepWater(w: Water, c2: number, restore = 0.004) {
+  const { dw, dh, u, v, damp } = w;
+  let maxAbs = 0;
+  for (let y = 1; y < dh - 1; y++) {
+    const row = y * dw;
+    for (let x = 1; x < dw - 1; x++) {
+      const i = row + x;
+      const c = u[i];
+      const nv =
+        (2 * c -
+          v[i] +
+          c2 * (u[i - 1] + u[i + 1] + u[i - dw] + u[i + dw] - 4 * c) -
+          restore * c) *
+        damp[i];
+      v[i] = nv;
+      const a = nv < 0 ? -nv : nv;
+      if (a > maxAbs) maxAbs = a;
+    }
+  }
+  w.u = v;
+  w.v = u;
+  w.active = maxAbs > 0.004;
+  if (!w.active) {
+    // Riak sudah hilang → nolkan sisa nilai kecil agar tidak ada pola yang "membeku".
+    u.fill(0);
+    v.fill(0);
+  }
+}
+
+/**
+ * Sentuhan / tetesan di (cx, cy) (satuan sel).
+ * drop=false → gangguan halus (jejak kursor).
+ * drop=true  → pusat cekung + cincin di sekitarnya, merambat jadi beberapa riak lingkar.
+ */
+export function splash(
+  w: Water,
+  cx: number,
+  cy: number,
+  radius: number,
+  amp: number,
+  drop = false,
+) {
+  const R = Math.ceil(radius * (drop ? 3.2 : 2.2));
+  const x0 = Math.max(1, Math.floor(cx - R)),
+    x1 = Math.min(w.dw - 2, Math.ceil(cx + R));
+  const y0 = Math.max(1, Math.floor(cy - R)),
+    y1 = Math.min(w.dh - 2, Math.ceil(cy + R));
+  const r2 = radius * radius;
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) {
+      const q = ((x - cx) * (x - cx) + (y - cy) * (y - cy)) / r2;
+      // Kedua profil bernilai total nol (turunan kedua gaussian) → permukaan tidak meninggalkan "lubang".
+      w.u[y * w.dw + x] +=
+        amp *
+        (drop
+          ? (1 - 1.425 * q + 0.25 * q * q) * Math.exp(-q * 0.8)
+          : (1 - q) * Math.exp(-q));
+    }
+  w.active = true;
+}
+
+export type WaterRender = {
+  time: number;
+  simGain: number;
+  windStrength: number;
+  base: number;
+  hGain: number;
+  sGain: number;
+  rgb: number;
+};
+
+export function renderWater(w: Water, p: WaterRender) {
+  const {
+    dw,
+    dh,
+    u,
+    H,
+    u32,
+    sx,
+    sy,
+    kx,
+    om,
+    rowS,
+    rowC,
+    colS,
+    colC,
+    gColS,
+    gColC,
+    gRowS,
+    gRowC,
+  } = w;
+  // bagian kolom (bergantung waktu) dihitung sekali per frame
+  for (let k = 0; k < K; k++) {
+    const ph = WAVES[k].ph;
+    for (let x = 0; x < dw; x++) {
+      const a = kx[k] * x - om[k] * p.time + ph;
+      colS[k * dw + x] = Math.sin(a);
+      colC[k * dw + x] = Math.cos(a);
+    }
+  }
+  for (let x = 0; x < dw; x++) {
+    const a = w.gkx * x - w.gom * p.time;
+    gColS[x] = Math.sin(a);
+    gColC[x] = Math.cos(a);
+  }
+  const ws = p.windStrength;
+  const amps = AMPS;
+  for (let y = 0; y < dh; y++) {
+    const grs = gRowS[y],
+      grc = gRowC[y];
+    const row = y * dw;
+    for (let x = 0; x < dw; x++) {
+      let sum = 0;
+      for (let k = 0; k < K; k++) {
+        sum +=
+          amps[k] *
+          (colS[k * dw + x] * rowC[k * dh + y] +
+            colC[k * dw + x] * rowS[k * dh + y]);
+      }
+      const gs = 0.5 + 0.5 * (gColS[x] * grc + gColC[x] * grs);
+      const env = 0.4 + 0.6 * gs;
+      H[row + x] = u[row + x] * p.simGain + sum * env * ws;
+    }
+  }
+  const LX = -0.6,
+    LY = -0.8;
+  u32.fill(0);
+  for (let y = 0; y < dh; y++) {
+    const fy = sy[y];
+    const row = y * dw;
+    const by = (y & 7) << 3;
+    for (let x = 0; x < dw; x++) {
+      const fade = fy < sx[x] ? fy : sx[x];
+      if (fade <= 0) continue;
+      const i = row + x;
+      let gx = 0,
+        gy = 0;
+      if (x > 0 && x < dw - 1 && y > 0 && y < dh - 1) {
+        gx = H[i + 1] - H[i - 1];
+        gy = H[i + dw] - H[i - dw];
+      }
+      const feed = p.base + p.hGain * H[i] + p.sGain * (gx * LX + gy * LY);
+      if (feed + BAYER[by | (x & 7)] < 0.5) continue;
+      const inten = feed > 1 ? 1 : feed;
+      const a = (fade * (0.45 + 0.55 * inten) * 255) | 0;
+      if (a <= 0) continue;
+      u32[i] = ((a << 24) | p.rgb) >>> 0;
+    }
+  }
+}
+
+/* ───────────── Mesin gumpalan dither (animasi sebelumnya, gaya PixelBlast) ───────────── */
+
+const BLOCK = 8; // 1 blok = 8×8 dot (feed dihitung per blok, pola isi dari matriks Bayer)
+const MAX_RIPPLES = 10;
+
+type Ripple = { x: number; y: number; t0: number };
+
 // Hash integer 3D → [0,1). Pengganti fract(sin()) milik shader, yang sedikit bias ke sisi positif
 // sehingga satu sisi layar jadi lebih padat dari sisi lain.
 const hash3 = (x: number, y: number, z: number) => {
@@ -142,14 +456,9 @@ function fbm(ux: number, uy: number, t: number, scale: number) {
   return sum * 0.5 + 0.5;
 }
 
-const smooth = (e0: number, e1: number, x: number) => {
-  const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
-  return t * t * (3 - 2 * t);
-};
-
 export type DitherField = {
-  dw: number; // lebar dalam piksel dither
-  dh: number; // tinggi dalam piksel dither
+  dw: number; // lebar dalam dot
+  dh: number; // tinggi dalam dot
   bw: number; // jumlah blok horizontal
   bh: number; // jumlah blok vertikal
   u32: Uint32Array; // buffer RGBA (little-endian ABGR)
@@ -220,7 +529,7 @@ export function renderDitherField(f: DitherField, p: DitherParams) {
   for (let by = 0; by < bh; by++) {
     for (let bx = 0; bx < bw; bx++) {
       const bi = by * bw + bx;
-      // koordinat uv blok (tinggi layar = 1, sumbu y ke atas) — sama dengan shader
+      // koordinat uv blok (tinggi layar = 1, sumbu y ke atas)
       let ux = ((bx + 0.5) * BLOCK - dw / 2) / dh;
       let uy = -((by + 0.5) * BLOCK - dh / 2) / dh;
 
@@ -279,9 +588,12 @@ const parseRgb = (s: string) => {
   return (b << 16) | (g << 8) | r;
 };
 
+const SIM_STEP_MS = 1000 / 60; // simulasi air berjalan tetap 60 langkah per detik
+
 /* ─────────────────────────────────── Komponen ─────────────────────────────────── */
 
 export default function PixelTrail({
+  water = true,
   color = "255,255,255",
   cellSize = 6,
   mobileCellSize = 8,
@@ -290,22 +602,36 @@ export default function PixelTrail({
   fadeMs = 1000,
   trail = false,
   ambientColor = "255,255,255",
-  ambientAlpha = 0.2,
-  ambientSpeed = 0.5,
-  ambientScale = 2,
-  ambientDensity = 1.5,
+  ambientAlpha,
   pixelSize = 3,
-  mobilePixelSize = 3,
+  mobilePixelSize = 2,
   edgeFade = 0.2,
-  pointerRadius = 3,
-  pointerStrength = 0.18,
-  pointerGlow = 0.25,
-  rippleSpeed = 0.4,
-  rippleThickness = 0.12,
-  rippleIntensity = 1.5,
+  // air
+  baseDensity = 0.09,
+  windStrength = 0.5,
+  windSpeed = 1,
+  windAngle = 25,
+  waveSpeed = 0.48,
+  waveDamping = 0.995,
+  pointerStrength = 1,
+  pointerRadius = 2.5,
+  dropStrength = 1,
+  dropRadius = 3,
+  // gumpalan
+  blobSpeed = 0.5,
+  blobScale = 2,
+  blobDensity = 1.5,
+  blobPointerRadius = 3,
+  blobPointerStrength = 0.18,
+  blobPointerGlow = 0.25,
+  blobRippleSpeed = 0.4,
+  blobRippleThickness = 0.12,
+  blobRippleIntensity = 1.5,
   className = "",
 }: PixelTrailProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Opasitas bawaan berbeda per animasi supaya masing-masing tampil pas tanpa diatur.
+  const alpha = ambientAlpha ?? (water ? 0.7 : 0.5);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -319,24 +645,33 @@ export default function PixelTrail({
     if (!ctx2d) return;
     const ctx: CanvasRenderingContext2D = ctx2d;
 
+    const useWater = water;
     let w = 0;
     let h = 0;
     let raf = 0;
     let last = 0;
     let visible = true;
     const startedAt = performance.now();
-    const timeOffset = Math.random() * 1000;
+    const waterOffset = Math.random() * 100;
+    const blobOffset = Math.random() * 1000;
     const rgb = parseRgb(ambientColor);
 
-    // ── Ambient (dither) ──
+    // ── Dot (dipakai bersama oleh air & gumpalan) ──
     let ps = pixelSize;
-    let field: DitherField | null = null;
     let off: HTMLCanvasElement | null = null;
     let offCtx: CanvasRenderingContext2D | null = null;
     let img: ImageData | null = null;
+
+    // ── Air ──
+    let wsim: Water | null = null;
+    let simAcc = 0;
+    let prevCell: { x: number; y: number } | null = null; // posisi kursor (satuan dot)
+
+    // ── Gumpalan ──
+    let field: DitherField | null = null;
     let fieldActive = false;
     const ripples: Ripple[] = [];
-    let prevPtr: { x: number; y: number } | null = null; // posisi kursor (px) untuk arah gerak
+    let prevPx: { x: number; y: number } | null = null; // posisi kursor (px) untuk arah gerak
 
     // ── Trail (kode lama, opsional) ──
     let cell = cellSize;
@@ -360,11 +695,25 @@ export default function PixelTrail({
       rows = Math.ceil(h / cell);
       cells.clear();
 
-      // ambient
+      // dot
       ps = w < 640 ? mobilePixelSize : pixelSize;
-      const dw = Math.max(1, Math.ceil(w / ps));
-      const dh = Math.max(1, Math.ceil(h / ps));
-      field = createDitherField(dw, dh, edgeFade);
+      const dw = Math.max(8, Math.ceil(w / ps));
+      const dh = Math.max(8, Math.ceil(h / ps));
+      if (useWater) {
+        wsim = createWater(
+          dw,
+          dh,
+          edgeFade,
+          (windAngle * Math.PI) / 180,
+          windSpeed,
+          waveDamping,
+        );
+        simAcc = 0;
+      } else {
+        field = createDitherField(dw, dh, edgeFade);
+        fieldActive = false;
+        ripples.length = 0;
+      }
       off = document.createElement("canvas");
       off.width = dw;
       off.height = dh;
@@ -421,13 +770,49 @@ export default function PixelTrail({
       return { x: clientX - rect.left, y: clientY - rect.top };
     };
 
-    // Seret gumpalan: tambahkan "sentuhan" (intensitas + arah) di sekitar kursor.
+    /* ── AIR: kursor menyapu air → riak V di belakangnya ── */
+    const pushWater = (x: number, y: number) => {
+      const wt = wsim;
+      if (!wt) return;
+      const cx = x / ps;
+      const cy = y / ps;
+      if (prevCell) {
+        const dx = cx - prevCell.x;
+        const dy = cy - prevCell.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 0.3) return;
+        const speed = Math.min(dist / 4, 1);
+        const steps = Math.min(12, Math.max(1, Math.ceil(dist / 1.5)));
+        for (let s = 1; s <= steps; s++) {
+          const t = s / steps;
+          splash(
+            wt,
+            prevCell.x + dx * t,
+            prevCell.y + dy * t,
+            pointerRadius,
+            -0.26 * pointerStrength * speed,
+          );
+        }
+      }
+      prevCell = { x: cx, y: cy };
+      start();
+    };
+
+    /* ── AIR: klik / ketuk → tetesan ── */
+    const dropWater = (x: number, y: number) => {
+      const wt = wsim;
+      if (!wt) return;
+      splash(wt, x / ps, y / ps, dropRadius, -3.6 * dropStrength, true);
+      start();
+    };
+
+    /* ── GUMPALAN: seret gumpalan di sekitar kursor ── */
     const pushField = (x: number, y: number) => {
       const f = field;
       if (!f) return;
-      if (prevPtr) {
-        const dx = x - prevPtr.x;
-        const dy = y - prevPtr.y;
+      if (prevPx) {
+        const dx = x - prevPx.x;
+        const dy = y - prevPx.y;
         const dist = Math.hypot(dx, dy);
         if (dist < 0.5) return;
         const dirx = dx / dist;
@@ -437,9 +822,9 @@ export default function PixelTrail({
         const steps = Math.max(1, Math.ceil(dist / (blockPx * 0.5)));
         for (let s = 1; s <= steps; s++) {
           const t = s / steps;
-          const bxp = (prevPtr.x + dx * t) / blockPx;
-          const byp = (prevPtr.y + dy * t) / blockPx;
-          const R = pointerRadius;
+          const bxp = (prevPx.x + dx * t) / blockPx;
+          const byp = (prevPx.y + dy * t) / blockPx;
+          const R = blobPointerRadius;
           const x0 = Math.max(0, Math.floor(bxp - R));
           const x1 = Math.min(f.bw - 1, Math.ceil(bxp + R));
           const y0 = Math.max(0, Math.floor(byp - R));
@@ -457,27 +842,36 @@ export default function PixelTrail({
           }
         }
       }
-      prevPtr = { x, y };
+      prevPx = { x, y };
       fieldActive = true;
       start();
     };
 
-    const addRipple = (x: number, y: number, clock: number) => {
+    /* ── GUMPALAN: klik / ketuk → ledakan + riak ── */
+    const addRipple = (x: number, y: number) => {
       const f = field;
       if (!f) return;
-      // piksel layar → koordinat uv shader (tinggi = 1, y ke atas)
+      // piksel layar → koordinat uv (tinggi = 1, y ke atas)
       const ux = (x / ps - f.dw / 2) / f.dh;
       const uy = -(y / ps - f.dh / 2) / f.dh;
       if (ripples.length >= MAX_RIPPLES) ripples.shift();
-      ripples.push({ x: ux, y: uy, t0: clock });
+      ripples.push({
+        x: ux,
+        y: uy,
+        t0: ((performance.now() - startedAt) / 1000) * 0.5,
+      });
+      start();
     };
 
     function tick(now: number) {
       raf = 0;
       if (!visible || document.hidden) return; // dijalankan ulang oleh start()
 
-      // Ada interaksi → ±60fps; hanya ambient → ±30fps.
-      const busy = fieldActive || ripples.length > 0 || cells.size > 0;
+      // Ada interaksi aktif → ±60fps; hanya animasi dasar → ±30fps.
+      const interacting = useWater
+        ? (wsim?.active ?? false)
+        : fieldActive || ripples.length > 0;
+      const busy = interacting || cells.size > 0;
       if (now - last < (busy ? 14 : 30)) {
         raf = requestAnimationFrame(tick);
         return;
@@ -485,53 +879,90 @@ export default function PixelTrail({
       const dt = Math.min(now - last, 64);
       last = now;
       const elapsed = (now - startedAt) / 1000;
-      const clock = elapsed * 0.5; // sama dengan shader: uTime = elapsed * 0.5 untuk riak & wobble
 
       ctx.clearRect(0, 0, w, h);
 
-      // ── Ambient dither ──
-      const f = field;
-      if (ambientAlpha > 0 && f && off && offCtx && img) {
-        // peluruhan sentuhan kursor
-        if (fieldActive) {
-          const k = Math.pow(0.93, dt / 16.7);
-          let alive = false;
-          for (let i = 0; i < f.fi.length; i++) {
-            f.fi[i] *= k;
-            f.fvx[i] *= k;
-            f.fvy[i] *= k;
-            if (f.fi[i] > 0.01) alive = true;
-            else {
-              f.fi[i] = 0;
-              f.fvx[i] = 0;
-              f.fvy[i] = 0;
-            }
-          }
-          fieldActive = alive;
-        }
-        for (let i = ripples.length - 1; i >= 0; i--)
-          if (clock - ripples[i].t0 > 4) ripples.splice(i, 1);
+      // ── Dot ──
+      if (alpha > 0 && off && offCtx && img) {
+        let dw = 0;
+        let dh = 0;
+        let src: Uint32Array | null = null;
 
-        renderDitherField(f, {
-          time: timeOffset + elapsed * ambientSpeed,
-          clock,
-          scale: ambientScale,
-          density: ambientDensity,
-          strength: pointerStrength,
-          glow: pointerGlow,
-          wobble: 4.5,
-          ripples,
-          rippleSpeed,
-          rippleThickness,
-          rippleIntensity,
-          rgb,
-        });
-        new Uint32Array(img.data.buffer).set(f.u32);
-        offCtx.putImageData(img, 0, 0);
-        ctx.imageSmoothingEnabled = false;
-        ctx.globalAlpha = ambientAlpha;
-        ctx.drawImage(off, 0, 0, f.dw, f.dh, 0, 0, f.dw * ps, f.dh * ps);
-        ctx.globalAlpha = 1;
+        if (useWater && wsim) {
+          // simulasi riak dengan langkah waktu tetap (maks 3 langkah per frame)
+          if (wsim.active) {
+            simAcc += dt;
+            let n = 0;
+            while (simAcc >= SIM_STEP_MS && n < 3) {
+              stepWater(wsim, waveSpeed);
+              simAcc -= SIM_STEP_MS;
+              n++;
+            }
+            if (n === 3) simAcc = 0;
+          } else {
+            simAcc = 0;
+          }
+          renderWater(wsim, {
+            time: elapsed + waterOffset,
+            simGain: 3.4,
+            windStrength,
+            base: baseDensity,
+            hGain: 0.3,
+            sGain: 0.35,
+            rgb,
+          });
+          dw = wsim.dw;
+          dh = wsim.dh;
+          src = wsim.u32;
+        } else if (!useWater && field) {
+          const f = field;
+          // peluruhan sentuhan kursor
+          if (fieldActive) {
+            const k = Math.pow(0.93, dt / 16.7);
+            let alive = false;
+            for (let i = 0; i < f.fi.length; i++) {
+              f.fi[i] *= k;
+              f.fvx[i] *= k;
+              f.fvy[i] *= k;
+              if (f.fi[i] > 0.01) alive = true;
+              else {
+                f.fi[i] = 0;
+                f.fvx[i] = 0;
+                f.fvy[i] = 0;
+              }
+            }
+            fieldActive = alive;
+          }
+          const clock = elapsed * 0.5; // sama dengan shader: uTime = elapsed * 0.5 untuk riak & wobble
+          for (let i = ripples.length - 1; i >= 0; i--)
+            if (clock - ripples[i].t0 > 4) ripples.splice(i, 1);
+          renderDitherField(f, {
+            time: blobOffset + elapsed * blobSpeed,
+            clock,
+            scale: blobScale,
+            density: blobDensity,
+            strength: blobPointerStrength,
+            glow: blobPointerGlow,
+            wobble: 4.5,
+            ripples,
+            rippleSpeed: blobRippleSpeed,
+            rippleThickness: blobRippleThickness,
+            rippleIntensity: blobRippleIntensity,
+            rgb,
+          });
+          dw = f.dw;
+          dh = f.dh;
+          src = f.u32;
+        }
+
+        if (src) {
+          new Uint32Array(img.data.buffer).set(src);
+          offCtx.putImageData(img, 0, 0);
+          ctx.imageSmoothingEnabled = false;
+          ctx.globalAlpha = alpha;
+          ctx.drawImage(off, 0, 0, dw, dh, 0, 0, dw * ps, dh * ps);
+          ctx.globalAlpha = 1;
+        }
       }
 
       // ── Trail (opsional) ──
@@ -554,49 +985,50 @@ export default function PixelTrail({
         ctx.globalAlpha = 1;
       }
 
-      // Ambient selalu lanjut selama hero terlihat; tanpa ambient, berhenti saat diam.
-      if (ambientAlpha > 0 || cells.size > 0) raf = requestAnimationFrame(tick);
+      // Animasi dasar selalu bergerak selama terlihat; tanpa dot, berhenti saat diam.
+      if (alpha > 0 || cells.size > 0) raf = requestAnimationFrame(tick);
     }
+
+    const onMove = (x: number, y: number) => {
+      if (useWater) pushWater(x, y);
+      else pushField(x, y);
+      if (trail) stampLine(x, y);
+    };
+    const resetPointer = () => {
+      prev = null;
+      prevCell = null;
+      prevPx = null;
+    };
 
     // ── Event: mouse (desktop) ──
     const onPointerMove = (e: PointerEvent) => {
       if (e.pointerType !== "mouse") return;
       const { x, y } = toLocal(e.clientX, e.clientY);
-      pushField(x, y);
-      if (trail) stampLine(x, y);
+      onMove(x, y);
     };
-    const onPointerLeave = () => {
-      prev = null;
-      prevPtr = null;
-    };
+    const onPointerLeave = () => resetPointer();
 
     // ── Event: sentuhan (HP) ──
     const onTouchStart = (e: TouchEvent) => {
-      prev = null;
-      prevPtr = null;
+      resetPointer();
       const t = e.touches[0];
       if (!t) return;
       const { x, y } = toLocal(t.clientX, t.clientY);
-      pushField(x, y);
-      if (trail) stampLine(x, y);
+      onMove(x, y);
     };
     const onTouchMove = (e: TouchEvent) => {
       const t = e.touches[0];
       if (!t) return;
       const { x, y } = toLocal(t.clientX, t.clientY);
-      pushField(x, y);
-      if (trail) stampLine(x, y);
+      onMove(x, y);
     };
-    const onTouchEnd = () => {
-      prev = null;
-      prevPtr = null;
-    };
+    const onTouchEnd = () => resetPointer();
 
-    // ── Ketukan / klik → ledakan + riak ──
+    // ── Klik / ketuk ──
     const onClick = (e: MouseEvent) => {
       const { x, y } = toLocal(e.clientX, e.clientY);
-      addRipple(x, y, ((performance.now() - startedAt) / 1000) * 0.5);
-      start();
+      if (useWater) dropWater(x, y);
+      else addRipple(x, y);
     };
 
     resize();
@@ -639,6 +1071,7 @@ export default function PixelTrail({
       host.removeEventListener("click", onClick);
     };
   }, [
+    water,
     color,
     cellSize,
     mobileCellSize,
@@ -647,19 +1080,29 @@ export default function PixelTrail({
     fadeMs,
     trail,
     ambientColor,
-    ambientAlpha,
-    ambientSpeed,
-    ambientScale,
-    ambientDensity,
+    alpha,
     pixelSize,
     mobilePixelSize,
     edgeFade,
-    pointerRadius,
+    baseDensity,
+    windStrength,
+    windSpeed,
+    windAngle,
+    waveSpeed,
+    waveDamping,
     pointerStrength,
-    pointerGlow,
-    rippleSpeed,
-    rippleThickness,
-    rippleIntensity,
+    pointerRadius,
+    dropStrength,
+    dropRadius,
+    blobSpeed,
+    blobScale,
+    blobDensity,
+    blobPointerRadius,
+    blobPointerStrength,
+    blobPointerGlow,
+    blobRippleSpeed,
+    blobRippleThickness,
+    blobRippleIntensity,
   ]);
 
   return (

@@ -17,6 +17,8 @@ export interface POSetting {
   url_slug?: string;
   qris_image_url?: string | null;
   logo_image_url?: string | null;
+  // Ikon persegi per PO (header, footer, favicon). Butuh kolom icon_image_url (011_po_icon.sql).
+  icon_image_url?: string | null;
   // Identitas toko untuk invoice/resi. Opsional: kalau kosong dipakai default
   // di lib/po/store-info.ts. Butuh kolom baru di tabel po_setting (lihat SQL).
   store_name?: string | null;
