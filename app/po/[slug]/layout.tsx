@@ -4,9 +4,11 @@
 // Dibuat di server supaya judulnya sudah benar sejak halaman dimuat
 // (juga muncul di preview link WhatsApp), bukan baru berubah setelah data tampil.
 // Ikon tab (favicon) juga diambil dari "Ikon PO" di pengaturan, jadi tiap PO bisa beda.
+// Layout ini juga membungkus halaman reseller (/po/[slug]/reseller/...), sehingga
+// ikon tab ikut diwarisi ke sana.
 
 import type { Metadata } from "next";
-import { createClient } from "@supabase/supabase-js";
+import { getPOTabInfo } from "@/lib/po/tabInfo";
 
 const BRAND = "Langitan.co";
 
@@ -16,37 +18,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  let name = "Katalog PO";
-  let iconUrl: string | null = null;
-
-  try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { db: { schema: "monitoring_sablon" } },
-    );
-    // Coba ambil judul + ikon. Kalau kolom icon_image_url belum dibuat (SQL belum
-    // dijalankan) query ini error → ulangi hanya dengan judul agar judul tab tetap benar.
-    const withIcon = await supabase
-      .from("po_setting")
-      .select("title, icon_image_url")
-      .eq("url_slug", slug)
-      .maybeSingle();
-
-    if (!withIcon.error) {
-      if (withIcon.data?.title?.trim()) name = withIcon.data.title.trim();
-      iconUrl = withIcon.data?.icon_image_url?.trim() || null;
-    } else {
-      const titleOnly = await supabase
-        .from("po_setting")
-        .select("title")
-        .eq("url_slug", slug)
-        .maybeSingle();
-      if (titleOnly.data?.title?.trim()) name = titleOnly.data.title.trim();
-    }
-  } catch {
-    // gagal ambil data → pakai default
-  }
+  const { name, iconUrl } = await getPOTabInfo(slug);
 
   return {
     title: `${name} | ${BRAND}`,

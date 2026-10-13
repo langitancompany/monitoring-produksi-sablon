@@ -2,7 +2,7 @@
 
 import { useDialog } from "@/app/components/ui/DialogProvider";
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   getPOSettingBySlug,
   getPOProducts,
@@ -15,14 +15,13 @@ import {
 import { POSetting, POProduct, POReseller, CartItem } from "@/types/po";
 import { calculateItemPrice, formatRupiah } from "@/lib/po/pricing";
 import PixelTrail from "@/app/components/po/PixelTrail";
-import { usePOTabIdentity } from "@/hooks/usePOTabIdentity";
 
 // ── Sub-components ───────────────────────────────────────────────
-import { SuccessToast } from "@/app/po/reseller/portal/SuccessToast";
-import { EditOrderModal } from "@/app/po/reseller/portal/EditOrderModal";
-import { OrderCart } from "@/app/po/reseller/portal/OrderCart";
-import { ProductMatrix } from "@/app/po/reseller/portal/ProductMatrix";
-import { HistoryTab } from "@/app/po/reseller/portal/HistoryTab";
+import { SuccessToast } from "./SuccessToast";
+import { EditOrderModal } from "./EditOrderModal";
+import { OrderCart } from "./OrderCart";
+import { ProductMatrix } from "./ProductMatrix";
+import { HistoryTab } from "./HistoryTab";
 
 // Tinggi header (px) & seberapa "tertinggal" teks hero saat scroll (0 = ikut scroll normal)
 const HEADER_H = 58;
@@ -51,7 +50,9 @@ export default function ResellerPortalPage() {
   const router = useRouter();
 
   // ── Core state ──────────────────────────────────────────────────
-  const [slug, setSlug] = useState<string | null>(null);
+  // Slug dari path: /po/[slug]/reseller/portal
+  const params = useParams();
+  const slug = params?.slug as string;
   const [reseller, setReseller] = useState<POReseller | null>(null);
   const [setting, setSetting] = useState<POSetting | null>(null);
   const [products, setProducts] = useState<POProduct[]>([]);
@@ -83,15 +84,15 @@ export default function ResellerPortalPage() {
   const [orders, setOrders] = useState<POResellerOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
 
-  const katalogHref = slug ? `/po/${slug}` : "/po";
+  const katalogHref = `/po/${slug}`;
 
   // Header transparan menyatu dengan hero; berubah putih setelah hero terlewati
   const [headerSolid, setHeaderSolid] = useState(false);
   const heroRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
 
-  // Judul & ikon tab = sama seperti katalog, ditambah "Reseller"
-  usePOTabIdentity(setting);
+  // Judul & ikon tab diatur di server: app/po/[slug]/reseller/layout.tsx
+  // (+ app/po/[slug]/layout.tsx), jadi tidak perlu diatur lagi di sini.
 
   // ── Load orders ──────────────────────────────────────────────────
   const loadOrders = useCallback(
@@ -106,14 +107,9 @@ export default function ResellerPortalPage() {
 
   // ── Init ─────────────────────────────────────────────────────────
   useEffect(() => {
-    const savedSlug = sessionStorage.getItem("po_slug");
-    setSlug(savedSlug);
-
     const stored = sessionStorage.getItem("po_reseller");
     if (!stored) {
-      router.replace(
-        savedSlug ? `/po/reseller?slug=${savedSlug}` : "/po/reseller",
-      );
+      router.replace(`/po/${slug}/reseller`);
       return;
     }
 
@@ -121,23 +117,19 @@ export default function ResellerPortalPage() {
     setReseller(resellerData);
 
     async function load() {
-      if (!savedSlug) {
-        setLoading(false);
-        return;
-      }
-      const s = await getPOSettingBySlug(savedSlug);
+      const s = await getPOSettingBySlug(slug);
       if (!s) {
         setLoading(false);
         return;
       }
+      setSetting(s); // langsung simpan, tidak menunggu daftar produk
       const p = await getPOProducts(s.id);
-      setSetting(s);
       setProducts(p);
       setLoading(false);
       if (resellerData?.id) loadOrders(resellerData.id, s.id);
     }
     load();
-  }, [router, loadOrders]);
+  }, [router, loadOrders, slug]);
 
   useEffect(() => {
     if (activeTab === "history" && reseller?.id) {
@@ -350,7 +342,7 @@ export default function ResellerPortalPage() {
     );
     if (!ok) return;
     sessionStorage.removeItem("po_reseller");
-    router.push(slug ? `/po/reseller?slug=${slug}` : "/po/reseller");
+    router.push(`/po/${slug}/reseller`);
   };
 
   // ── Loading & guard ───────────────────────────────────────────────

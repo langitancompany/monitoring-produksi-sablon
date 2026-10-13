@@ -1,24 +1,24 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { loginReseller, getPOSettingBySlug } from "@/lib/po/supabase";
 import { POSetting } from "@/types/po";
 import { Package, Eye, EyeOff, MessageCircle } from "lucide-react";
 import PixelTrail from "@/app/components/po/PixelTrail";
-import { usePOTabIdentity } from "@/hooks/usePOTabIdentity";
 
 // Tinggi header (px) & seberapa "tertinggal" teks hero saat scroll (0 = ikut scroll normal)
 const HEADER_H = 58;
 const HERO_TEXT_LAG = 0.5;
 const WIDE_BREAKPOINT = 768; // sama dengan breakpoint `md` Tailwind
 
-function ResellerLoginContent() {
+export default function ResellerLoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const slug = searchParams.get("slug");
+  // Slug dari path: /po/[slug]/reseller
+  const params = useParams();
+  const slug = params?.slug as string;
 
-  const katalogHref = slug ? `/po/${slug}` : "/po";
+  const katalogHref = `/po/${slug}`;
 
   const [kode, setKode] = useState("");
   const [pin, setPin] = useState("");
@@ -31,8 +31,8 @@ function ResellerLoginContent() {
   const [settingReady, setSettingReady] = useState(!slug);
   const brandName = setting?.title?.trim() || "Portal Reseller";
 
-  // Judul & ikon tab = sama seperti katalog, ditambah "Reseller"
-  usePOTabIdentity(setting);
+  // Judul & ikon tab diatur di server: app/po/[slug]/reseller/layout.tsx
+  // (+ app/po/[slug]/layout.tsx), jadi tidak perlu diatur lagi di sini.
 
   // Link WhatsApp admin (08xx → 628xx), sama seperti footer katalog
   const waDigits = (setting?.wa_admin_phone || "").replace(/\D/g, "");
@@ -120,9 +120,7 @@ function ResellerLoginContent() {
     if (slug) {
       sessionStorage.setItem("po_slug", slug);
     }
-    router.push(
-      slug ? `/po/reseller/portal?slug=${slug}` : "/po/reseller/portal",
-    );
+    router.push(`/po/${slug}/reseller/portal`);
   }
 
   // Logo PO: ikon unggahan dari Pengaturan PO; kalau belum ada → ikon paket (seperti katalog).
@@ -304,13 +302,5 @@ function ResellerLoginContent() {
         </div>
       </main>
     </div>
-  );
-}
-
-export default function ResellerLoginPage() {
-  return (
-    <Suspense fallback={null}>
-      <ResellerLoginContent />
-    </Suspense>
   );
 }

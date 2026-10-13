@@ -67,8 +67,8 @@ export default function POOverview({ poId }: POOverviewProps) {
     {
       key: "reseller",
       label: "Portal Reseller",
-      url: `${origin}/po/reseller?slug=${currentSlug}`,
-      href: `/po/reseller?slug=${currentSlug}`,
+      url: `${origin}/po/${currentSlug}/reseller`,
+      href: `/po/${currentSlug}/reseller`,
       icon: Users,
     },
     {

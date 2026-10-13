@@ -355,7 +355,7 @@ export default function CatalogPage() {
             {periode}
           </span>
           <Link
-            href={withSlug("/po/reseller")}
+            href={`/po/${slug}/reseller`}
             className={`flex items-center gap-1.5 bg-transparent border px-3 sm:px-4 py-2 rounded-full text-xs font-bold transition-all ${
               headerSolid
                 ? "text-zinc-950 border-gray-300 hover:bg-stone-100 hover:border-zinc-950"
@@ -776,7 +776,7 @@ export default function CatalogPage() {
                 )}
                 <li>
                   <Link
-                    href={withSlug("/po/reseller")}
+                    href={`/po/${slug}/reseller`}
                     className="text-zinc-400 hover:text-white transition-colors"
                   >
                     Portal Reseller

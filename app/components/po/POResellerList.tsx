@@ -137,7 +137,7 @@ export default function POResellerList({ poId }: POResellerListProps) {
     setConfirmingId(r.id);
 
     const portalUrl = urlSlug
-      ? `${window.location.origin}/po/reseller?slug=${urlSlug}`
+      ? `${window.location.origin}/po/${urlSlug}/reseller`
       : window.location.origin;
 
     const message = buildConfirmationMessage(r, portalUrl);
