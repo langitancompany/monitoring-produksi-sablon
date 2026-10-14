@@ -30,6 +30,23 @@ function getMarginPercentage(qty: number, config: any): number {
   return base;
 }
 
+// Pembulatan SELALU ke atas (ceil) supaya harga jual tidak pernah lebih
+// rendah dari hasil hitungan. step = 0 berarti tanpa pembulatan.
+// Nilai dibulatkan ke 2 desimal dulu supaya sisa floating-point
+// (mis. 15000.0000000001) tidak membuat harga loncat satu step.
+const OPSI_PEMBULATAN = [
+  { value: 0, label: "Tanpa" },
+  { value: 100, label: "100" },
+  { value: 500, label: "500" },
+  { value: 1000, label: "1.000" },
+];
+
+function bulatkanKeAtas(num: number, step: number): number {
+  if (!step || step <= 0) return num;
+  const bersih = Math.round(num * 100) / 100;
+  return Math.ceil(bersih / step) * step;
+}
+
 export default function CalculatorView() {
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -48,6 +65,8 @@ export default function CalculatorView() {
   const [finalPrice, setFinalPrice] = useState(0);
   const [laborDetails, setLaborDetails] = useState({ gesut: 0, packing: 0 });
   const [appliedMargin, setAppliedMargin] = useState(0);
+  // Kelipatan pembulatan harga jual (selalu dibulatkan ke atas)
+  const [roundStep, setRoundStep] = useState(500);
 
   const [inputs, setInputs] = useState({
     qty: 0,
@@ -236,6 +255,9 @@ export default function CalculatorView() {
     );
 
   const showResult = finalPrice > 0;
+  // Harga jual setelah pembulatan ke atas — inilah yang ditampilkan & dikali qty
+  const roundedPrice = bulatkanKeAtas(finalPrice, roundStep);
+  const selisihPembulatan = roundedPrice - finalPrice;
   const currentTotalBonus = selectedAddonIds.reduce((total, id) => {
     const item = addons.find((a) => a.id === id);
     return total + (item ? Number(item.cost) : 0);
@@ -259,7 +281,7 @@ export default function CalculatorView() {
       <div className="flex justify-between text-sm">
         <span className="text-zinc-500 dark:text-zinc-400">Total Omset</span>
         <span className="font-mono tabular-nums font-semibold text-zinc-900 dark:text-white">
-          {formatResult(finalPrice * inputs.qty)}
+          {formatResult(roundedPrice * inputs.qty)}
         </span>
       </div>
       <div className="flex justify-between text-sm">
@@ -275,6 +297,32 @@ export default function CalculatorView() {
           )}
         </span>
       </div>
+      {roundStep > 0 && (
+        <>
+          <div className="flex justify-between text-sm">
+            <span className="text-zinc-500 dark:text-zinc-400">
+              Harga Murni (sebelum bulat)
+            </span>
+            <span className="font-mono tabular-nums font-semibold text-zinc-900 dark:text-white">
+              {formatResult(finalPrice)}{" "}
+              <span className="text-[10px] font-normal text-zinc-400 dark:text-zinc-500">
+                /pcs
+              </span>
+            </span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-zinc-500 dark:text-zinc-400">
+              Pembulatan ke atas (Rp {roundStep.toLocaleString("id-ID")})
+            </span>
+            <span className="font-mono tabular-nums font-semibold text-emerald-600 dark:text-emerald-400">
+              +{formatResult(selisihPembulatan)}{" "}
+              <span className="text-[10px] font-normal text-zinc-400 dark:text-zinc-500">
+                /pcs
+              </span>
+            </span>
+          </div>
+        </>
+      )}
       <hr className="border-zinc-200 dark:border-zinc-800" />
 
       <div className="flex justify-between text-sm">
@@ -580,6 +628,36 @@ export default function CalculatorView() {
 
             <hr className="border-zinc-200 dark:border-zinc-800" />
 
+            {/* Pembulatan harga jual: selalu ke atas, tidak pernah merugikan */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">
+                  Pembulatan Harga
+                </label>
+                <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  Selalu ke atas
+                </span>
+              </div>
+              <div className="flex gap-1 bg-zinc-100 dark:bg-zinc-900 p-1 rounded-lg">
+                {OPSI_PEMBULATAN.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setRoundStep(opt.value)}
+                    className={`flex-1 px-3 py-2 rounded-md text-sm font-semibold transition-colors duration-150 ${
+                      roundStep === opt.value
+                        ? "bg-white dark:bg-zinc-950 text-[#124540] dark:text-[#49BFB4] shadow-sm"
+                        : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <hr className="border-zinc-200 dark:border-zinc-800" />
+
             {/* Addon: accordion collapsed by default supaya tidak menambah panjang scroll */}
             <div>
               <button
@@ -652,7 +730,7 @@ export default function CalculatorView() {
           <div
             className={`text-4xl md:text-5xl font-mono tabular-nums font-semibold mb-2 tracking-tight truncate transition-colors duration-150 ${showResult ? "text-zinc-900 dark:text-white" : "text-zinc-400 dark:text-zinc-600"}`}
           >
-            {showResult ? formatResult(finalPrice) : "Rp -"}
+            {showResult ? formatResult(roundedPrice) : "Rp -"}
             <span
               className={`text-lg font-normal ml-1 ${showResult ? "text-zinc-500 dark:text-zinc-400" : "text-zinc-400 dark:text-zinc-700"}`}
             >
@@ -691,7 +769,7 @@ export default function CalculatorView() {
             <p
               className={`text-xl font-mono tabular-nums font-semibold ${showResult ? "text-zinc-900 dark:text-white" : "text-zinc-400 dark:text-zinc-600"}`}
             >
-              {showResult ? formatResult(finalPrice) : "Rp -"}
+              {showResult ? formatResult(roundedPrice) : "Rp -"}
             </p>
           </div>
           {showResult && (
@@ -727,7 +805,7 @@ export default function CalculatorView() {
                 Rekomendasi Harga Jual
               </p>
               <p className="text-3xl font-mono tabular-nums font-semibold text-zinc-900 dark:text-white">
-                {formatResult(finalPrice)}
+                {formatResult(roundedPrice)}
                 <span className="text-base font-normal text-zinc-500 dark:text-zinc-400 ml-1">
                   /pcs
                 </span>
