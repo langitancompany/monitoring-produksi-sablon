@@ -15,6 +15,10 @@ import { hasRole, getUserRoles } from "@/lib/roles";
 import MultiSelectDropdown from "./MultiSelectDropdown"; // ── TAMBAHAN ──
 import SizeInputForm, { SizeEntry } from "./SizeInputForm";
 import GesutInputForm from "./GesutInputForm"; // ── TAMBAHAN ──
+import CustomerAutocompleteInput from "./CustomerAutocompleteInput";
+import type { Customer } from "@/lib/customers";
+
+const NO_CUSTOMERS: Customer[] = [];
 
 interface CreateOrderProps {
   productionTypes: ProductionTypeData[];
@@ -22,6 +26,8 @@ interface CreateOrderProps {
   onCancel: () => void;
   onSubmit: (data: any) => void | Promise<void>;
   isSubmitting?: boolean; // ── TAMBAHAN ── loading di tombol Simpan
+  /** Pelanggan lama (dari riwayat pesanan) untuk isi otomatis Nama, No HP, Alamat. */
+  customers?: Customer[];
 }
 
 export default function CreateOrder({
@@ -30,6 +36,7 @@ export default function CreateOrder({
   onCancel,
   onSubmit,
   isSubmitting = false,
+  customers = NO_CUSTOMERS,
 }: CreateOrderProps) {
   const [showSizeForm, setShowSizeForm] = useState(false);
   const [showGesutForm, setShowGesutForm] = useState(false); // ── TAMBAHAN ──
@@ -156,6 +163,18 @@ export default function CreateOrder({
     setForm((f) => ({ ...f, hp: normalizePhone(f.hp) }));
   };
 
+  // Pelanggan lama dipilih → isi Nama, No HP, dan Alamat sekaligus.
+  // Bila pelanggan itu belum punya alamat tersimpan, alamat yang sudah
+  // diketik di form dibiarkan (tidak dikosongkan).
+  const handlePickCustomer = (c: Customer) => {
+    setForm((f) => ({
+      ...f,
+      nama: c.nama,
+      hp: c.hp,
+      alamat_pemesan: c.alamat || f.alamat_pemesan,
+    }));
+  };
+
   // ── Form Utama ─────────────────────────────────────────────────────────────
   // Urutan: Nama, No HP, Alamat → Jenis, Jenis Pakaian, Jumlah → Detail Ukuran,
   // Komposisi Gesut (Manual) → PJ, Helper, Deadline → Art → Ukuran Desain, Catatan.
@@ -168,6 +187,11 @@ export default function CreateOrder({
   const autoGrow = (el: HTMLTextAreaElement) => {
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
+  };
+  // Alamat yang terisi otomatis (pelanggan lama) perlu dihitung tingginya
+  // saat render, supaya alamat beberapa baris tidak terpotong.
+  const autoGrowRef = (el: HTMLTextAreaElement | null) => {
+    if (el) autoGrow(el);
   };
 
   return (
@@ -185,22 +209,31 @@ export default function CreateOrder({
           <div className="grid grid-cols-12 gap-3 md:gap-4 items-start">
             {/* ── Baris 1: Nama · No HP · Alamat ── */}
             <div className="col-span-12 md:col-span-4">
-              <label className={LABEL}>Nama Pemesan</label>
-              <input
+              <label className={LABEL}>
+                Nama Pemesan{" "}
+                <span className={OPT}>(ketik untuk cari pelanggan lama)</span>
+              </label>
+              <CustomerAutocompleteInput
+                field="nama"
                 className={INPUT}
                 placeholder="Masukkan nama pemesan"
                 value={form.nama}
-                onChange={(e) => setForm({ ...form, nama: e.target.value })}
+                onChange={(v) => setForm((f) => ({ ...f, nama: v }))}
+                customers={customers}
+                onPick={handlePickCustomer}
               />
             </div>
             <div className="col-span-12 sm:col-span-6 md:col-span-3">
               <label className={LABEL}>No HP</label>
-              <input
+              <CustomerAutocompleteInput
+                field="hp"
                 className={INPUT}
                 placeholder="08xx / +62xx"
                 value={form.hp}
-                onChange={(e) => setForm({ ...form, hp: e.target.value })}
+                onChange={(v) => setForm((f) => ({ ...f, hp: v }))}
                 onBlur={handleHpBlur}
+                customers={customers}
+                onPick={handlePickCustomer}
               />
             </div>
             <div className="col-span-12 sm:col-span-6 md:col-span-5">
@@ -209,6 +242,7 @@ export default function CreateOrder({
                 <span className={OPT}>(Opsional, untuk Label Kirim)</span>
               </label>
               <textarea
+                ref={autoGrowRef}
                 rows={1}
                 className={`${INPUT} resize-none overflow-hidden`}
                 placeholder="Alamat lengkap pengiriman..."

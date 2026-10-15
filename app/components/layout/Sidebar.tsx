@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { UserData } from "@/types";
 import { APP_INFO, CHANGELOG } from "@/lib/changelog";
+import ThemedLogo from "@/app/components/ui/ThemedLogo";
 
 interface SidebarProps {
   sidebarOpen: boolean;
@@ -180,16 +181,7 @@ export default function Sidebar({
         <div className="h-28 md:h-16 flex items-center px-6 md:px-6 border-b border-zinc-200 dark:border-zinc-800">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 md:w-9 md:h-9 rounded-xl flex items-center justify-center overflow-hidden">
-              <img
-                src="/favicon.ico"
-                alt="Logo"
-                className="w-full h-full object-contain"
-                loading="lazy"
-                onError={(e) => {
-                  e.currentTarget.src =
-                    "https://ui-avatars.com/api/?name=L&background=2589FF&color=fff";
-                }}
-              />
+              <ThemedLogo alt="Logo" className="w-full h-full object-contain" />
             </div>
             <div className="flex flex-col">
               <h1 className="font-semibold text-xl md:text-lg tracking-tight leading-none">

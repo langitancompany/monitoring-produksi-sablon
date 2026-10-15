@@ -17,6 +17,7 @@ import {
   Shirt,
 } from "lucide-react";
 import { createBrowserClient } from "@supabase/ssr";
+import ThemedLogo from "@/app/components/ui/ThemedLogo";
 
 // ─────────────────────────────────────────────────────────────────────
 // Tampilan dashboard di panel kiri dibangun dari JSX (bukan gambar) supaya
@@ -84,7 +85,7 @@ function DashboardMock() {
         <div className="mb-2 flex items-center gap-1.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={LOGO_SRC}
+            src="/logo.png"
             alt="Logo Langitan.co"
             className="h-[18px] w-[18px] shrink-0 object-contain"
           />
@@ -421,12 +422,7 @@ export default function LoginScreen() {
         <main className="flex flex-col p-8 sm:p-12">
           {/* Wordmark untuk layar sempit, karena panel kiri disembunyikan. */}
           <div className="mb-10 flex items-center gap-3 md:hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={LOGO_SRC}
-              alt=""
-              className="h-[35px] w-[35px] shrink-0 object-contain"
-            />
+            <ThemedLogo alt="" className="h-[35px] w-[35px] shrink-0 object-contain" />
             <div className="leading-tight">
               <p className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
                 Langitan.co

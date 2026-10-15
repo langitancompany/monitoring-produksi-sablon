@@ -34,8 +34,8 @@ import {
   type TVOrder,
 } from "@/lib/tvQueue";
 import { orderTypeLabel } from "@/lib/utils";
+import ThemedLogo from "@/app/components/ui/ThemedLogo";
 
-const LOGO_SRC = "/icon-bedge.png";
 const TEAL = "#49bfb4";
 
 const clamp = (v: number, min: number, max: number) =>
@@ -361,12 +361,7 @@ export default function TVPage() {
       <header className="mx-[0.9em] mt-[0.9em] rounded-xl border border-zinc-200/80 bg-zinc-100/80 px-[1.8em] py-[1.1em] shadow-sm dark:border-zinc-800/80 dark:bg-zinc-900/90">
         <div className="flex items-center justify-between gap-[2em]">
           <div className="flex items-center gap-[1em]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={LOGO_SRC}
-              alt=""
-              className="h-[3em] w-[3em] object-contain"
-            />
+            <ThemedLogo alt="" className="h-[3em] w-[3em] object-contain" />
             <div className="leading-tight">
               <p className="font-mono text-[0.75em] uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">
                 {eyebrow ?? "\u00A0"}

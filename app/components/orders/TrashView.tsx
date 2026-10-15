@@ -1,9 +1,9 @@
 // app/components/orders/TrashView.tsx
 
 import React from "react";
-import { formatDate, getStatusColor } from "@/lib/utils";
+import { formatDate, getStatusColor, isMerchandiseOrder } from "@/lib/utils";
 import { Order } from "@/types";
-import { Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { Gift, Loader2, RefreshCw, Shirt, Trash2 } from "lucide-react";
 
 interface TrashViewProps {
   orders: Order[];
@@ -11,6 +11,25 @@ interface TrashViewProps {
   onPermanentDelete: (id: string) => void;
   /** Proses yang sedang berjalan di menu ini (menampilkan loading di tombol terkait). */
   busy?: { id: string; action: "restore" | "purge" } | null;
+}
+
+// Asal pesanan: menu Merchandise atau menu Kaos. Nama & ikonnya sengaja sama
+// dengan menu di sidebar supaya langsung dikenali saat mencari pesanan di Sampah.
+// Pesanan yang bukan merchandise otomatis dianggap dari menu Kaos.
+function getOrderCategory(order: Order) {
+  return isMerchandiseOrder(order)
+    ? {
+        label: "Merchandise",
+        Icon: Gift,
+        className:
+          "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
+      }
+    : {
+        label: "Kaos",
+        Icon: Shirt,
+        className:
+          "bg-[#124540]/10 text-[#124540] dark:bg-[#49bfb4]/15 dark:text-[#49bfb4]",
+      };
 }
 
 export default function TrashView({
@@ -51,6 +70,7 @@ export default function TrashView({
             const isRestoring =
               busy?.id === order.id && busy.action === "restore";
             const isPurging = busy?.id === order.id && busy.action === "purge";
+            const category = getOrderCategory(order);
 
             return (
               <div
@@ -64,6 +84,13 @@ export default function TrashView({
                 </div>
 
                 <div className="flex flex-col items-start gap-1.5 mb-2 mt-4">
+                  {/* KATEGORI: dari menu Kaos atau Merchandise */}
+                  <span
+                    className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${category.className}`}
+                  >
+                    <category.Icon className="w-3 h-3 shrink-0" />
+                    {category.label}
+                  </span>
                   <span className="text-[10px] font-mono font-semibold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded-md max-w-full truncate">
                     #{order.kode_produksi}
                   </span>

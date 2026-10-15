@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Search, Loader2, AlertCircle, Package } from "lucide-react";
 import TrackingTimeline from "./TrackingTimeline";
+import ThemedLogo from "@/app/components/ui/ThemedLogo";
 
 const smartFormat = (input: string): string => {
   const cleaned = input.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
@@ -201,14 +202,7 @@ function TrackingPageInner() {
       <div className="md:hidden flex flex-col items-center px-4 py-8">
         <div className="w-full max-w-md">
           <div className="flex items-center gap-3 mb-6">
-            <img
-              src="/logo.png"
-              alt="Langitan.co"
-              className="h-8 w-auto object-contain"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = "none";
-              }}
-            />
+            <ThemedLogo alt="Langitan.co" className="h-8 w-auto object-contain" />
             <div>
               <p className="text-sm font-semibold text-slate-800 dark:text-white leading-none">
                 Langitan.co
@@ -233,14 +227,7 @@ function TrackingPageInner() {
         <div className="w-80 lg:w-96 flex-shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col">
           <div className="p-6 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-3 mb-6">
-              <img
-                src="/logo.png"
-                alt="Langitan.co"
-                className="h-8 w-auto object-contain"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
-                }}
-              />
+              <ThemedLogo alt="Langitan.co" className="h-8 w-auto object-contain" />
               <div>
                 <p className="text-sm font-semibold text-slate-800 dark:text-white leading-none">
                   Langitan.co

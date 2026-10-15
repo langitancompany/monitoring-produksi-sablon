@@ -13,6 +13,10 @@ import { Loader2 } from "lucide-react";
 import { Order, UserData, MERCHANDISE_PRODUCTS } from "@/types";
 import { hasRole, getUserRoles } from "@/lib/roles";
 import { toLocalISODate } from "@/lib/utils";
+import CustomerAutocompleteInput from "./CustomerAutocompleteInput";
+import type { Customer } from "@/lib/customers";
+
+const NO_CUSTOMERS: Customer[] = [];
 
 // Lama pengerjaan standar (hari) untuk mengisi deadline default saat Buat.
 const DEFAULT_DEADLINE_DAYS = 3;
@@ -24,6 +28,8 @@ interface MerchandiseOrderFormProps {
   onCancel: () => void;
   onSubmit: (data: any) => void | Promise<void>;
   isSubmitting?: boolean; // loading (spinner) di tombol Simpan / Update
+  /** Pelanggan lama untuk isi otomatis Nama, No HP, Alamat. Hanya dipakai di mode Buat. */
+  customers?: Customer[];
 }
 
 export default function MerchandiseOrderForm({
@@ -32,6 +38,7 @@ export default function MerchandiseOrderForm({
   onCancel,
   onSubmit,
   isSubmitting = false,
+  customers = NO_CUSTOMERS,
 }: MerchandiseOrderFormProps) {
   const isEdit = !!order;
 
@@ -119,6 +126,20 @@ export default function MerchandiseOrderForm({
     setForm((f) => ({ ...f, hp: normalizePhone(f.hp) }));
   };
 
+  // Pelanggan lama dipilih → isi Nama, No HP, dan Alamat sekaligus.
+  // Bila pelanggan itu belum punya alamat tersimpan, alamat yang sudah
+  // diketik di form dibiarkan (tidak dikosongkan).
+  const handlePickCustomer = (c: Customer) => {
+    setForm((f) => ({
+      ...f,
+      nama: c.nama,
+      hp: c.hp,
+      alamat_pemesan: c.alamat || f.alamat_pemesan,
+    }));
+  };
+  // Saran pelanggan hanya untuk pesanan BARU; mode Edit tidak memakainya.
+  const suggestionCustomers = isEdit ? NO_CUSTOMERS : customers;
+
   const handleSubmit = () => {
     if (isDisabled || isSubmitting) return;
     onSubmit({ ...form, jumlah: jumlahNumber });
@@ -156,22 +177,36 @@ export default function MerchandiseOrderForm({
           <div className="grid grid-cols-12 gap-3 md:gap-4 items-start">
             {/* ── Baris 1: Nama · No HP · Alamat ── */}
             <div className="col-span-12 md:col-span-4">
-              <label className={LABEL}>Nama Pemesan</label>
-              <input
+              <label className={LABEL}>
+                Nama Pemesan
+                {!isEdit && (
+                  <>
+                    {" "}
+                    <span className={OPT}>(ketik untuk cari pelanggan lama)</span>
+                  </>
+                )}
+              </label>
+              <CustomerAutocompleteInput
+                field="nama"
                 className={INPUT}
                 placeholder="Masukkan nama pemesan"
                 value={form.nama}
-                onChange={(e) => setForm({ ...form, nama: e.target.value })}
+                onChange={(v) => setForm((f) => ({ ...f, nama: v }))}
+                customers={suggestionCustomers}
+                onPick={handlePickCustomer}
               />
             </div>
             <div className="col-span-12 sm:col-span-6 md:col-span-3">
               <label className={LABEL}>No HP</label>
-              <input
+              <CustomerAutocompleteInput
+                field="hp"
                 className={INPUT}
                 placeholder="08xx / +62xx"
                 value={form.hp}
-                onChange={(e) => setForm({ ...form, hp: e.target.value })}
+                onChange={(v) => setForm((f) => ({ ...f, hp: v }))}
                 onBlur={handleHpBlur}
+                customers={suggestionCustomers}
+                onPick={handlePickCustomer}
               />
             </div>
             <div className="col-span-12 sm:col-span-6 md:col-span-5">

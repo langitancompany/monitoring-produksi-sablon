@@ -112,6 +112,7 @@ import {
   OrderStatus,
 } from "@/types";
 import { DEFAULT_PRODUCTION_TYPES, isMerchandiseOrder } from "@/lib/utils";
+import { buildCustomerList } from "@/lib/customers";
 import { Loader2 } from "lucide-react";
 
 type ActiveTab =
@@ -355,6 +356,10 @@ export default function ProductionApp() {
     () => orders.filter((o: Order) => !isMerchandiseOrder(o)),
     [orders],
   );
+
+  // ── TAMBAHAN ── Pelanggan lama (Kaos + Merchandise digabung) untuk isi
+  // otomatis Nama, No HP, Alamat saat membuat pesanan baru (repeat order).
+  const customers = useMemo(() => buildCustomerList(orders), [orders]);
 
   const {
     usersList,
@@ -736,6 +741,7 @@ export default function ProductionApp() {
                     onCancel={() => setView("list")}
                     onSubmit={handleCreateOrder}
                     isSubmitting={isCreating}
+                    customers={customers}
                   />
                 )}
                 {view === "edit" && renderOrderEdit()}
@@ -770,6 +776,7 @@ export default function ProductionApp() {
                     onCancel={() => setView("list")}
                     onSubmit={handleCreateMerchandiseOrder}
                     isSubmitting={isCreating}
+                    customers={customers}
                   />
                 )}
                 {view === "edit" && renderOrderEdit()}
