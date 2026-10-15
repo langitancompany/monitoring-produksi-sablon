@@ -2,10 +2,11 @@
 //
 // Logika untuk tampilan TV antrian produksi (/tv).
 // Aturan urutan SAMA PERSIS dengan sortByUrgency() di OrderList.tsx,
-// jadi urutan di TV = urutan di daftar Pesanan Aktif.
+// jadi urutan di TV = urutan di daftar Pesanan Aktif. Pesanan Merchandise ikut tampil
+// di antrian TV (tahap dihitung dari steps_merchandise, tanpa packing).
 
 import type { Order } from "@/types";
-import { getDeadlineStatus } from "@/lib/utils";
+import { getDeadlineStatus, getOrderSteps, orderNeedsPacking } from "@/lib/utils";
 
 // ─── Tipe data yang dibutuhkan TV (hanya kolom yang perlu di-select) ─────────
 
@@ -22,6 +23,9 @@ export type TVOrder = Pick<
   | "link_approval"
   | "steps_manual"
   | "steps_dtf"
+  | "steps_merchandise"
+  | "jenis_merchandise"
+  | "varian_merchandise"
   | "finishing_qc"
   | "finishing_packing"
   | "shipping"
@@ -49,18 +53,14 @@ export const TV_STAGES: { key: Exclude<TVStage, "selesai">; label: string }[] = 
  * ingin tahu order itu sebenarnya sedang di tahap mana.
  */
 export function getStage(o: TVOrder): TVStage {
-  const type = o.jenis_produksi?.toLowerCase() || "";
-  const isManual = type.includes("manual") || type.includes("sablon");
-  const steps = (isManual ? o.steps_manual : o.steps_dtf) as
-    | { isCompleted: boolean }[]
-    | null
-    | undefined;
-  const productionDone =
-    Array.isArray(steps) && steps.length > 0 && steps.every((s) => s.isCompleted);
+  // Manual / DTF / Merchandise dipilih lewat helper (sama dengan checkAutoStatus).
+  const steps = getOrderSteps(o);
+  const productionDone = steps.length > 0 && steps.every((s) => s.isCompleted);
 
   if (!o.link_approval?.link) return "masuk";
   if (!productionDone) return "produksi";
-  if (!o.finishing_qc?.isPassed || !o.finishing_packing?.isPacked) return "finishing";
+  if (!o.finishing_qc?.isPassed || (orderNeedsPacking(o) && !o.finishing_packing?.isPacked))
+    return "finishing";
   if (!o.shipping?.bukti_terima) return "kirim";
   return "selesai";
 }

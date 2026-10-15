@@ -74,6 +74,9 @@ const CreateOrder = dynamic(
   () => import("@/app/components/orders/CreateOrder"),
 );
 const EditOrder = dynamic(() => import("@/app/components/orders/EditOrder"));
+const MerchandiseOrderForm = dynamic(
+  () => import("@/app/components/orders/MerchandiseOrderForm"),
+);
 const OrderDetail = dynamic(
   () => import("@/app/components/orders/OrderDetail"),
 );
@@ -108,12 +111,13 @@ import {
   DEFAULT_PERMISSIONS,
   OrderStatus,
 } from "@/types";
-import { DEFAULT_PRODUCTION_TYPES } from "@/lib/utils";
+import { DEFAULT_PRODUCTION_TYPES, isMerchandiseOrder } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
 type ActiveTab =
   | "dashboard"
   | "orders"
+  | "merchandise"
   | "calendar"
   | "logs"
   | "completed_orders"
@@ -135,6 +139,7 @@ interface CurrentUser extends UserData {
 const VALID_TABS: ActiveTab[] = [
   "dashboard",
   "orders",
+  "merchandise",
   "calendar",
   "logs",
   "completed_orders",
@@ -295,6 +300,8 @@ export default function ProductionApp() {
     trashBusy,
     handleCreateOrder,
     handleEditOrder,
+    handleCreateMerchandiseOrder,
+    handleEditMerchandiseOrder,
     handleDeleteOrder,
     handleRestoreOrder,
     handlePermanentDelete,
@@ -332,6 +339,21 @@ export default function ProductionApp() {
   const selectedOrder = useMemo(
     () => orders.find((o: Order) => o.id === selectedOrderId),
     [orders, selectedOrderId],
+  );
+
+  // ── TAMBAHAN ── Pesanan Merchandise punya menu & daftar sendiri. Daftar Pesanan
+  // Aktif (sablon) dan modul Gaji tidak memuat merchandise (aturan upahnya terpisah).
+  const sablonOrders = useMemo(
+    () => activeOrders.filter((o: Order) => !isMerchandiseOrder(o)),
+    [activeOrders],
+  );
+  const merchandiseOrders = useMemo(
+    () => activeOrders.filter((o: Order) => isMerchandiseOrder(o)),
+    [activeOrders],
+  );
+  const salaryOrders = useMemo(
+    () => orders.filter((o: Order) => !isMerchandiseOrder(o)),
+    [orders],
   );
 
   const {
@@ -419,7 +441,7 @@ export default function ProductionApp() {
 
     const params = new URLSearchParams();
     params.set("tab", activeTab);
-    if (activeTab === "orders") {
+    if (activeTab === "orders" || activeTab === "merchandise") {
       params.set("view", view);
       if (selectedOrderId) params.set("orderId", selectedOrderId);
     }
@@ -505,12 +527,13 @@ export default function ProductionApp() {
   const handleNotificationClick = useCallback(
     async (notificationId: string, orderId: string) => {
       await markAsRead(notificationId);
-      setActiveTab("orders");
+      const target = orders.find((o: Order) => o.id === orderId);
+      setActiveTab(isMerchandiseOrder(target) ? "merchandise" : "orders");
       setView("detail");
       setSelectedOrderId(orderId);
       setSidebarOpen(false);
     },
-    [markAsRead],
+    [markAsRead, orders],
   );
 
   // ─── Guards ────────────────────────────────────────────────────────────────
@@ -525,6 +548,77 @@ export default function ProductionApp() {
   if (!currentUser) return <LoginScreen />;
 
   const p = currentUser.permissions;
+
+  // ── TAMBAHAN ── Buka detail pesanan dari luar tab pesanan (Dashboard,
+  // Kalender, Pesanan Selesai): merchandise dibuka di tab Merchandise, sisanya di
+  // tab Pesanan Aktif.
+  const openOrderDetail = (id: string, fromTab?: ActiveTab) => {
+    if (fromTab) setPreviousTab(fromTab);
+    const target = orders.find((o: Order) => o.id === id);
+    setSelectedOrderId(id);
+    setView("detail");
+    setActiveTab(isMerchandiseOrder(target) ? "merchandise" : "orders");
+  };
+
+  // ── TAMBAHAN ── Tampilan Edit & Detail dipakai bersama oleh tab Pesanan
+  // Aktif dan tab Merchandise; formnya dipilih dari jenis pesanan.
+  const renderOrderEdit = () =>
+    selectedOrderId &&
+    (selectedOrder ? (
+      isMerchandiseOrder(selectedOrder) ? (
+        <MerchandiseOrderForm
+          users={usersList}
+          order={selectedOrder}
+          onCancel={() => setView("detail")}
+          onSubmit={(d) => handleEditMerchandiseOrder(d, selectedOrderId)}
+          isSubmitting={isUpdating}
+        />
+      ) : (
+        <EditOrder
+          users={usersList}
+          order={selectedOrder}
+          productionTypes={productionTypes}
+          onCancel={() => setView("detail")}
+          onSubmit={(d) => handleEditOrder(d, selectedOrderId)}
+          isSubmitting={isUpdating}
+        />
+      )
+    ) : (
+      <OrderNotFound
+        onBack={() => {
+          setSelectedOrderId(null);
+          setView("list");
+        }}
+      />
+    ));
+
+  const backFromDetail = () => {
+    setSelectedOrderId(null);
+    setView("list");
+    if (previousTab) {
+      setActiveTab(previousTab);
+      setPreviousTab(null);
+    }
+  };
+
+  const renderOrderDetail = () =>
+    selectedOrderId &&
+    (selectedOrder ? (
+      <OrderDetail
+        currentUser={currentUser}
+        order={selectedOrder}
+        onBack={backFromDetail}
+        onEdit={() => setView("edit")}
+        onTriggerUpload={triggerUpload}
+        onUpdateOrder={checkAutoStatus}
+        onDelete={handleDeleteOrder}
+        isDeleting={deletingOrderId === selectedOrderId}
+        onConfirm={showConfirm}
+        writeLog={writeLog}
+      />
+    ) : (
+      <OrderNotFound onBack={backFromDetail} />
+    ));
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -614,12 +708,7 @@ export default function ProductionApp() {
                 role={currentUser.role}
                 orders={activeOrders}
                 loading={ordersLoading}
-                onSelectOrder={(id) => {
-                  setPreviousTab(activeTab); // simpan "dashboard"
-                  setSelectedOrderId(id);
-                  setView("detail");
-                  setActiveTab("orders");
-                }}
+                onSelectOrder={(id) => openOrderDetail(id, activeTab)}
               />
             )}
 
@@ -628,7 +717,7 @@ export default function ProductionApp() {
                 {view === "list" && (
                   <OrderList
                     role={currentUser.role}
-                    orders={activeOrders}
+                    orders={sablonOrders}
                     productionTypes={productionTypes}
                     onSelectOrder={(id) => {
                       setSelectedOrderId(id);
@@ -649,59 +738,42 @@ export default function ProductionApp() {
                     isSubmitting={isCreating}
                   />
                 )}
-                {view === "edit" &&
-                  selectedOrderId &&
-                  (selectedOrder ? (
-                    <EditOrder
-                      users={usersList}
-                      order={selectedOrder}
-                      productionTypes={productionTypes}
-                      onCancel={() => setView("detail")}
-                      onSubmit={(d) => handleEditOrder(d, selectedOrderId)}
-                      isSubmitting={isUpdating}
-                    />
-                  ) : (
-                    <OrderNotFound
-                      onBack={() => {
-                        setSelectedOrderId(null);
-                        setView("list");
-                      }}
-                    />
-                  ))}
-                {view === "detail" &&
-                  selectedOrderId &&
-                  (selectedOrder ? (
-                    <OrderDetail
-                      currentUser={currentUser}
-                      order={selectedOrder}
-                      onBack={() => {
-                        setSelectedOrderId(null);
-                        setView("list");
-                        if (previousTab) {
-                          setActiveTab(previousTab);
-                          setPreviousTab(null);
-                        }
-                      }}
-                      onEdit={() => setView("edit")}
-                      onTriggerUpload={triggerUpload}
-                      onUpdateOrder={checkAutoStatus}
-                      onDelete={handleDeleteOrder}
-                      isDeleting={deletingOrderId === selectedOrderId}
-                      onConfirm={showConfirm}
-                      writeLog={writeLog}
-                    />
-                  ) : (
-                    <OrderNotFound
-                      onBack={() => {
-                        setSelectedOrderId(null);
-                        setView("list");
-                        if (previousTab) {
-                          setActiveTab(previousTab);
-                          setPreviousTab(null);
-                        }
-                      }}
-                    />
-                  ))}
+                {view === "edit" && renderOrderEdit()}
+                {view === "detail" && renderOrderDetail()}
+              </>
+            )}
+
+            {/* ── TAMBAHAN ── Menu Pesanan Merchandise (daftar, buat, edit, detail) */}
+            {activeTab === "merchandise" && p?.orders?.view && (
+              <>
+                {view === "list" && (
+                  <OrderList
+                    role={currentUser.role}
+                    orders={merchandiseOrders}
+                    productionTypes={[]}
+                    title="Daftar Pesanan Merchandise"
+                    newOrderLabel="Pesanan merchandise baru"
+                    showTypeFilter={false}
+                    onSelectOrder={(id) => {
+                      setSelectedOrderId(id);
+                      setView("detail");
+                    }}
+                    onNewOrder={() => setView("create")}
+                    onDeleteOrder={handleDeleteOrder}
+                    deletingOrderId={deletingOrderId}
+                    currentUser={currentUser}
+                  />
+                )}
+                {view === "create" && (
+                  <MerchandiseOrderForm
+                    users={usersList}
+                    onCancel={() => setView("list")}
+                    onSubmit={handleCreateMerchandiseOrder}
+                    isSubmitting={isCreating}
+                  />
+                )}
+                {view === "edit" && renderOrderEdit()}
+                {view === "detail" && renderOrderDetail()}
               </>
             )}
 
@@ -712,24 +784,14 @@ export default function ProductionApp() {
                 onPageChange={setCompletedOrdersPage}
                 itemsPerPage={completedOrdersPerPage}
                 onItemsPerPageChange={setCompletedOrdersPerPage}
-                onSelectOrder={(id) => {
-                  setPreviousTab(activeTab);
-                  setSelectedOrderId(id);
-                  setView("detail");
-                  setActiveTab("orders");
-                }}
+                onSelectOrder={(id) => openOrderDetail(id, activeTab)}
               />
             )}
 
             {activeTab === "calendar" && (
               <CalendarView
                 orders={activeOrders}
-                onSelectOrder={(id) => {
-                  setPreviousTab(activeTab); // simpan "dashboard"
-                  setSelectedOrderId(id);
-                  setView("detail");
-                  setActiveTab("orders");
-                }}
+                onSelectOrder={(id) => openOrderDetail(id, activeTab)}
               />
             )}
 
@@ -746,7 +808,7 @@ export default function ProductionApp() {
               >
                 <SalaryView
                   users={usersList}
-                  orders={orders}
+                  orders={salaryOrders}
                   currentUser={currentUser}
                   onEditOrder={(order) => {
                     setEditReturnTab("salary"); // trigger redirect balik setelah edit selesai

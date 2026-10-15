@@ -1,6 +1,6 @@
 // lib/utils.ts
 
-import { OrderStatus, ProductionStep, UserData, ProductionTypeData, DEFAULT_PERMISSIONS } from "@/types";
+import { OrderStatus, ProductionStep, UserData, ProductionTypeData, DEFAULT_PERMISSIONS, MERCHANDISE_PRODUCTS } from "@/types";
 
 // --- CONSTANTS ---
 export const INITIAL_STEPS_MANUAL: ProductionStep[] = [
@@ -14,6 +14,93 @@ export const INITIAL_STEPS_DTF: ProductionStep[] = [
   { id: 'd1', name: 'Cetak DTF', type: 'status_update', isCompleted: false },
   { id: 'd2', name: 'Press Kaos', type: 'upload_image', isCompleted: false },
 ];
+
+// ── TAMBAHAN ── Pesanan MERCHANDISE (lanyard, totebag, gantungan kunci, dst.):
+// disimpan di tabel `orders` yang sama dengan jenis_produksi = 'merchandise'.
+// Alurnya: Approval → Produksi (langkah di bawah) → QC → Pengiriman (tanpa packing).
+// Daftar produknya ada di MERCHANDISE_PRODUCTS (types/index.ts).
+export const MERCHANDISE_JENIS = 'merchandise';
+
+const DEFAULT_MERCHANDISE_STEPS: ProductionStep[] = [
+  { id: 'l1', name: 'Cetak Kertas Sublim', type: 'status_update', actionLabel: 'Sudah Cetak', isCompleted: false },
+  { id: 'l2', name: 'Produksi Sublim', type: 'status_update', actionLabel: 'Sudah Diproduksi', isCompleted: false },
+];
+
+/**
+ * Langkah produksi per produk merchandise. Produk yang tidak ditulis di sini
+ * memakai DEFAULT_MERCHANDISE_STEPS (Cetak Kertas Sublim → Produksi Sublim).
+ * UBAH DI SINI bila totebag / gantungan kunci dll. punya alur berbeda, mis.:
+ *   totebag: [{ id: 't1', name: 'Jahit', type: 'status_update', actionLabel: 'Sudah Dijahit', isCompleted: false }, ...]
+ * Catatan: langkah disalin ke pesanan SAAT DIBUAT, jadi perubahan di sini hanya
+ * berlaku untuk pesanan baru. `id` langkah harus unik di dalam satu produk.
+ */
+export const MERCHANDISE_STEPS: Record<string, ProductionStep[]> = {
+  // lanyard: [...],
+};
+
+export function getInitialMerchandiseSteps(produk?: string | null): ProductionStep[] {
+  const tpl = (produk && MERCHANDISE_STEPS[produk]) || DEFAULT_MERCHANDISE_STEPS;
+  return tpl.map((s) => ({ ...s, isCompleted: false }));
+}
+
+export const isMerchandiseJenis = (jenis?: string | null): boolean =>
+  (jenis ?? '').toLowerCase() === MERCHANDISE_JENIS;
+
+export const isMerchandiseOrder = (o?: { jenis_produksi?: string | null } | null): boolean =>
+  isMerchandiseJenis(o?.jenis_produksi);
+
+/** Nama kolom langkah produksi yang dipakai suatu jenis produksi. */
+export type StepsKey = 'steps_manual' | 'steps_dtf' | 'steps_merchandise';
+
+export function getStepsKey(jenisProduksi?: string | null): StepsKey {
+  const t = (jenisProduksi ?? '').toLowerCase();
+  if (t === MERCHANDISE_JENIS) return 'steps_merchandise';
+  if (t.includes('manual') || t.includes('sablon')) return 'steps_manual';
+  return 'steps_dtf';
+}
+
+/** Daftar langkah produksi sebuah pesanan (selalu array, tidak pernah null). */
+export function getOrderSteps(o?: { jenis_produksi?: string | null } | null): ProductionStep[] {
+  if (!o) return [];
+  const steps = (o as any)[getStepsKey(o.jenis_produksi)];
+  return Array.isArray(steps) ? steps : [];
+}
+
+/** Merchandise tidak punya tahap packing: setelah lolos QC langsung masuk Pengiriman. */
+export const orderNeedsPacking = (o?: { jenis_produksi?: string | null } | null): boolean =>
+  !isMerchandiseOrder(o);
+
+/** Label produk merchandise (fallback: value apa adanya). */
+export function merchandiseProductLabel(value?: string | null): string {
+  if (!value) return '-';
+  return MERCHANDISE_PRODUCTS.find((p) => p.value === value)?.label ?? value;
+}
+
+/** Label variasi produk merchandise, atau '' bila tidak ada. */
+export function merchandiseVariantLabel(produk?: string | null, varian?: string | null): string {
+  if (!varian) return '';
+  const p = MERCHANDISE_PRODUCTS.find((x) => x.value === produk);
+  return p?.variants.find((v) => v.value === varian)?.label ?? varian;
+}
+
+/** Teks ringkas untuk kartu/daftar, mis. "Lanyard · Dengan Stopper" atau "Totebag". */
+export function merchandiseLabel(o?: { jenis_merchandise?: string | null; varian_merchandise?: string | null } | null): string {
+  if (!o?.jenis_merchandise) return 'Merchandise';
+  const v = merchandiseVariantLabel(o.jenis_merchandise, o.varian_merchandise);
+  return v ? `${merchandiseProductLabel(o.jenis_merchandise)} · ${v}` : merchandiseProductLabel(o.jenis_merchandise);
+}
+
+/** Teks jenis untuk tampilan umum: merchandise → "Lanyard · ...", lainnya → jenis_produksi. */
+export function orderTypeLabel(o: { jenis_produksi?: string | null; jenis_merchandise?: string | null; varian_merchandise?: string | null }): string {
+  return isMerchandiseOrder(o) ? merchandiseLabel(o) : (o.jenis_produksi ?? '');
+}
+
+/** YYYY-MM-DD menurut jam LOKAL perangkat (toISOString memakai UTC dan bisa mundur sehari). */
+export function toLocalISODate(d: Date = new Date()): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
 
 export const MONTHS = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 

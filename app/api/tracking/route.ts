@@ -101,7 +101,7 @@ function maskName(name: string | null): string {
 // no_hp hanya dipakai di server untuk verifikasi, TIDAK dikirim ke browser.
 const COLUMNS =
   'kode_produksi, no_hp, nama_pemesan, jumlah, jenis_produksi, status, tanggal_masuk, deadline, ' +
-  'link_approval, steps_manual, steps_dtf, finishing_qc, finishing_packing, shipping';
+  'link_approval, steps_manual, steps_dtf, steps_merchandise, jenis_merchandise, varian_merchandise, finishing_qc, finishing_packing, shipping';
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
 
@@ -196,6 +196,9 @@ export async function GET(req: NextRequest) {
       : null,
     steps_manual: Array.isArray(o.steps_manual) ? o.steps_manual.map(pickStep) : [],
     steps_dtf: Array.isArray(o.steps_dtf) ? o.steps_dtf.map(pickStep) : [],
+    steps_merchandise: Array.isArray(o.steps_merchandise) ? o.steps_merchandise.map(pickStep) : [],
+    jenis_merchandise: o.jenis_merchandise ?? null,
+    varian_merchandise: o.varian_merchandise ?? null,
     finishing_qc: {
       isPassed: !!o.finishing_qc?.isPassed,
       timestamp: o.finishing_qc?.timestamp ?? null,

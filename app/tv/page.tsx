@@ -33,6 +33,7 @@ import {
   sliceForPage,
   type TVOrder,
 } from "@/lib/tvQueue";
+import { orderTypeLabel } from "@/lib/utils";
 
 const LOGO_SRC = "/icon-bedge.png";
 const TEAL = "#49bfb4";
@@ -139,7 +140,7 @@ function QueueRow({ order, rank }: { order: TVOrder; rank: number }) {
           </span>
         </p>
         <p className="mt-[0.25em] truncate text-[0.8em] text-zinc-500 dark:text-zinc-400">
-          {order.jenis_produksi}
+          {orderTypeLabel(order)}
         </p>
       </div>
 

@@ -2,6 +2,7 @@
 'use client';
 
 import React from 'react';
+import { orderTypeLabel } from '@/lib/utils';
 
 interface TrackingTimelineProps {
   result: any;
@@ -135,12 +136,17 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function TrackingTimeline({ result }: TrackingTimelineProps) {
   const jenis = result.jenis_produksi?.toLowerCase() || '';
+  const isMerchandise = jenis === 'merchandise'; // merchandise: tanpa tahap packing
+  // Pelanggan melihat nama produknya (mis. "Lanyard"), bukan kata "merchandise".
+  const jenisLabel = isMerchandise ? orderTypeLabel(result) : result.jenis_produksi;
   const isManual = jenis.includes('manual') || jenis.includes('sablon');
-  const steps: any[] = isManual ? (result.steps_manual || []) : (result.steps_dtf || []);
+  const steps: any[] = isMerchandise
+    ? (result.steps_merchandise || [])
+    : isManual ? (result.steps_manual || []) : (result.steps_dtf || []);
 
   const hasApproval  = !!result.link_approval?.link;
   const prodDone     = steps.length > 0 && steps.every((s: any) => s.isCompleted);
-  const qcDone       = result.finishing_qc?.isPassed && result.finishing_packing?.isPacked;
+  const qcDone       = result.finishing_qc?.isPassed && (isMerchandise || result.finishing_packing?.isPacked);
   const shipped      = !!result.shipping?.bukti_kirim;
   const received     = !!result.shipping?.bukti_terima;
   const isSelesai    = result.status === 'Selesai';
@@ -162,7 +168,7 @@ export default function TrackingTimeline({ result }: TrackingTimelineProps) {
           <p className="text-sm font-semibold text-slate-800 dark:text-white leading-tight">{result.nama_pemesan}</p>
           <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 font-mono">#{result.kode_produksi}</p>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            {result.jumlah} pcs · {result.jenis_produksi}
+            {result.jumlah} pcs · {jenisLabel}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
@@ -190,14 +196,14 @@ export default function TrackingTimeline({ result }: TrackingTimelineProps) {
         </TimelineItem>
 
         {/* Step 3: Produksi */}
-        <TimelineItem state={prodState} title={`Produksi (${result.jenis_produksi})`} date={prodDone ? 'Selesai' : null}>
+        <TimelineItem state={prodState} title={`Produksi (${jenisLabel})`} date={prodDone ? 'Selesai' : null}>
           {stepsWithFile.map((s: any) => (
             <FileLink key={s.id} href={s.fileUrl} label={s.name} />
           ))}
         </TimelineItem>
 
         {/* Step 4: QC & Packing */}
-        <TimelineItem state={qcState} title="Quality control & packing" date={qcDone ? fmt(result.finishing_qc?.timestamp) : null}>
+        <TimelineItem state={qcState} title={isMerchandise ? 'Quality control' : 'Quality control & packing'} date={qcDone ? fmt(result.finishing_qc?.timestamp) : null}>
           {result.finishing_packing?.fileUrl && (
             <FileLink href={result.finishing_packing.fileUrl} label="Lihat foto packing" />
           )}

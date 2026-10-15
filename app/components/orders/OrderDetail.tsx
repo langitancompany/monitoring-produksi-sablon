@@ -8,6 +8,8 @@ import LabelPengiriman from "./detail/LabelPengiriman";
 import OrderDetailHeader from "./detail/OrderDetailHeader";
 import DetailUkuran from "./detail/DetailUkuran";
 import DetailGesut from "./detail/DetailGesut"; // ── TAMBAHAN ──
+import DetailMerchandise from "./detail/DetailMerchandise"; // ── TAMBAHAN ──
+import { getOrderSteps, isMerchandiseOrder } from "@/lib/utils";
 import StepApproval from "./detail/StepApproval";
 import StepProduksi from "./detail/StepProduksi";
 import StepFinishing from "./detail/StepFinishing";
@@ -72,12 +74,13 @@ export default function OrderDetail({
 
   const currentStatus = order.status;
   const jenisProd = order.jenis_produksi?.toLowerCase() || "";
+  // ── TAMBAHAN ── pesanan merchandise: detail/approval/finishing sedikit berbeda
+  const isMerchandise = isMerchandiseOrder(order);
   const isManual = jenisProd === "manual" || jenisProd === "sablon";
-  const currentSteps = isManual ? order.steps_manual : order.steps_dtf;
+  // Manual / DTF / Merchandise dipilih otomatis lewat helper
+  const currentSteps = getOrderSteps(order);
   const isProductionFinished =
-    currentSteps &&
-    currentSteps.length > 0 &&
-    currentSteps.every((s) => s.isCompleted);
+    currentSteps.length > 0 && currentSteps.every((s) => s.isCompleted);
   const isRevisi = currentStatus === "Revisi";
 
   // produksi.edit  → update step & lapor kendala
@@ -188,19 +191,26 @@ export default function OrderDetail({
         onPrintLabel={handlePrintLabel}
       />
 
-      <DetailUkuran
-        data={order.detail_ukuran}
-        jenisPakaian={order.jenis_pakaian}
-      />
+      {isMerchandise ? (
+        <DetailMerchandise order={order} />
+      ) : (
+        <>
+          <DetailUkuran
+            data={order.detail_ukuran}
+            jenisPakaian={order.jenis_pakaian}
+          />
 
-      {/* ── TAMBAHAN ── Gesut hanya relevan untuk produksi Manual; DTF pakai
-          model finishing+packing agregat per tim, tidak ada input per-order. */}
-      {isManual && <DetailGesut data={order.detail_gesut} />}
+          {/* ── TAMBAHAN ── Gesut hanya relevan untuk produksi Manual; DTF pakai
+              model finishing+packing agregat per tim, tidak ada input per-order. */}
+          {isManual && <DetailGesut data={order.detail_gesut} />}
+        </>
+      )}
 
       <StepApproval
         order={order}
         canUploadApproval={!!canUploadApproval}
         canDeleteApprovalFile={!!canDeleteApprovalFile}
+        showApprovalForm={!isMerchandise}
         onTriggerUpload={onTriggerUpload}
         onFileDelete={handleFileDelete}
       />
@@ -208,7 +218,6 @@ export default function OrderDetail({
       <StepProduksi
         order={order}
         currentUser={currentUser}
-        isManual={isManual}
         canUpdateStep={!!canUpdateStep}
         isSupervisor={isSupervisor}
         isManagement={isManagement}
@@ -239,6 +248,7 @@ export default function OrderDetail({
         canUpdateShipping={!!canUpdateShipping}
         canResetQC={!!canResetQC}
         canDeleteFinishingFile={!!canDeleteFinishingFile}
+        showPacking={!isMerchandise}
         qcNote={qcNote}
         setQcNote={setQcNote}
         loadingAction={loadingAction}

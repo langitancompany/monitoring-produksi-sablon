@@ -1,6 +1,6 @@
 import { AlertCircle } from "lucide-react";
 import { ActionItem } from "@/hooks/useDashboard";
-import { formatDate } from "@/lib/utils";
+import { formatDate, orderTypeLabel } from "@/lib/utils";
 
 interface ShareTicketProps {
   item: ActionItem;
@@ -100,7 +100,7 @@ export function ShareTicket({ item }: ShareTicketProps) {
             Tipe
           </p>
           <p className="font-mono text-xl font-semibold text-zinc-900 uppercase">
-            {order.jenis_produksi}
+            {orderTypeLabel(order)}
           </p>
         </div>
         <div className={`p-4 ${theme.softBg}`}>

@@ -8,6 +8,8 @@ interface StepApprovalProps {
   order: Order;
   canUploadApproval: boolean;
   canDeleteApprovalFile: boolean;
+  /** false = tanpa Form Approval otomatis (pesanan merchandise): cukup upload & lihat mockup. */
+  showApprovalForm?: boolean;
   onTriggerUpload: (type: string) => void;
   onFileDelete: (field: string) => void;
 }
@@ -16,6 +18,7 @@ export default function StepApproval({
   order,
   canUploadApproval,
   canDeleteApprovalFile,
+  showApprovalForm = true,
   onTriggerUpload,
   onFileDelete,
 }: StepApprovalProps) {
@@ -33,20 +36,24 @@ export default function StepApproval({
           {order.link_approval?.link ? (
             <>
               <div className="font-semibold text-sm md:text-base text-zinc-900 dark:text-zinc-200">
-                Mockup Terupload — Form Approval Siap
+                {showApprovalForm
+                  ? "Mockup Terupload — Form Approval Siap"
+                  : "Mockup Terupload"}
               </div>
               <div className="text-[10px] text-zinc-500 dark:text-zinc-400">
                 Oleh: {order.link_approval.by} | {order.link_approval.timestamp}
               </div>
               <div className="flex items-center gap-4 mt-1">
-                <a
-                  href={`/approval/${order.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1 hover:underline"
-                >
-                  <Eye className="w-3.5 h-3.5" /> Lihat Form Approval
-                </a>
+                {showApprovalForm && (
+                  <a
+                    href={`/approval/${order.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1 hover:underline"
+                  >
+                    <Eye className="w-3.5 h-3.5" /> Lihat Form Approval
+                  </a>
+                )}
                 <a
                   href={order.link_approval.link}
                   target="_blank"
@@ -63,7 +70,9 @@ export default function StepApproval({
                 Mockup Desain
               </div>
               <div className="text-[10px] text-zinc-400 dark:text-zinc-600 italic">
-                Upload mockup, form approval akan dibuat otomatis...
+                {showApprovalForm
+                  ? "Upload mockup, form approval akan dibuat otomatis..."
+                  : "Upload mockup desain yang sudah disetujui customer..."}
               </div>
             </>
           )}

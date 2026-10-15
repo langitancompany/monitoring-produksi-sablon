@@ -6,6 +6,7 @@ import {
   getStatusColor,
   openWA,
   getDeadlineStatus,
+  orderTypeLabel,
 } from "@/lib/utils";
 import { Order, UserData } from "@/types";
 import {
@@ -64,7 +65,7 @@ export default function OrderDetailHeader({
       ``,
       `📦 *Detail Pesanan*`,
       `Kode  : *${order.kode_produksi}*`,
-      `Item  : ${order.jumlah} pcs (${order.jenis_produksi})`,
+      `Item  : ${order.jumlah} pcs (${orderTypeLabel(order)})`,
       `Estimasi selesai: *${formatDate(order.deadline)}*`,
       ``,
       `🔍 *Pantau progres produksi Anda di:*`,

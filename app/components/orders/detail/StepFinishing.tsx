@@ -21,6 +21,8 @@ interface StepFinishingProps {
   canUpdateShipping: boolean;
   canResetQC: boolean;
   canDeleteFinishingFile: boolean;
+  /** false = tanpa tahap packing (pesanan merchandise): hanya QC, lalu Pengiriman. */
+  showPacking?: boolean;
   qcNote: string;
   setQcNote: (v: string) => void;
   loadingAction: string | null; // ── TAMBAHAN ──
@@ -40,6 +42,7 @@ export default function StepFinishing({
   canUpdateShipping,
   canResetQC,
   canDeleteFinishingFile,
+  showPacking = true,
   qcNote,
   setQcNote,
   loadingAction,
@@ -57,10 +60,12 @@ export default function StepFinishing({
           <span className="font-mono tabular-nums text-[10px] text-zinc-400 dark:text-zinc-500">
             03
           </span>
-          QC &amp; Packing
+          {showPacking ? "QC & Packing" : "Quality Control"}
         </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+        <div
+          className={`grid grid-cols-1 gap-4 md:gap-6 ${showPacking ? "md:grid-cols-2" : ""}`}
+        >
           {/* KIRI: QC */}
           <div className="flex flex-col border border-zinc-200 dark:border-zinc-800 rounded-md p-4">
             <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400 mb-3">
@@ -153,7 +158,8 @@ export default function StepFinishing({
             )}
           </div>
 
-          {/* KANAN: PACKING */}
+          {/* KANAN: PACKING (tidak untuk merchandise) */}
+          {showPacking && (
           <div className="flex flex-col border border-zinc-200 dark:border-zinc-800 rounded-md p-4">
             <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400 mb-3">
               Packing
@@ -239,6 +245,7 @@ export default function StepFinishing({
               </div>
             )}
           </div>
+          )}
         </div>
 
         {/* Catatan QC & Finishing — satu thread untuk seluruh Step 3 */}
@@ -292,7 +299,9 @@ export default function StepFinishing({
               </button>
             ) : (
               <span className="text-[10px] text-zinc-300 dark:text-zinc-600 italic">
-                Menunggu pengerjaan & packing selesai...
+                {showPacking
+                  ? "Menunggu pengerjaan & packing selesai..."
+                  : "Menunggu QC lolos..."}
               </span>
             )}
           </div>

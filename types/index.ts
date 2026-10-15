@@ -181,6 +181,16 @@ export interface Order {
   jenis_aplikasi_art?: JenisAplikasiArt | null;
   // ── TAMBAHAN ── jenis pakaian. null/undefined = 'kaos' (data lama)
   jenis_pakaian?: JenisPakaian | null;
+
+  // ── TAMBAHAN ── khusus pesanan MERCHANDISE (jenis_produksi = 'merchandise').
+  // `jenis_merchandise` = produknya (value dari MERCHANDISE_PRODUCTS, mis. 'lanyard',
+  // 'totebag'); `varian_merchandise` = variasi produk itu bila ada (mis. 'stopper').
+  // `steps_merchandise` = langkah produksi (lihat getInitialMerchandiseSteps di lib/utils.ts).
+  // Untuk merchandise, `jumlah` diisi manual (bukan dihitung dari detail ukuran),
+  // dan `catatan_pesanan` dipakai sebagai "Catatan Tambahan".
+  jenis_merchandise?: string | null;
+  varian_merchandise?: string | null;
+  steps_merchandise?: ProductionStep[] | null;
 }
 
 // ── TAMBAHAN ── T-Shirt: lengan bisa dipilih. Sweater/Hoodie: lengan otomatis panjang.
@@ -188,6 +198,33 @@ export type JenisPakaian = 'kaos' | 'sweater_hoodie';
 export const JENIS_PAKAIAN_OPTIONS: { value: JenisPakaian; label: string }[] = [
   { value: 'kaos', label: 'T-Shirt' },
   { value: 'sweater_hoodie', label: 'Sweater / Hoodie' },
+];
+
+// ── TAMBAHAN ── Daftar produk MERCHANDISE untuk menu Pesanan Merchandise.
+// UBAH DI SINI untuk menambah produk atau variasinya:
+//  - `value`   disimpan di database (orders.jenis_merchandise / varian_merchandise)
+//              → JANGAN diubah bila sudah dipakai pesanan lama (huruf kecil, tanpa spasi).
+//  - `label`   teks yang tampil di layar → bebas diganti kapan saja.
+//  - `variants` pilihan variasi produk (mis. stopper/tanpa stopper). Kosongkan [] bila
+//              produk tidak punya variasi; bila ada isinya, variasi WAJIB dipilih di form.
+// Langkah produksi tiap produk diatur di MERCHANDISE_STEPS (lib/utils.ts).
+export interface MerchandiseProduct {
+  value: string;
+  label: string;
+  variants: { value: string; label: string }[];
+}
+
+export const MERCHANDISE_PRODUCTS: MerchandiseProduct[] = [
+  {
+    value: 'lanyard',
+    label: 'Lanyard',
+    variants: [
+      { value: 'stopper', label: 'Dengan Stopper' },
+      { value: 'tanpa_stopper', label: 'Tanpa Stopper' },
+    ],
+  },
+  { value: 'totebag', label: 'Totebag', variants: [] },
+  { value: 'gantungan_kunci', label: 'Gantungan Kunci', variants: [] },
 ];
 
 // Pilihan jenis aplikasi untuk dropdown (ubah di sini bila ada jenis baru)
@@ -214,6 +251,9 @@ export interface ProductionStep {
   id: string;
   name: string;
   type: 'upload_image' | 'upload_pdf' | 'status_update';
+  // ── TAMBAHAN ── teks tombol khusus untuk step bertipe 'status_update'
+  // (mis. "Sudah Cetak"). Kosong = "Tandai Selesai".
+  actionLabel?: string;
   isCompleted: boolean;
   fileUrl?: string | null;
   uploadedBy?: string;

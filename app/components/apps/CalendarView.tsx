@@ -33,7 +33,7 @@ import {
   AlignLeft,
 } from "lucide-react";
 import { Order } from "@/types";
-import { getStatusColor } from "@/lib/utils";
+import { getStatusColor, orderTypeLabel } from "@/lib/utils";
 
 // 🟢 UPDATE TIPE DATA
 interface CalendarEvent {
@@ -608,7 +608,7 @@ export default function CalendarView({
                               {order.jumlah} pcs
                             </span>
                             <span className="w-1 h-1 rounded-full bg-zinc-300"></span>
-                            <span>{order.jenis_produksi}</span>
+                            <span>{orderTypeLabel(order)}</span>
                           </div>
                         </div>
                       ))}

@@ -4,6 +4,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { Order, OrderStatus, UserData } from '@/types';
 import { triggerOrderNotifications } from '@/lib/orderLogic';
 import { finFetch } from '@/hooks/useFinanceApi';
+import { MERCHANDISE_JENIS, getInitialMerchandiseSteps, getOrderSteps, orderNeedsPacking } from '@/lib/utils';
 
 interface UseOrdersProps {
   supabase: SupabaseClient;
@@ -141,10 +142,9 @@ export function useOrders({
     const oldStatus = orderData.status as OrderStatus;
     const hasUnresolvedKendala = orderData.kendala?.some((k: any) => !k.isResolved);
 
-    const type = orderData.jenis_produksi?.toLowerCase() || '';
-    const isManual = type.includes('manual') || type.includes('sablon');
-    const steps = (isManual ? orderData.steps_manual : orderData.steps_dtf) as any[];
-    const productionDone = Array.isArray(steps) && steps.length > 0 && steps.every((s: any) => s.isCompleted);
+    // ── UBAH ── langkah produksi dipilih lewat helper (manual / dtf / merchandise).
+    const steps = getOrderSteps(orderData) as any[];
+    const productionDone = steps.length > 0 && steps.every((s: any) => s.isCompleted);
 
     let normalStatus = 'Pesanan Masuk';
 
@@ -152,7 +152,8 @@ export function useOrders({
       normalStatus = 'Pesanan Masuk';
     } else if (!productionDone) {
       normalStatus = 'On Process';
-    } else if (!orderData.finishing_qc?.isPassed || !orderData.finishing_packing?.isPacked) {
+    } else if (!orderData.finishing_qc?.isPassed || (orderNeedsPacking(orderData) && !orderData.finishing_packing?.isPacked)) {
+      // ── UBAH ── merchandise tidak punya tahap packing: lolos QC langsung → Kirim.
       if (orderData.finishing_qc?.isPassed === false && orderData.finishing_qc?.notes) {
         normalStatus = 'Revisi';
       } else {
@@ -298,6 +299,101 @@ export function useOrders({
         showAlert('Sukses', 'Diupdate');
       } else {
         // ── TAMBAHAN ── sebelumnya gagal diam-diam: tombol tidak berubah & tidak ada pesan
+        showAlert('Gagal Update', error.message, 'error');
+      }
+    } finally {
+      setIsUpdating(false);
+    }
+  }, [supabase, orders, fetchOrders, showAlert, checkAutoStatus, setView, isUpdating]);
+
+  // ─── Pesanan MERCHANDISE (lanyard, totebag, gantungan kunci, dst.) ─────────
+  // Disimpan di tabel `orders` yang sama (jenis_produksi = 'merchandise'), jadi
+  // tagihan/DP, tracking, notifikasi, log & sampah ikut bekerja tanpa kode baru.
+  // Kolom khusus: jenis_merchandise, varian_merchandise, steps_merchandise
+  // (butuh migrasi 011_merchandise_orders.sql).
+
+  const handleCreateMerchandiseOrder = useCallback(async (formData: any) => {
+    if (isCreating) return; // cegah klik ganda saat sedang menyimpan
+    setIsCreating(true);
+    try {
+      const payload: any = {
+        kode_produksi: generateProductionCode(),
+        nama_pemesan: formData.nama,
+        no_hp: formData.hp,
+        alamat_pemesan: formData.alamat_pemesan?.trim() || null,
+        jumlah: Number(formData.jumlah) || 0,
+        detail_ukuran: null, // merchandise tidak memakai detail ukuran
+        tanggal_masuk: new Date().toISOString().split('T')[0],
+        deadline: formData.deadline,
+        jenis_produksi: MERCHANDISE_JENIS,
+        jenis_merchandise: formData.jenis_merchandise || null, // produk: lanyard/totebag/...
+        varian_merchandise: formData.varian_merchandise || null, // variasi: stopper/...
+        assigned_to: formData.assigned_to || null,
+        helper_id: formData.helper_id || null,
+        catatan_pesanan: formData.catatan_pesanan?.trim() || null, // "Catatan Tambahan"
+        status: 'Pesanan Masuk',
+        // Langkah produksi disalin dari template produknya (lib/utils.ts → MERCHANDISE_STEPS).
+        steps_merchandise: getInitialMerchandiseSteps(formData.jenis_merchandise),
+        // Kolom lama tetap diisi array kosong (aman bila kolomnya NOT NULL).
+        steps_manual: [],
+        steps_dtf: [],
+        finishing_qc: { isPassed: false, notes: '' },
+        finishing_packing: { isPacked: false },
+        shipping: {},
+        kendala: [],
+      };
+
+      const { data, error } = await supabase.from('orders').insert([payload]).select().single();
+      if (!error) {
+        await writeLog({
+          order: data,
+          category: 'STATUS',
+          event: 'Pesanan Masuk',
+          ket: 'Pesanan merchandise baru dibuat',
+          isSystem: true,
+        });
+        await fetchOrders();
+        setView('list');
+        showAlert('Sukses', 'Pesanan merchandise dibuat');
+        triggerOrderNotifications(data);
+      } else {
+        showAlert('Error', error.message, 'error');
+      }
+    } finally {
+      setIsCreating(false);
+    }
+  }, [generateProductionCode, supabase, fetchOrders, showAlert, writeLog, setView, isCreating]);
+
+  const handleEditMerchandiseOrder = useCallback(async (d: any, selectedOrderId: string) => {
+    if (isUpdating) return; // cegah klik ganda saat sedang menyimpan
+    setIsUpdating(true);
+    try {
+      const old = orders.find(o => o.id === selectedOrderId);
+      const updates: any = {
+        nama_pemesan: d.nama,
+        no_hp: d.hp,
+        alamat_pemesan: d.alamat_pemesan?.trim() || null,
+        jumlah: Number(d.jumlah) || 0,
+        deadline: d.deadline,
+        jenis_merchandise: d.jenis_merchandise || null,
+        varian_merchandise: d.varian_merchandise || null,
+        assigned_to: d.assigned_to || null,
+        helper_id: d.helper_id || null,
+        catatan_pesanan: d.catatan_pesanan?.trim() || null,
+      };
+      // Produk diganti (hanya mungkin bila belum ada langkah yang selesai — dikunci di form):
+      // langkah produksi disalin ulang dari template produk yang baru.
+      if (old && old.jenis_merchandise !== updates.jenis_merchandise) {
+        const noneDone = !getOrderSteps(old).some((s: any) => s.isCompleted);
+        if (noneDone) updates.steps_merchandise = getInitialMerchandiseSteps(updates.jenis_merchandise);
+      }
+      const { error } = await supabase.from('orders').update(updates).eq('id', selectedOrderId);
+      if (!error) {
+        if (old) await checkAutoStatus({ ...old, ...updates });
+        await fetchOrders();
+        setView('detail');
+        showAlert('Sukses', 'Diupdate');
+      } else {
         showAlert('Gagal Update', error.message, 'error');
       }
     } finally {
@@ -472,6 +568,8 @@ export function useOrders({
     checkAutoStatus,
     handleCreateOrder,
     handleEditOrder,
+    handleCreateMerchandiseOrder, // ── TAMBAHAN ──
+    handleEditMerchandiseOrder, // ── TAMBAHAN ──
     handleDeleteOrder,
     handleRestoreOrder,
     handlePermanentDelete,

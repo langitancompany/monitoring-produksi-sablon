@@ -70,9 +70,9 @@ Struktur di bawah mengikuti isi repositori saat ini (`node_modules/`, `.next/`, 
 │   │   ├── layout/                   #   Sidebar, Header, UnitSwitcher
 │   │   ├── misc/                     #   FCMManager (push notif), AboutView, TestNotifButton
 │   │   ├── orders/                   #   Buat/Edit pesanan, daftar, pesanan selesai, sampah, form approval,
-│   │   │   │                         #   input ukuran & gesut
-│   │   │   └── detail/               #   bagian detail pesanan: header, ukuran, gesut, step approval/produksi/
-│   │   │                             #   finishing, catatan produksi, label pengiriman
+│   │   │   │                         #   input ukuran & gesut, MerchandiseOrderForm (buat + edit pesanan merchandise)
+│   │   │   └── detail/               #   bagian detail pesanan: header, ukuran, gesut, detail merchandise, step
+│   │   │                             #   approval/produksi/finishing, catatan produksi, label pengiriman
 │   │   ├── po/                       #   PO Management (admin): produk, reseller, rekap, packing, shipping, slip/struk A6
 │   │   ├── settings/                 #   Pengaturan: user, permission, WhatsApp
 │   │   │   └── tabs/                 #     tab: Users, Jenis Produksi, Gaji Gesut, Notifikasi, Pengumuman, Backup
@@ -117,7 +117,8 @@ Struktur di bawah mengikuti isi repositori saat ini (`node_modules/`, `.next/`, 
 │   └── po.ts                         #   tipe modul PO
 │
 ├── supabase/
-│   └── migrations/                   # SQL migrasi (mis. 010_finance_salary_posting.sql: posting gaji → pengeluaran)
+│   └── migrations/                   # SQL migrasi (010_finance_salary_posting.sql: posting gaji → pengeluaran;
+│                                     #   011_merchandise_orders.sql: kolom pesanan merchandise — jalankan SEBELUM deploy)
 │
 ├── wa-gateway/                       # Service terpisah: WhatsApp Gateway (Baileys), punya Dockerfile & package.json sendiri
 │   └── src/index.ts                  #   worker antrian wa_outbox + HTTP kecil (/status, /qr.json, /groups, /send, /health)
@@ -138,6 +139,7 @@ Struktur di bawah mengikuti isi repositori saat ini (`node_modules/`, `.next/`, 
 
 - **Dashboard** — ringkasan jumlah pesanan per status, grafik (bar/pie), daftar aksi yang perlu perhatian.
 - **Pesanan Aktif** — daftar & detail pesanan dengan tahapan: Pesanan Masuk → On Process → Finishing → Kirim → Selesai (termasuk status Revisi/Ada Kendala/Telat). Detail per pesanan mencakup approval desain, input ukuran per warna/lengan, input komposisi gesut (untuk produksi manual), checklist QC & packing, upload bukti kirim/terima, label pengiriman, dan catatan kendala.
+- **Merchandise** — menu & daftar terpisah untuk pesanan merchandise: lanyard, totebag, gantungan kunci, dan produk lain (tersimpan di tabel `orders` dengan `jenis_produksi = 'merchandise'`). Form: data pelanggan, jenis merchandise (+ varian bila produknya punya, mis. lanyard dengan/tanpa stopper), jumlah, PJ & helper, deadline, catatan tambahan. Alur: Approval (upload mockup) → Produksi (default: 1. Cetak Kertas Sublim ➜ tombol *Sudah Cetak*, 2. Produksi Sublim ➜ tombol *Sudah Diproduksi*, berurutan) → QC → Pengiriman (tanpa packing). **Menambah produk/varian**: edit `MERCHANDISE_PRODUCTS` di `types/index.ts`; **langkah produksi per produk**: edit `MERCHANDISE_STEPS` di `lib/utils.ts`. Tagihan/DP, tracking publik, notifikasi, dan antrian TV ikut bekerja; merchandise tidak masuk modul Gaji.
 - **Kalender Produksi** — tampilan kalender deadline pesanan.
 - **Pesanan Selesai** & **Sampah (Trash)** — arsip dan soft-delete pesanan.
 - **Keuangan (Finance)** — pencatatan DP/pelunasan, bukti pembayaran (multi-file upload), status pembayaran per pesanan.
@@ -189,7 +191,7 @@ Catatan desain penting (dari komentar kode):
 
 ## 6. Model Data Inti (ringkas)
 
-- **Order** — entitas utama: data pemesan, jenis produksi, status, tahapan produksi (`steps_manual`/`steps_dtf`), QC & packing, shipping (bukti kirim/terima), kendala, harga & status pembayaran, bukti pembayaran (multi-file), serta `detail_gesut` (khusus produksi Manual, independen dari jumlah baju jadi karena gesut dihitung per potongan kain).
+- **Order** — entitas utama: data pemesan, jenis produksi, status, tahapan produksi (`steps_manual`/`steps_dtf`/`steps_merchandise`, dipilih lewat `getOrderSteps()` di `lib/utils.ts`), `jenis_merchandise` + `varian_merchandise` (khusus merchandise), QC & packing, shipping (bukti kirim/terima), kendala, harga & status pembayaran, bukti pembayaran (multi-file), serta `detail_gesut` (khusus produksi Manual, independen dari jumlah baju jadi karena gesut dihitung per potongan kain).
 - **PricingConfig** — histori harga per kategori (`MANUAL`, `DTF`, `GENERAL`, `GROSIR`) dengan `key_name` dan `effective_date`. Tabel `pricing_configs` menjadi **satu-satunya sumber** baik untuk HPP/harga jual ke customer maupun upah per-pcs tukang (angka yang sama, bukan dua sumber terpisah).
 - **PO** (`POSetting`, `POProduct`, `POOrder`, `POReseller`) — model untuk event Pre-Order: pengaturan event, katalog produk (dengan biaya tambahan lengan/ukuran), data reseller, dan pesanan PO beserta status pembayaran.
 

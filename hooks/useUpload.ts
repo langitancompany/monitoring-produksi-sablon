@@ -1,7 +1,7 @@
 // hooks/useUpload.ts
 import { useState, useRef, useCallback } from 'react';
 import { SupabaseClient } from '@supabase/supabase-js';
-import { getDocumentLabel, generateStorageFilename } from '@/lib/utils';
+import { getDocumentLabel, generateStorageFilename, getOrderSteps } from '@/lib/utils';
 import imageCompression from 'browser-image-compression';
 import { Order, UserData } from '@/types';
 
@@ -104,8 +104,7 @@ export function useUpload({
   // 🟢 Cari nama step (kalau type === 'step') untuk label dokumen
   let stepName: string | undefined;
   if (uploadContext.type === 'step' && uploadContext.stepId) {
-    const steps = order.jenis_produksi === 'manual' ? order.steps_manual : order.steps_dtf;
-    const step = steps?.find((s: any) => s.id === uploadContext.stepId);
+    const step = getOrderSteps(order).find((s: any) => s.id === uploadContext.stepId);
     stepName = (step as any)?.name;
   }
 
@@ -156,9 +155,7 @@ export function useUpload({
         timestamp: common.timestamp,
       };
     } else if (uploadContext.type === 'step' && uploadContext.stepId) {
-      const steps = updatedOrder.jenis_produksi === 'manual'
-        ? updatedOrder.steps_manual
-        : updatedOrder.steps_dtf;
+      const steps = getOrderSteps(updatedOrder) as any[];
       const idx = steps.findIndex((s: any) => s.id === uploadContext.stepId);
 
       if (idx >= 0) {

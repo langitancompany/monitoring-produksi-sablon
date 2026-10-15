@@ -11,7 +11,7 @@ import { buildQueue, monthRange, type TVOrder } from "@/lib/tvQueue";
 
 const SELECT_COLUMNS = `
   id, kode_produksi, nama_pemesan, jumlah, jenis_produksi, status,
-  tanggal_masuk, deadline, link_approval, steps_manual, steps_dtf,
+  tanggal_masuk, deadline, link_approval, steps_manual, steps_dtf, steps_merchandise, jenis_merchandise, varian_merchandise,
   finishing_qc, finishing_packing, shipping, kendala,
   assigned_user:users!assigned_to ( name ),
   helper_user:users!helper_id ( name )

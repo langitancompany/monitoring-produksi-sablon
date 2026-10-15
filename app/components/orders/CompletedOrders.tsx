@@ -25,7 +25,7 @@ import {
   Calendar,
   Eye,
 } from "lucide-react";
-import { formatDate } from "@/lib/utils";
+import { formatDate, orderTypeLabel } from "@/lib/utils";
 
 interface CompletedOrdersProps {
   orders: Order[];
@@ -353,7 +353,7 @@ export default function CompletedOrders({
                     </td>
                     <td className="px-4 py-3 md:px-6 md:py-4">
                       <span className="inline-block px-2 py-1 rounded border border-zinc-200 dark:border-zinc-700 text-[9px] md:text-[10px] font-semibold text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-900 uppercase">
-                        {order.jenis_produksi}
+                        {orderTypeLabel(order)}
                       </span>
                     </td>
                     <td className="px-4 py-3 md:px-6 md:py-4 text-center font-mono tabular-nums font-semibold text-zinc-700 dark:text-zinc-200">

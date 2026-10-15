@@ -197,6 +197,7 @@ export default function Header({
   const pageTitles: Record<string, string> = {
     dashboard: "Dashboard",
     orders: "Daftar Pesanan",
+    merchandise: "Pesanan Merchandise",
     completed_orders: "Arsip Selesai",
     trash: "Sampah",
     settings: "Pengaturan",

@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { Order, UserData, KendalaNote } from '@/types';
+import { getOrderSteps } from '@/lib/utils';
 
 // Sama persis dengan signature writeLog di useOrders.ts — didefinisikan
 // ulang di sini karena writeLog tidak diekspor sebagai type tersendiri.
@@ -35,15 +36,12 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
   // Nilai: `step:<stepId>` | 'proofing-revisi' | 'qc-pass' | 'qc-revisi' | null
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
-  const jenisProd = order.jenis_produksi?.toLowerCase() || '';
-  const isManual = jenisProd === 'manual' || jenisProd === 'sablon';
-
   // ─── Step Handlers ────────────────────────────────────────────────────────
 
   const handleStatusStep = useCallback(async (stepId: string) => {
     if (loadingAction) return;
     const updated = JSON.parse(JSON.stringify(order));
-    const steps = (isManual ? updated.steps_manual : updated.steps_dtf) as any[];
+    const steps = getOrderSteps(updated) as any[];
     const idx = steps.findIndex((s: any) => s.id === stepId);
     const stepName = idx >= 0 ? steps[idx].name : stepId;
     if (idx >= 0) {
@@ -69,12 +67,12 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
     } finally {
       setLoadingAction(null);
     }
-  }, [order, isManual, currentUser.name, onUpdateOrder, writeLog, loadingAction]);
+  }, [order, currentUser.name, onUpdateOrder, writeLog, loadingAction]);
 
   const handleSaveProofingRevisi = useCallback(async () => {
     if (!proofingRevisiNote.trim() || !proofingStepId || loadingAction) return;
     const updated = JSON.parse(JSON.stringify(order));
-    const steps = (isManual ? updated.steps_manual : updated.steps_dtf) as any[];
+    const steps = getOrderSteps(updated) as any[];
     const idx = steps.findIndex((s: any) => s.id === proofingStepId);
     const stepName = idx >= 0 ? steps[idx].name : proofingStepId;
     if (idx >= 0) {
@@ -97,7 +95,7 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
     } finally {
       setLoadingAction(null);
     }
-  }, [order, isManual, proofingRevisiNote, proofingStepId, onUpdateOrder, writeLog, loadingAction]);
+  }, [order, proofingRevisiNote, proofingStepId, onUpdateOrder, writeLog, loadingAction]);
 
   // ─── QC Handlers ─────────────────────────────────────────────────────────
 
@@ -204,7 +202,7 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
     }
     const stillHasKendala = updated.kendala.some((k: any) => !k.isResolved);
     if (!stillHasKendala) {
-      const steps = isManual ? updated.steps_manual : updated.steps_dtf;
+      const steps = getOrderSteps(updated);
       const allStepsDone = steps && steps.every((s: any) => s.isCompleted);
       updated.status = allStepsDone ? 'Finishing' : 'On Process';
     }
@@ -216,7 +214,7 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
       ket: kendalaText,
       newVal: updated.status,
     });
-  }, [order, isManual, currentUser.name, onUpdateOrder, writeLog]);
+  }, [order, currentUser.name, onUpdateOrder, writeLog]);
 
   const handleDeleteKendala = useCallback((kendalaId: string) => {
     onConfirm('Hapus Laporan?', 'Laporan kendala ini akan dihapus permanen.', () => {
@@ -225,7 +223,7 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
       updated.kendala = updated.kendala.filter((k: KendalaNote) => k.id !== kendalaId);
       const allResolved = updated.kendala.length === 0 || updated.kendala.every((k: any) => k.isResolved);
       if (allResolved && updated.status === 'Ada Kendala') {
-        const steps = isManual ? updated.steps_manual : updated.steps_dtf;
+        const steps = getOrderSteps(updated);
         const allStepsDone = steps && steps.every((s: any) => s.isCompleted);
         updated.status = allStepsDone ? 'Finishing' : 'On Process';
       }
@@ -238,7 +236,7 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
         newVal: updated.status,
       });
     });
-  }, [order, isManual, onConfirm, onUpdateOrder, writeLog]);
+  }, [order, onConfirm, onUpdateOrder, writeLog]);
 
   // ─── File Delete Handler ──────────────────────────────────────────────────
 
@@ -247,7 +245,7 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
       const updated = JSON.parse(JSON.stringify(order));
       let label = field;
       if (isStep && stepId) {
-        const steps = isManual ? updated.steps_manual : updated.steps_dtf;
+        const steps = getOrderSteps(updated);
         const idx = steps.findIndex((s: any) => s.id === stepId);
         if (idx >= 0) { label = steps[idx].name; steps[idx].isCompleted = false; steps[idx].fileUrl = null; }
       } else if (field === 'approval') {
@@ -268,7 +266,7 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
         ket: `File "${label}" dihapus`,
       });
     });
-  }, [order, isManual, onConfirm, onUpdateOrder, writeLog]);
+  }, [order, onConfirm, onUpdateOrder, writeLog]);
 
   return {
     // State

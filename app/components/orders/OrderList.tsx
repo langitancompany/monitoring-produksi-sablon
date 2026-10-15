@@ -1,7 +1,12 @@
 // app/components/orders/OrderList.tsx
 
 import React, { useState } from "react";
-import { formatDate, getDeadlineStatus, MONTHS } from "@/lib/utils";
+import {
+  formatDate,
+  getDeadlineStatus,
+  MONTHS,
+  orderTypeLabel,
+} from "@/lib/utils";
 import { Order, ProductionTypeData, UserData } from "@/types";
 import {
   AlertTriangle,
@@ -25,6 +30,17 @@ interface OrderListProps {
   /** id pesanan yang sedang dihapus (untuk menampilkan loading di tombol sampah). */
   deletingOrderId?: string | null;
   currentUser: UserData;
+  // ── TAMBAHAN ── dipakai ulang untuk daftar Pesanan Merchandise. Semua opsional,
+  // default-nya = tampilan Pesanan Aktif (sablon) seperti sebelumnya.
+  title?: string;
+  newOrderLabel?: string;
+  /** false = sembunyikan filter "Semua Jenis" (tidak relevan untuk merchandise). */
+  showTypeFilter?: boolean;
+}
+
+// Teks jenis pada kartu: merchandise menampilkan produknya (mis. "Lanyard · Dengan Stopper").
+function typeLabel(o: Order): string {
+  return orderTypeLabel(o);
 }
 
 // ─── Konstanta Alur Status ───────────────────────────────────────────────────
@@ -214,7 +230,7 @@ function MobileCard({
             ·
           </span>
           <span className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase font-semibold">
-            {order.jenis_produksi}
+            {typeLabel(order)}
           </span>
         </div>
         <span
@@ -390,7 +406,7 @@ function KanbanCard({
           </span>
           <span className="text-zinc-300 dark:text-zinc-600">·</span>
           <span className="uppercase font-semibold">
-            {order.jenis_produksi}
+            {typeLabel(order)}
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -562,6 +578,9 @@ export default function OrderList({
   onDeleteOrder,
   deletingOrderId,
   currentUser,
+  title = "Daftar Pesanan",
+  newOrderLabel = "Pesanan baru",
+  showTypeFilter = true,
 }: OrderListProps) {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [monthFilter, setMonthFilter] = useState<string>("all");
@@ -627,7 +646,7 @@ export default function OrderList({
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div className="hidden md:block">
           <h2 className="text-xl font-semibold text-zinc-900 dark:text-white">
-            Daftar Pesanan
+            {title}
           </h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
             <span className="font-mono tabular-nums">
@@ -649,24 +668,26 @@ export default function OrderList({
               </option>
             ))}
           </select>
-          <select
-            className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 text-xs rounded-md px-2 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors duration-150"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-          >
-            <option value="all">Semua Jenis</option>
-            {productionTypes.map((pt) => (
-              <option key={pt.id} value={pt.value}>
-                {pt.name}
-              </option>
-            ))}
-          </select>
+          {showTypeFilter && (
+            <select
+              className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 text-xs rounded-md px-2 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors duration-150"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+            >
+              <option value="all">Semua Jenis</option>
+              {productionTypes.map((pt) => (
+                <option key={pt.id} value={pt.value}>
+                  {pt.name}
+                </option>
+              ))}
+            </select>
+          )}
           {canCreateOrder && (
             <button
               onClick={onNewOrder}
               className="ml-auto md:ml-0 bg-[#124540] hover:bg-[#0d332f] text-white px-3 py-2 rounded-md text-xs font-semibold flex items-center gap-2 transition-colors duration-150 whitespace-nowrap"
             >
-              <ClipboardList className="w-3.5 h-3.5" /> Pesanan baru
+              <ClipboardList className="w-3.5 h-3.5" /> {newOrderLabel}
             </button>
           )}
         </div>

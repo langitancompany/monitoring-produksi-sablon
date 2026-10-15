@@ -17,11 +17,11 @@ import {
   User,
 } from "lucide-react";
 import ProductionNotes from "./ProductionNotes";
+import { getOrderSteps, isMerchandiseOrder } from "@/lib/utils";
 
 interface StepProduksiProps {
   order: Order;
   currentUser: UserData;
-  isManual: boolean;
   canUpdateStep: boolean;
   isSupervisor: boolean;
   isManagement: boolean;
@@ -46,7 +46,6 @@ interface StepProduksiProps {
 export default function StepProduksi({
   order,
   currentUser,
-  isManual,
   canUpdateStep,
   isSupervisor,
   isManagement,
@@ -67,7 +66,10 @@ export default function StepProduksi({
   onDeleteKendala,
   onFileDelete,
 }: StepProduksiProps) {
-  const currentSteps = isManual ? order.steps_manual : order.steps_dtf;
+  // Manual / DTF / Merchandise dipilih otomatis dari jenis produksi pesanan.
+  const currentSteps = getOrderSteps(order);
+  // Merchandise: langkah dikerjakan berurutan (cetak dulu, baru produksi).
+  const isMerchandise = isMerchandiseOrder(order);
 
   return (
     <div className="bg-white dark:bg-zinc-950 p-5 md:p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
@@ -165,8 +167,14 @@ export default function StepProduksi({
 
       {/* List Steps */}
       <div className="space-y-4">
-        {currentSteps?.map((s) => {
+        {currentSteps.map((s, stepIdx) => {
           const step = s as any;
+          // Khusus merchandise: langkah baru bisa ditandai bila langkah sebelumnya sudah selesai,
+          // dan langkah yang sudah selesai tidak bisa di-undo bila langkah sesudahnya sudah selesai.
+          const isLocked =
+            isMerchandise && currentSteps.slice(0, stepIdx).some((p) => !p.isCompleted);
+          const hasLaterDone =
+            isMerchandise && currentSteps.slice(stepIdx + 1).some((n) => n.isCompleted);
           const isProofingStep = step.name.toLowerCase().includes("proofing");
           const hasFileUploaded = !!step.fileUrl;
           const isStepCompleted = step.isCompleted;
@@ -229,7 +237,7 @@ export default function StepProduksi({
                     <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
                       Selesai
                     </span>
-                    {canUpdateStep && (
+                    {canUpdateStep && !hasLaterDone && (
                       <button
                         onClick={() => onFileDelete("step", true, step.id)}
                         className="text-zinc-400 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-150 p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800"
@@ -283,9 +291,23 @@ export default function StepProduksi({
                       ) : step.type === "status_update" ? (
                         <button
                           onClick={() => onStatusStep(step.id)}
-                          className="bg-[#124540] text-white text-xs px-4 py-2 rounded-md font-semibold hover:bg-[#0d332f] transition-colors duration-150 w-full sm:w-auto"
+                          disabled={isBusy || isLocked}
+                          title={
+                            isLocked
+                              ? "Selesaikan langkah sebelumnya terlebih dahulu"
+                              : undefined
+                          }
+                          className="bg-[#124540] text-white text-xs px-4 py-2 rounded-md font-semibold hover:bg-[#0d332f] disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 w-full sm:w-auto flex items-center justify-center gap-2"
                         >
-                          Tandai Selesai
+                          {isSavingStep ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />{" "}
+                              Memproses...
+                            </>
+                          ) : (
+                            // actionLabel: teks tombol khusus per langkah (mis. "Sudah Cetak")
+                            (step.actionLabel ?? "Tandai Selesai")
+                          )}
                         </button>
                       ) : (
                         <button
