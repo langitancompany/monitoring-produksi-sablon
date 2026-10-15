@@ -14,7 +14,10 @@
 //   • berhenti reconnect saat sesi dipakai di tempat lain (440) atau nomor dibatasi (403)
 //   • cek "nomor terdaftar" di-cache (tidak query ke WhatsApp setiap pesan)
 //   • indikator "sedang mengetik" + jeda acak antar pesan
-//   • batas kirim per jam (pengaman kalau ada bug yang membanjiri antrian)
+//   • batas kirim per jam / per hari / per penerima — dihitung dari tabel wa_outbox, jadi TIDAK
+//     ter-reset saat gateway restart (pengaman kalau ada bug yang membanjiri antrian)
+//   • circuit breaker: kirim gagal beruntun → seluruh antrian dijeda (tanda WhatsApp mulai membatasi)
+//   • cache metadata grup (tanpa ini tiap kirim ke grup menanyakan data grup ke server WhatsApp)
 //   • pesan tidak "habis jatah percobaan" hanya karena WhatsApp sedang terputus
 
 import http from 'node:http';
@@ -28,8 +31,10 @@ import makeWASocket, {
   DisconnectReason,
   fetchLatestBaileysVersion,
   useMultiFileAuthState,
+  type GroupMetadata,
   type WASocket,
 } from '@whiskeysockets/baileys';
+import { CircuitBreaker, SendLimiter, TtlCache } from './safety.js';
 
 const env = (k: string, d?: string) => {
   const v = process.env[k] ?? d;
@@ -46,7 +51,18 @@ const PORT = Number(env('PORT', '3100'));
 const DELAY_MIN = Number(env('SEND_DELAY_MIN', '3'));
 const DELAY_MAX = Number(env('SEND_DELAY_MAX', '8'));
 const MAX_ATTEMPTS = Number(env('MAX_ATTEMPTS', '5'));
-const MAX_PER_HOUR = Number(env('MAX_PER_HOUR', '60')); // pengaman; volume normal jauh di bawah ini
+// Batas kirim (pengaman; volume normal jauh di bawah ini). Pesan yang kena batas DITAHAN, bukan dibuang.
+const MAX_PER_HOUR = Number(env('MAX_PER_HOUR', '20'));
+const MAX_PER_DAY = Number(env('MAX_PER_DAY', '150'));
+const MAX_PER_USER_PER_HOUR = Number(env('MAX_PER_USER_PER_HOUR', '8'));   // per orang (DM)
+const MAX_PER_GROUP_PER_HOUR = Number(env('MAX_PER_GROUP_PER_HOUR', '15')); // per grup
+// Circuit breaker: gagal beruntun sebanyak ini → antrian dijeda. Jeda pertama BREAKER_PAUSE_MIN menit,
+// digandakan bila gagal lagi setelah jeda, maksimal BREAKER_MAX_PAUSE_MIN menit.
+const BREAKER_THRESHOLD = Number(env('BREAKER_THRESHOLD', '3'));
+const BREAKER_PAUSE_MIN = Number(env('BREAKER_PAUSE_MIN', '30'));
+const BREAKER_MAX_PAUSE_MIN = Number(env('BREAKER_MAX_PAUSE_MIN', '240'));
+// Masa berlaku cache metadata grup (menit). Juga dibersihkan saat ada perubahan grup & saat reconnect.
+const GROUP_CACHE_TTL_MIN = Number(env('GROUP_CACHE_TTL_MIN', '360'));
 
 const log = pino({ level: 'info' });
 const db = createClient(SUPABASE_URL, SERVICE_KEY, {
@@ -58,6 +74,19 @@ const db = createClient(SUPABASE_URL, SERVICE_KEY, {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const randDelay = () => (DELAY_MIN + Math.random() * Math.max(0, DELAY_MAX - DELAY_MIN)) * 1000;
+
+const limiter = new SendLimiter({
+  perHour: MAX_PER_HOUR,
+  perDay: MAX_PER_DAY,
+  perUserPerHour: MAX_PER_USER_PER_HOUR,
+  perGroupPerHour: MAX_PER_GROUP_PER_HOUR,
+});
+const breaker = new CircuitBreaker({
+  threshold: BREAKER_THRESHOLD,
+  baseMs: BREAKER_PAUSE_MIN * 60_000,
+  maxMs: BREAKER_MAX_PAUSE_MIN * 60_000,
+});
+const groupCache = new TtlCache<GroupMetadata>(GROUP_CACHE_TTL_MIN * 60_000);
 
 // Error yang tidak ada gunanya dicoba ulang (mis. nomor tidak terdaftar di WhatsApp)
 class PermanentError extends Error {}
@@ -111,10 +140,18 @@ async function startSocket() {
       browser: ['LCO Gateway', 'Chrome', '1.0'],
       markOnlineOnConnect: false,
       syncFullHistory: false,
+      // Tanpa ini, tiap kirim ke grup Baileys menanyakan data grup ke server WhatsApp.
+      cachedGroupMetadata: (jid) => cachedGroupMetadata(jid),
     });
     sock = s;
 
     s.ev.on('creds.update', saveCreds);
+
+    // Anggota/pengaturan grup berubah → buang cache-nya (diambil ulang saat kirim berikutnya)
+    s.ev.on('groups.update', (updates) => {
+      for (const u of updates) if (u.id) groupCache.delete(u.id);
+    });
+    s.ev.on('group-participants.update', (e) => groupCache.delete(e.id));
 
     s.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
       if (s !== sock) return; // event dari socket lama → abaikan
@@ -127,6 +164,7 @@ async function startSocket() {
 
       if (connection === 'open') {
         connState = 'open';
+        groupCache.clear(); // perubahan grup selama terputus tidak terpantau → mulai dari awal
         lastQr = null;
         closeReason = null;
         failCount = 0;
@@ -203,12 +241,60 @@ async function resolveUserJid(target: string): Promise<string> {
   return found.jid;
 }
 
-// Catatan jumlah kirim 1 jam terakhir (pengaman)
-const sentLog: number[] = [];
-function sentLastHour() {
-  const cutoff = Date.now() - 3600_000;
-  while (sentLog.length && sentLog[0] < cutoff) sentLog.shift();
-  return sentLog.length;
+// Kunci penerima untuk batas per penerima: nomor ter-normalisasi (DM) atau JID (grup)
+const targetKey = (type: 'group' | 'user', target: string) =>
+  type === 'group' ? target : normalizeNumber(target);
+
+// Metadata grup (dipakai Baileys saat kirim ke grup): ambil dari cache, bila kosong ambil sekali lalu simpan.
+async function cachedGroupMetadata(jid: string): Promise<GroupMetadata | undefined> {
+  const hit = groupCache.get(jid);
+  if (hit) return hit;
+  if (!sock || connState !== 'open') return undefined;
+  try {
+    const data = await sock.groupMetadata(jid);
+    groupCache.set(jid, data);
+    return data;
+  } catch {
+    return undefined; // Baileys mengambil sendiri
+  }
+}
+
+// Riwayat kirim 24 jam terakhir dimuat dari database agar batas kirim tidak "reset" saat gateway restart.
+// Selama belum berhasil dimuat, pengiriman ditahan (aman).
+let limiterReady = false;
+async function loadLimiter(): Promise<boolean> {
+  try {
+    const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+    const { data, error } = await db
+      .from('wa_outbox')
+      .select('target_type, target, sent_at')
+      .eq('status', 'sent')
+      .gte('sent_at', since)
+      .order('sent_at', { ascending: true })
+      .limit(5000);
+    if (error) throw error;
+    limiter.seed(
+      (data ?? [])
+        .map((r: any) => ({ t: Date.parse(r.sent_at), key: targetKey(r.target_type, String(r.target)) }))
+        .filter((e) => Number.isFinite(e.t)),
+    );
+    limiterReady = true;
+    log.info({ jam: limiter.lastHour(), hari: limiter.lastDay() }, 'riwayat kirim 24 jam terakhir dimuat dari database');
+    return true;
+  } catch (e: any) {
+    log.warn({ err: e?.message }, 'gagal memuat riwayat kirim — pengiriman ditahan sampai berhasil');
+    return false;
+  }
+}
+
+// Jawaban "terlalu banyak permintaan" dari WhatsApp → langsung jeda (tidak menunggu 3x gagal).
+// Bentuk errornya bisa beragam, jadi dicek dari beberapa tempat.
+function isRateLimit(e: any): boolean {
+  return (
+    e?.output?.statusCode === 429 ||
+    Number(e?.data) === 429 ||
+    /rate-?overlimit|too many requests|\b429\b/i.test(String(e?.message ?? ''))
+  );
 }
 
 async function sendOne(type: 'group' | 'user', target: string, message: string, mentions: string[] = []) {
@@ -224,13 +310,13 @@ async function sendOne(type: 'group' | 'user', target: string, message: string, 
 
   const mentionJids = mentions.map((m) => `${normalizeNumber(m)}@s.whatsapp.net`);
   await sock.sendMessage(jid, mentionJids.length ? { text: message, mentions: mentionJids } : { text: message });
-  sentLog.push(Date.now());
+  limiter.record(targetKey(type, target));
 }
 
 // ───────────────────────── Worker antrian ─────────────────────────
 
 let working = false;
-let capWarned = false;
+let capWarned: string | null = null;
 
 // Saklar dari Pengaturan app (tabel wa_settings, baris id=1).
 // Gagal baca / tabel belum ada → dianggap NONAKTIF (aman: tidak mengirim apa pun).
@@ -247,7 +333,9 @@ async function processQueue() {
   if (working || shuttingDown || connState !== 'open') return;
   working = true;
   try {
+    if (breaker.isPaused()) return; // circuit breaker sedang menjeda antrian
     if (!(await isEnabled())) return; // saklar mati → jangan kirim apa pun
+    if (!limiterReady && !(await loadLimiter())) return; // riwayat kirim belum termuat → tahan
 
     // Pesan yang nyangkut di 'sending' > 2 menit (mis. gateway restart) dikembalikan ke pending
     await db
@@ -271,15 +359,28 @@ async function processQueue() {
       // Terputus di tengah batch → hentikan, jangan "membakar" percobaan pesan berikutnya
       if (shuttingDown || connState !== 'open') break;
 
-      // Pengaman batas per jam: sisanya tetap menunggu di antrian
-      if (sentLastHour() >= MAX_PER_HOUR) {
-        if (!capWarned) {
-          log.warn({ cap: MAX_PER_HOUR }, 'Batas kirim per jam tercapai — sisa pesan ditahan. Cek apakah ada yang membanjiri antrian.');
-          capWarned = true;
+      // Breaker bisa aktif di tengah batch (mis. dipicu oleh pesan sebelumnya)
+      if (breaker.isPaused()) break;
+
+      // Pengaman batas kirim. Batas per jam / per hari: hentikan batch, sisanya menunggu di antrian.
+      const key = targetKey(row.target_type, row.target);
+      const hit = limiter.check(row.target_type, key);
+      if (hit && hit.scope !== 'penerima') {
+        if (capWarned !== hit.scope) {
+          log.warn({ batas: hit.scope, jam: limiter.lastHour(), hari: limiter.lastDay() }, 'Batas kirim tercapai — sisa pesan ditahan. Cek apakah ada yang membanjiri antrian.');
+          capWarned = hit.scope;
         }
         break;
       }
-      capWarned = false;
+      capWarned = null;
+
+      // Batas per penerima: tahan pesan ini saja sampai jatah penerima itu kembali, lanjutkan ke penerima lain.
+      if (hit) {
+        const bebasLagi = new Date(hit.freesAt + 5_000 + Math.random() * 55_000).toISOString();
+        await db.from('wa_outbox').update({ scheduled_at: bebasLagi }).eq('id', row.id).eq('status', 'pending');
+        log.warn({ id: row.id, to: row.target, bebasLagi }, 'Batas kirim per penerima tercapai — pesan ditahan');
+        continue;
+      }
 
       // "Klaim" baris: hanya lanjut kalau memang masih pending (aman kalau ada 2 worker)
       const { data: claimed } = await db
@@ -293,6 +394,7 @@ async function processQueue() {
 
       try {
         await sendOne(row.target_type, row.target, row.message, row.mentions ?? []);
+        breaker.success();
         await db
           .from('wa_outbox')
           .update({ status: 'sent', sent_at: new Date().toISOString(), last_error: null })
@@ -316,6 +418,19 @@ async function processQueue() {
           })
           .eq('id', row.id);
         log.warn({ id: row.id, err: e?.message, attempts }, giveUp ? 'GAGAL permanen' : 'gagal, akan dicoba lagi');
+
+        // Circuit breaker: hanya kegagalan "sungguhan" yang dihitung (bukan nomor tidak terdaftar,
+        // bukan karena koneksi terputus di tengah kirim).
+        if (!(e instanceof PermanentError) && connState === 'open') {
+          const rate = isRateLimit(e);
+          if (breaker.failure({ immediate: rate, reason: rate ? 'rate limit dari WhatsApp' : 'gagal beruntun' })) {
+            log.error(
+              { sampai: new Date(breaker.pausedUntil() ?? 0).toISOString(), alasan: breaker.reason, kali: breaker.tripCount },
+              'CIRCUIT BREAKER AKTIF — seluruh antrian dijeda. WhatsApp mungkin mulai membatasi nomor; cek nomor & status.',
+            );
+            break;
+          }
+        }
       }
 
       await sleep(randDelay());
@@ -374,7 +489,17 @@ const server = http.createServer(async (req, res) => {
         wa: connState,
         reason: closeReason,
         enabled: await isEnabled(),
-        sent_last_hour: sentLastHour(),
+        sent_last_hour: limiter.lastHour(),
+        sent_last_day: limiter.lastDay(),
+        // Terisi bila circuit breaker sedang menjeda antrian
+        paused_until: breaker.pausedUntil() ? new Date(breaker.pausedUntil() as number).toISOString() : null,
+        paused_reason: breaker.pausedUntil() ? breaker.reason : null,
+        limits: {
+          per_hour: MAX_PER_HOUR,
+          per_day: MAX_PER_DAY,
+          per_user_per_hour: MAX_PER_USER_PER_HOUR,
+          per_group_per_hour: MAX_PER_GROUP_PER_HOUR,
+        },
       });
     }
 
@@ -388,6 +513,7 @@ const server = http.createServer(async (req, res) => {
       if (!sock || connState !== 'open') return json(res, 503, { error: 'WhatsApp belum terhubung' });
       if (groupsCache && Date.now() - groupsCache.at < GROUPS_TTL) return json(res, 200, groupsCache.data);
       const groups = await sock.groupFetchAllParticipating();
+      for (const g of Object.values(groups)) groupCache.set(g.id, g); // sekalian mengisi cache metadata grup
       const data = Object.values(groups).map((g) => ({ id: g.id, nama: g.subject, anggota: g.participants.length }));
       groupsCache = { at: Date.now(), data };
       return json(res, 200, data);
@@ -398,9 +524,19 @@ const server = http.createServer(async (req, res) => {
       if (typeof b.to !== 'string' || typeof b.message !== 'string' || !b.to || !b.message) {
         return json(res, 400, { error: 'to & message wajib' });
       }
-      if (sentLastHour() >= MAX_PER_HOUR) return json(res, 429, { error: 'Batas kirim per jam tercapai' });
+      if (breaker.isPaused()) {
+        return json(res, 503, { error: 'Pengiriman sedang dijeda (circuit breaker)', paused_until: new Date(breaker.pausedUntil() ?? 0).toISOString() });
+      }
+      if (!limiterReady && !(await loadLimiter())) {
+        return json(res, 503, { error: 'Riwayat kirim belum termuat dari database, coba lagi sebentar lagi' });
+      }
+      const type = b.type === 'group' ? 'group' : 'user';
+      const hit = limiter.check(type, targetKey(type, b.to));
+      if (hit) {
+        return json(res, 429, { error: `Batas kirim tercapai (${hit.scope})`, retry_after_sec: Math.max(1, Math.ceil((hit.freesAt - Date.now()) / 1000)) });
+      }
       try {
-        await sendOne(b.type === 'group' ? 'group' : 'user', b.to, b.message, Array.isArray(b.mentions) ? b.mentions : []);
+        await sendOne(type, b.to, b.message, Array.isArray(b.mentions) ? b.mentions : []);
         return json(res, 200, { ok: true });
       } catch (e: any) {
         return json(res, 500, { error: e?.message });
@@ -439,4 +575,5 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
 startSocket().catch((e) => log.error(e));
+void loadLimiter(); // gagal pun tidak masalah: dicoba lagi otomatis oleh worker sebelum mengirim
 setInterval(processQueue, 5000);
