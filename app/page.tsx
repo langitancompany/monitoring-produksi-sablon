@@ -290,6 +290,7 @@ export default function ProductionApp() {
     writeLog,
     checkAutoStatus,
     isCreating,
+    isUpdating,
     deletingOrderId,
     trashBusy,
     handleCreateOrder,
@@ -657,6 +658,7 @@ export default function ProductionApp() {
                       productionTypes={productionTypes}
                       onCancel={() => setView("detail")}
                       onSubmit={(d) => handleEditOrder(d, selectedOrderId)}
+                      isSubmitting={isUpdating}
                     />
                   ) : (
                     <OrderNotFound

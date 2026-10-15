@@ -40,6 +40,7 @@ export function useOrders({
 
   // ── TAMBAHAN ── state loading untuk indikator di tombol
   const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false); // ── TAMBAHAN ── spinner tombol Update (Edit Pesanan)
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   // Proses di menu Sampah (pulihkan / hapus permanen): satu proses pada satu waktu.
   const [trashBusy, setTrashBusy] = useState<{ id: string; action: 'restore' | 'purge' } | null>(null);
@@ -267,33 +268,42 @@ export function useOrders({
   }, [generateProductionCode, supabase, fetchOrders, showAlert, writeLog, setView, isCreating]);
 
   const handleEditOrder = useCallback(async (d: any, selectedOrderId: string) => {
-    const updates = {
-      nama_pemesan: d.nama,
-      no_hp: d.hp,
-      alamat_pemesan: d.alamat_pemesan || null,
-      jumlah: d.jumlah || 0,
-      detail_ukuran: d.detail_ukuran || null,
-      detail_gesut: d.detail_gesut || null, // ── TAMBAHAN ── ini yang bikin update gesut tidak tersimpan
-      deadline: d.deadline,
-      jenis_produksi: d.type,
-      assigned_to: d.assigned_to || null,
-      helper_id: d.helper_id || null,
-      // ── TAMBAHAN ── field opsional untuk Form Approval
-      ukuran_desain_depan: d.ukuran_desain_depan?.trim() || null,
-      ukuran_desain_belakang: d.ukuran_desain_belakang?.trim() || null,
-      catatan_pesanan: d.catatan_pesanan?.trim() || null,
-      jenis_aplikasi_art: cleanArt(d.jenis_aplikasi_art),
-      jenis_pakaian: d.jenis_pakaian || 'kaos',
-    };
-    const { error } = await supabase.from('orders').update(updates).eq('id', selectedOrderId);
-    if (!error) {
-      const old = orders.find(o => o.id === selectedOrderId);
-      if (old) await checkAutoStatus({ ...old, ...updates });
-      await fetchOrders();
-      setView('detail');
-      showAlert('Sukses', 'Diupdate');
+    if (isUpdating) return; // ── TAMBAHAN ── cegah klik ganda saat sedang menyimpan
+    setIsUpdating(true);
+    try {
+      const updates = {
+        nama_pemesan: d.nama,
+        no_hp: d.hp,
+        alamat_pemesan: d.alamat_pemesan || null,
+        jumlah: d.jumlah || 0,
+        detail_ukuran: d.detail_ukuran || null,
+        detail_gesut: d.detail_gesut || null, // ── TAMBAHAN ── ini yang bikin update gesut tidak tersimpan
+        deadline: d.deadline,
+        jenis_produksi: d.type,
+        assigned_to: d.assigned_to || null,
+        helper_id: d.helper_id || null,
+        // ── TAMBAHAN ── field opsional untuk Form Approval
+        ukuran_desain_depan: d.ukuran_desain_depan?.trim() || null,
+        ukuran_desain_belakang: d.ukuran_desain_belakang?.trim() || null,
+        catatan_pesanan: d.catatan_pesanan?.trim() || null,
+        jenis_aplikasi_art: cleanArt(d.jenis_aplikasi_art),
+        jenis_pakaian: d.jenis_pakaian || 'kaos',
+      };
+      const { error } = await supabase.from('orders').update(updates).eq('id', selectedOrderId);
+      if (!error) {
+        const old = orders.find(o => o.id === selectedOrderId);
+        if (old) await checkAutoStatus({ ...old, ...updates });
+        await fetchOrders();
+        setView('detail');
+        showAlert('Sukses', 'Diupdate');
+      } else {
+        // ── TAMBAHAN ── sebelumnya gagal diam-diam: tombol tidak berubah & tidak ada pesan
+        showAlert('Gagal Update', error.message, 'error');
+      }
+    } finally {
+      setIsUpdating(false);
     }
-  }, [supabase, orders, fetchOrders, showAlert, checkAutoStatus, setView]);
+  }, [supabase, orders, fetchOrders, showAlert, checkAutoStatus, setView, isUpdating]);
 
   const handleDeleteOrder = useCallback(async (id: string) => {
     const orderToDelete = orders.find(o => o.id === id);
@@ -454,6 +464,7 @@ export function useOrders({
     ordersLoading,
     ordersError,
     isCreating, // ── TAMBAHAN ──
+    isUpdating, // ── TAMBAHAN ──
     deletingOrderId, // ── TAMBAHAN ──
     trashBusy,
     fetchOrders,

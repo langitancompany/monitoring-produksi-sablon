@@ -29,31 +29,107 @@ Menggantikan pencatatan manual/Excel/WA untuk operasional produksi sablon dengan
 | Utilitas          | `date-fns`, `xlsx` (export Excel), `jspdf` + `html2canvas-pro`/`html-to-image` (export PDF/gambar nota & slip), `jszip`, `react-easy-crop`, `browser-image-compression`, `recharts` (chart dashboard) |
 | Deployment target | Vercel (ada Cron Job & API routes yang sesuai konvensi Vercel)                                                                                                                                        |
 
-## 3. Struktur Direktori (ringkas)
+## 3. Struktur Direktori
+
+Struktur di bawah mengikuti isi repositori saat ini (`node_modules/`, `.next/`, dan `.git/` tidak ditampilkan). Saat menambah folder atau modul baru, perbarui bagian ini agar README tetap sesuai dengan kode.
 
 ```
-app/
-├── api/                     # API routes (server-side, pakai Supabase service role)
-├── components/
-│   ├── apps/                # Modul aplikasi: Kalkulator, Kalender, Config Harga, Nota, Gaji, Catatan Rapat, Log Aktivitas
-│   ├── auth/                # Layar login
-│   ├── dashboard/           # Dashboard ringkasan & grafik
-│   ├── finance/             # Modul Keuangan (Finance)
-│   ├── layout/              # Sidebar, Header, UnitSwitcher
-│   ├── misc/                # FCMManager (push notif), AboutView
-│   ├── orders/               # CRUD & detail alur produksi per pesanan
-│   ├── po/                  # Modul PO Management (admin)
-│   ├── settings/            # Pengaturan user & permission
-│   └── ui/                  # Komponen UI umum (alert, modal, dsb)
-├── po/[slug]/                # Halaman publik katalog PO per event/slug
-├── po/reseller/portal/       # Portal reseller (order, riwayat)
-├── tracking/                  # Halaman publik lacak pesanan (tanpa login)
-├── debug/                     # Halaman debug internal
-├── layout.tsx, page.tsx       # Root layout & entry point aplikasi utama (SPA-like, satu page.tsx besar dengan dynamic import per modul)
-hooks/                        # Custom hooks: useAuth, useOrders, useDashboard, useNotifications, useUpload, useUsers, useUnitAccess, useUpdateCheck
-lib/                          # Supabase client, Firebase client, logika harga (pricing), logika status order, PO helpers
-scripts/                      # Script migrasi data satu-kali (dijalankan manual via ts-node atau API debug)
-types/                        # Definisi TypeScript: struktur Order, User, Permission, PO, dll
+.
+├── app/                              # Next.js App Router (halaman, komponen UI, API routes)
+│   ├── api/                          # API routes server-side (service role Supabase, dilindungi lib/apiAuth.ts)
+│   │   ├── backup/                   #   backup seluruh tabel ke JSON
+│   │   ├── cleanup-storage/          #   bersihkan file Storage yang tidak direferensikan order
+│   │   ├── cron/
+│   │   │   ├── check-overdue/        #   deteksi pesanan telat + kirim push notification
+│   │   │   └── wa-reminders/         #   pengingat WhatsApp harian (dijadwalkan di Coolify, pakai CRON_SECRET)
+│   │   ├── delete-user/              #   hapus user dari Supabase Auth (admin)
+│   │   ├── finance/                  #   API modul Keuangan
+│   │   │   ├── audit/ expense-meta/ export-log/ invoice-settings/ meta/ order-lookup/
+│   │   │   ├── expenses/[id]/        #     pengeluaran + aksi decide / proof / void
+│   │   │   ├── invoices/             #     tagihan
+│   │   │   ├── orders/[orderId]/     #     data keuangan per order (+ purge)
+│   │   │   ├── overview/ report/ todo/ vendors/
+│   │   │   ├── payments/[id]/        #     pembayaran + aksi proof / verify / void
+│   │   │   └── salary/               #     posting / unposting gaji → pengeluaran (post, unpost)
+│   │   ├── health/                   #   healthcheck ringan untuk Coolify (tanpa akses DB)
+│   │   ├── po/orders/                #   hapus pesanan PO (service role)
+│   │   ├── send-notification/        #   kirim push notification via Firebase Admin
+│   │   ├── tracking/                 #   API publik untuk halaman /tracking (hanya kolom aman, exact match)
+│   │   ├── version/                  #   info versi aplikasi (untuk UpdateBanner)
+│   │   └── wa/                       #   integrasi WhatsApp
+│   │       ├── gateway/              #     proxy ke service wa-gateway (status, QR, grup)
+│   │       ├── notify/               #     masukkan notifikasi order ke antrian wa_outbox
+│   │       └── settings/             #     saklar & pengaturan WhatsApp Bot
+│   ├── components/                   # Komponen UI, dikelompokkan per modul
+│   │   ├── apps/                     #   Kalkulator, Kalender, Config Harga, Nota, Gaji (SalaryView,
+│   │   │                             #   FixedSalaryView, SalaryPrintSlip), Catatan Rapat, Log Aktivitas
+│   │   ├── auth/                     #   layar login
+│   │   ├── dashboard/                #   dashboard ringkasan, grafik, daftar aksi, banner update, share tiket
+│   │   ├── finance/                  #   modul Keuangan (modal pembayaran/pengeluaran, invoice, panel per order)
+│   │   │   └── tabs/                 #     tab: Overview, Payments, Expenses, Invoices, Report, Audit, Settings, Guide
+│   │   ├── layout/                   #   Sidebar, Header, UnitSwitcher
+│   │   ├── misc/                     #   FCMManager (push notif), AboutView, TestNotifButton
+│   │   ├── orders/                   #   Buat/Edit pesanan, daftar, pesanan selesai, sampah, form approval,
+│   │   │   │                         #   input ukuran & gesut
+│   │   │   └── detail/               #   bagian detail pesanan: header, ukuran, gesut, step approval/produksi/
+│   │   │                             #   finishing, catatan produksi, label pengiriman
+│   │   ├── po/                       #   PO Management (admin): produk, reseller, rekap, packing, shipping, slip/struk A6
+│   │   ├── settings/                 #   Pengaturan: user, permission, WhatsApp
+│   │   │   └── tabs/                 #     tab: Users, Jenis Produksi, Gaji Gesut, Notifikasi, Pengumuman, Backup
+│   │   └── ui/                       #   komponen umum: CustomAlert, DialogProvider, ProfileModal, AnnouncementBanner
+│   ├── approval/[id]/                # Form Approval otomatis per order (wajib login)
+│   ├── debug/                        # halaman debug internal (cek sesi & data user)
+│   ├── po/                           # Halaman publik Pre-Order
+│   │   ├── [slug]/                   #   katalog PO per event/slug
+│   │   │   ├── daftar-reseller/      #     pendaftaran reseller baru (+ syarat & ketentuan)
+│   │   │   └── reseller/
+│   │   │       └── portal/           #     portal reseller: matrix produk, keranjang, riwayat, edit pesanan
+│   │   └── order/                    #   form order publik
+│   ├── po-management/[id]/           # halaman admin PO per campaign (memuat POManagementView)
+│   ├── tracking/                     # halaman publik lacak pesanan (tanpa login) + timeline
+│   ├── tv/                           # tampilan TV antrian produksi (/tv, atur lewat query ?per=&interval=&refresh=)
+│   ├── globals.css, favicon.ico
+│   ├── layout.tsx                    # root layout
+│   └── page.tsx                      # entry point aplikasi internal (SPA-like, dynamic import per modul)
+│
+├── hooks/                            # Custom hooks (state & logika data per fitur)
+│   ├── useAuth, useUsers, useUnitAccess            # sesi, user, akses antar unit
+│   ├── useOrders, useOrderDetail, useUpload        # CRUD pesanan, detail, upload file
+│   ├── useDashboard, useNotifications, useTVQueue  # dashboard, notifikasi, antrian TV
+│   ├── useFinanceApi, useExpenseMeta, useInvoiceSettings   # modul Keuangan
+│   └── usePagedList, usePOTabIdentity, useUpdateCheck      # daftar bertahap, judul tab PO, cek versi baru
+│
+├── lib/                              # Logika bersama (non-UI)
+│   ├── finance/                      #   harga, pembayaran, pengeluaran, invoice, gaji (client & guard), helper API server
+│   ├── po/                           #   helper PO: generator, harga, validasi order, optimasi gambar, arsip ZIP, pesan WA
+│   ├── supabase/client.ts            #   browser client berbasis @supabase/ssr (cookie session)
+│   ├── supabaseClient.ts, supabaseAdmin.ts         # client biasa & service role (server only)
+│   ├── firebase.ts, firebaseAdmin.ts               # FCM client & admin
+│   ├── apiAuth.ts                    #   proteksi API route (requireUser, requireCronSecret)
+│   ├── orderLogic.ts, orderMerge.ts  #   logika status/notifikasi order & three-way merge antar user
+│   ├── notificationHelper.ts         #   kirim push ke user / role
+│   ├── waQueue.ts, waMessages.ts, waSettings.ts    # antrian & isi pesan WhatsApp (server only)
+│   ├── gesutSystem.ts, roles.ts, tvQueue.ts, utils.ts
+│   └── changelog.ts                  #   versi & riwayat perubahan aplikasi
+│
+├── types/                            # Definisi TypeScript
+│   ├── index.ts                      #   Order, User, Permission, role, jenis pakaian, dll
+│   └── po.ts                         #   tipe modul PO
+│
+├── supabase/
+│   └── migrations/                   # SQL migrasi (mis. 010_finance_salary_posting.sql: posting gaji → pengeluaran)
+│
+├── wa-gateway/                       # Service terpisah: WhatsApp Gateway (Baileys), punya Dockerfile & package.json sendiri
+│   └── src/index.ts                  #   worker antrian wa_outbox + HTTP kecil (/status, /qr.json, /groups, /send, /health)
+│
+├── scripts/                          # Script migrasi data satu-kali (dijalankan manual, lihat bagian 9)
+├── public/                           # Aset statis: logo, header nota/approval, ikon, firebase-messaging-sw.js
+│
+├── proxy.ts                          # pengganti middleware.ts (Next.js 16): refresh sesi Supabase
+├── Dockerfile, .dockerignore         # image produksi aplikasi utama (Node 20, output standalone)
+├── next.config.ts, tsconfig.json, tailwind.config.ts, postcss.config.mjs, eslint.config.mjs
+├── package.json, package-lock.json
+└── README.md, LICENSE, NOTICE
 ```
 
 ## 4. Fitur Utama
