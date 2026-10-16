@@ -4,6 +4,7 @@
 import { thumbPath } from './images';
 import { submitOrderViaApi } from './order-api';
 import { createClient } from '@/lib/supabase/client';
+import { isPoExpired } from './order-validation';
 import { POSetting, POProduct, POOrder, POResellerFull, POOrderItem, POOrderPayload } from '@/types/po';
 
 // ─────────────────────────────────────────────
@@ -25,7 +26,26 @@ export async function getPOSettingAdmin(poId?: string) {
 
   const { data, error } = await query.single();
   if (error) return null;
-  return data;
+  return autoCloseExpiredSetting(data);
+}
+
+/**
+ * Kalau PO masih berstatus aktif tapi periode_selesai sudah lewat, otomatis
+ * dinonaktifkan: status di database diubah jadi nonaktif dan objek yang
+ * dikembalikan ikut diperbarui, sehingga pengaturan & daftar PO langsung
+ * menampilkan "nonaktif" dan form pemesanan tertutup.
+ * (Penutupan di server juga dijalankan oleh /api/cron/close-expired-po.)
+ */
+async function autoCloseExpiredSetting<T extends POSetting>(setting: T): Promise<T> {
+  if (!setting?.is_active || !isPoExpired(setting)) return setting;
+  const supabase = createClient();
+  const { error } = await supabase
+    .from('po_setting')
+    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .eq('id', setting.id);
+  // Kalau gagal menyimpan (mis. bukan admin), tetap tampilkan sebagai nonaktif.
+  if (error) console.warn('Auto-nonaktif PO gagal disimpan:', error.message);
+  return { ...setting, is_active: false };
 }
 
 export async function getPOSettingBySlug(slug: string): Promise<POSetting | null> {
@@ -36,7 +56,7 @@ export async function getPOSettingBySlug(slug: string): Promise<POSetting | null
     .eq('url_slug', slug)
     .single();
   if (error) return null;
-  return data;
+  return data && isPoExpired(data) ? { ...data, is_active: false } : data;
 }
 
 export async function updatePOSetting(
@@ -504,7 +524,7 @@ export async function getAllPOSettings(): Promise<POSetting[]> {
     .from('po_setting')
     .select('*')
     .order('updated_at', { ascending: false });
-  return data || [];
+  return Promise.all((data || []).map((po: POSetting) => autoCloseExpiredSetting(po)));
 }
 
 export async function createPOSetting(

@@ -45,6 +45,19 @@ function formatTanggal(iso: string): string {
 }
 
 /**
+ * True kalau periode PO sudah lewat (hari ini WIB > tanggal selesai).
+ * PO dianggap berakhir mulai hari SETELAH tanggal selesai, jadi pada
+ * tanggal selesai itu sendiri pemesanan masih dibuka.
+ */
+export function isPoExpired(
+  setting: Pick<POSetting, 'periode_selesai'>,
+  now: Date = new Date(),
+): boolean {
+  const selesai = setting.periode_selesai?.slice(0, 10);
+  return !!selesai && todayWIB(now) > selesai;
+}
+
+/**
  * Cek apakah PO sedang menerima pesanan.
  * @returns pesan error kalau ditutup, atau null kalau boleh memesan.
  */

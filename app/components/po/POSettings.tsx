@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { getPOSettingAdmin, updatePOSetting } from "@/lib/po/admin";
 import { formatRupiah } from "@/lib/po/pricing";
 import { POSetting } from "@/types/po";
+import { isPoExpired } from "@/lib/po/order-validation";
 import { createClient } from "@/lib/supabase/client";
 import {
   ToggleLeft,
@@ -143,12 +144,28 @@ export default function POSettings({ poId }: POSettingsProps) {
     load();
   }, [poId]);
 
+  // Periode sudah lewat → PO tidak boleh aktif (otomatis nonaktif & tertutup).
+  const expired = isPoExpired({
+    periode_selesai: form.periode_selesai || undefined,
+  });
+
+  // Kalau tanggal selesai diubah ke tanggal yang sudah lewat, status ikut nonaktif.
+  function handleSelesaiChange(value: string) {
+    const lewat = isPoExpired({ periode_selesai: value || undefined });
+    setForm((f) => ({
+      ...f,
+      periode_selesai: value,
+      is_active: lewat ? false : f.is_active,
+    }));
+  }
+
   async function handleSave() {
     if (!setting) return;
     setSaving(true);
 
     const result = await updatePOSetting(setting.id, {
       ...form,
+      is_active: expired ? false : form.is_active,
       periode_mulai: form.periode_mulai || undefined,
       periode_selesai: form.periode_selesai || undefined,
       wa_admin_phone: form.wa_admin_phone || undefined,
@@ -165,7 +182,12 @@ export default function POSettings({ poId }: POSettingsProps) {
 
     setSaving(false);
     if (result.success) {
-      notify("Pengaturan berhasil disimpan.");
+      if (expired && form.is_active) setForm((f) => ({ ...f, is_active: false }));
+      notify(
+        expired
+          ? "Pengaturan disimpan. Periode PO sudah berakhir, jadi status otomatis nonaktif."
+          : "Pengaturan berhasil disimpan.",
+      );
     } else {
       notify("Gagal: " + result.error);
     }
@@ -446,12 +468,22 @@ export default function POSettings({ poId }: POSettingsProps) {
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
               {form.is_active
                 ? "PO sedang aktif — publik bisa memesan"
-                : "PO nonaktif — form pemesanan ditutup"}
+                : expired
+                  ? "PO nonaktif otomatis — periode sudah berakhir, form pemesanan ditutup"
+                  : "PO nonaktif — form pemesanan ditutup"}
             </p>
           </div>
         </div>
         <button
-          onClick={() => setForm({ ...form, is_active: !form.is_active })}
+          onClick={() => {
+            if (expired && !form.is_active) {
+              notify(
+                "Periode PO sudah berakhir. Ubah Tanggal Selesai ke hari ini atau setelahnya untuk mengaktifkan kembali.",
+              );
+              return;
+            }
+            setForm({ ...form, is_active: !form.is_active });
+          }}
           className="shrink-0 transition-colors duration-150"
           aria-label="Toggle status PO"
         >
@@ -660,9 +692,7 @@ export default function POSettings({ poId }: POSettingsProps) {
           <input
             type="date"
             value={form.periode_selesai}
-            onChange={(e) =>
-              setForm({ ...form, periode_selesai: e.target.value })
-            }
+            onChange={(e) => handleSelesaiChange(e.target.value)}
             className={INPUT}
           />
         </Field>

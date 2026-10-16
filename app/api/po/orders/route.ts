@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import {
   buildFallbackPoNumber,
   checkPoOpen,
+  isPoExpired,
   priceOrderItems,
   validateCustomer,
 } from '@/lib/po/order-validation';
@@ -22,6 +23,15 @@ async function loadPoContext(admin: Admin, poSettingId: string) {
     .eq('id', poSettingId)
     .maybeSingle();
   if (!setting) return { error: fail('PO tidak ditemukan.', 404) } as const;
+
+  // Periode sudah lewat → nonaktifkan PO di database sekalian.
+  if (setting.is_active && isPoExpired(setting as POSetting)) {
+    await admin
+      .from('po_setting')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('id', poSettingId);
+    setting.is_active = false;
+  }
 
   const closed = checkPoOpen(setting as POSetting);
   if (closed) return { error: fail(closed, 403) } as const;

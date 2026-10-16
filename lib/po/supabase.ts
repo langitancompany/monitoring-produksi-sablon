@@ -3,6 +3,7 @@
 
 import { createClient } from '@/lib/supabase/client';
 import { POSetting, POProduct, POOrderPayload, POResellerOrderUpdatePayload } from '@/types/po';
+import { isPoExpired } from './order-validation';
 import { submitOrderViaApi, updateOrderViaApi } from './order-api';
 
 /**
@@ -27,7 +28,8 @@ export async function getPOSettingBySlug(slug: string): Promise<POSetting | null
     .eq('url_slug', slug)
     .single();
   if (error) return null;
-  return data;
+  // Periode sudah lewat → tampilkan tertutup (database disinkronkan server/admin).
+  return data && isPoExpired(data) ? { ...data, is_active: false } : data;
 }
 
 /**

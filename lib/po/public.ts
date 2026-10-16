@@ -2,6 +2,7 @@
 // Fungsi Supabase yang dipanggil dari halaman PUBLIK (tanpa login admin)
 
 import { createClient } from '@/lib/supabase/client';
+import { isPoExpired } from './order-validation';
 
 export interface ResellerRegistrationPayload {
   nama: string;        // nama lengkap
@@ -51,5 +52,5 @@ export async function getPOSettingPublic(slug: string) {
     .single();
 
   if (error) return null;
-  return data;
+  return data && isPoExpired(data) ? { ...data, is_active: false } : data;
 }

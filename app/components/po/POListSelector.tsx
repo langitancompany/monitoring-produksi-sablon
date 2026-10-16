@@ -4,6 +4,7 @@ import { useDialog } from "@/app/components/ui/DialogProvider";
 import { useEffect, useState } from "react";
 import { getAllPOSettings, createPOSetting } from "@/lib/po/admin";
 import { POSetting } from "@/types/po";
+import { isPoExpired } from "@/lib/po/order-validation";
 import { Plus, ShoppingBag, CalendarDays, X, Loader2 } from "lucide-react";
 
 interface POListSelectorProps {
@@ -116,7 +117,11 @@ export default function POListSelector({ onSelect }: POListSelectorProps) {
                       : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
                   }`}
                 >
-                  {po.is_active ? "Aktif" : "Tidak Aktif"}
+                  {po.is_active
+                    ? "Aktif"
+                    : isPoExpired(po)
+                      ? "Berakhir"
+                      : "Tidak Aktif"}
                 </span>
               </div>
               <p className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm mb-1">
