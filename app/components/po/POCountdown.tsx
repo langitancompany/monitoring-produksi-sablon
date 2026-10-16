@@ -30,11 +30,6 @@ function targetMs(endDate?: string | null): number | null {
   return Number.isNaN(t) ? null : t;
 }
 
-function formatTanggal(endDate: string): string {
-  const [y, m, d] = endDate.slice(0, 10).split("-");
-  return `${d}/${m}/${y}`;
-}
-
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /**
@@ -86,29 +81,46 @@ function RollDigit({ value }: { value: string }) {
   );
 }
 
-function Group({ value, label }: { value: number; label: string }) {
+// Jarak antar kolom. Lebar kotak titik dua harus sama dengan jarak ini
+// supaya titik dua tepat di tengah celah.
+const GAP = "gap-x-6 sm:gap-x-10 md:gap-x-14";
+const COLON_W = "w-6 sm:w-10 md:w-14";
+
+/**
+ * Satu kolom: angka di atas, label di bawah, keduanya satu kolom grid sehingga
+ * label selalu persis di tengah angkanya. Titik dua TIDAK memakai lebar kolom;
+ * ia ditempel di tepi kanan angka (absolute) dan berada di tengah celah.
+ */
+function Unit({
+  value,
+  label,
+  colon,
+}: {
+  value: number;
+  label: string;
+  colon?: boolean;
+}) {
   const text = pad(value);
   return (
     <div className="flex flex-col items-center">
-      <div className="flex text-5xl sm:text-7xl md:text-8xl font-medium leading-none tracking-tight">
+      <div className="relative flex text-4xl sm:text-6xl md:text-7xl font-medium leading-none tracking-tight tabular-nums">
         {text.split("").map((ch, i) => (
           // key dari posisi dari kanan supaya digit satuan/puluhan tetap stabil
           <RollDigit key={text.length - i} value={ch} />
         ))}
+        {colon && (
+          <span
+            aria-hidden
+            className={`absolute top-0 bottom-0 left-full ${COLON_W} flex flex-col items-center justify-center gap-[0.2em] -translate-y-[0.04em] opacity-60`}
+          >
+            <span className="block w-[0.09em] h-[0.09em] rounded-full bg-current" />
+            <span className="block w-[0.09em] h-[0.09em] rounded-full bg-current" />
+          </span>
+        )}
       </div>
-      <span className="mt-3 text-xs sm:text-sm font-normal text-white/55">
+      <span className="mt-3 text-xs sm:text-sm font-medium text-white/55">
         {label}
       </span>
-    </div>
-  );
-}
-
-function Colon() {
-  return (
-    // Titik dua sejajar dengan angka (label di bawah tidak ikut menggeser)
-    <div className="flex flex-col justify-center gap-2 sm:gap-3 h-[48px] sm:h-[72px] md:h-[96px] px-2 sm:px-4 md:px-5 shrink-0">
-      <span className="block w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-white/80" />
-      <span className="block w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-white/80" />
     </div>
   );
 }
@@ -145,7 +157,7 @@ export default function POCountdown({
   const minutes = Math.floor((totalSec % 3600) / 60);
   const seconds = totalSec % 60;
 
-  // Kurang dari 24 jam → judul berubah jadi "segera berakhir"
+  // Kurang dari 24 jam → label berubah jadi "Hari terakhir" (warna tetap putih)
   const urgent = remaining < 24 * 3600 * 1000;
 
   if (variant === "compact") {
@@ -163,30 +175,24 @@ export default function POCountdown({
   return (
     <div
       role="timer"
-      aria-label="Waktu tersisa sampai PO berakhir"
-      className="flex flex-col items-center gap-8"
+      aria-label="Waktu tersisa sampai pemesanan ditutup"
+      className="flex flex-col items-center gap-6 text-white"
     >
-      <p
-        className={`text-xl sm:text-3xl font-light tracking-tight ${
-          urgent ? "text-amber-300" : "text-white"
-        }`}
-      >
-        {urgent ? "Segera berakhir, PO ditutup dalam" : "PO ditutup dalam"}
+      <p className="inline-flex items-center gap-2 text-sm sm:text-base font-semibold text-white/75">
+        {urgent && (
+          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+        )}
+        {urgent
+          ? "Hari terakhir, pemesanan ditutup dalam"
+          : "Pemesanan ditutup dalam"}
       </p>
 
-      <div className="flex items-start justify-center">
-        <Group value={days} label="Hari" />
-        <Colon />
-        <Group value={hours} label="Jam" />
-        <Colon />
-        <Group value={minutes} label="Menit" />
-        <Colon />
-        <Group value={seconds} label="Detik" />
+      <div className={`grid grid-cols-[repeat(4,auto)] ${GAP}`}>
+        <Unit value={days} label="Hari" colon />
+        <Unit value={hours} label="Jam" colon />
+        <Unit value={minutes} label="Menit" colon />
+        <Unit value={seconds} label="Detik" />
       </div>
-
-      <p className="text-xs text-white/45">
-        Berakhir {formatTanggal(endDate as string)} pukul 23:59 WIB
-      </p>
     </div>
   );
 }

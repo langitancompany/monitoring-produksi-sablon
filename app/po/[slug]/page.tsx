@@ -21,9 +21,6 @@ import {
   ArrowRight,
   LayoutGrid,
   Pencil,
-  CheckCircle2,
-  XCircle,
-  Clock,
   Shirt,
   Camera,
   Eye,
@@ -63,6 +60,30 @@ const HEADER_H = 60;
 
 // Seberapa "tertinggal" teks hero saat scroll (0 = ikut scroll normal, 0.5 = bergeser separuh kecepatan)
 const HERO_TEXT_LAG = 0.2;
+
+// "2026-10-01" → "1 Okt 2026"; tahun hanya ditulis sekali bila sama
+function formatPeriode(mulai?: string, selesai?: string): string {
+  const parse = (s?: string) => {
+    const m = s?.slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null;
+  };
+  const fmt = (d: Date, withYear: boolean) =>
+    d.toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "short",
+      ...(withYear ? { year: "numeric" } : {}),
+      timeZone: "UTC",
+    });
+  const a = parse(mulai);
+  const b = parse(selesai);
+  if (a && b) {
+    const sameYear = a.getUTCFullYear() === b.getUTCFullYear();
+    return `${fmt(a, !sameYear)} – ${fmt(b, true)}`;
+  }
+  if (b) return `Sampai ${fmt(b, true)}`;
+  if (a) return `Mulai ${fmt(a, true)}`;
+  return "";
+}
 
 function loadCart(): CartItemSession[] {
   if (typeof window === "undefined") return [];
@@ -180,7 +201,10 @@ export default function CatalogPage() {
   useEffect(() => {
     document.title = `${brandName} | Langitan.co`;
   }, [brandName]);
-  const periode = `${setting?.periode_mulai || "-"} — ${setting?.periode_selesai || "-"}`;
+  const periode = formatPeriode(
+    setting?.periode_mulai,
+    setting?.periode_selesai,
+  );
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
 
   // Data footer: identitas toko + link WhatsApp admin (08xx → 628xx)
@@ -326,7 +350,7 @@ export default function CatalogPage() {
 
   return (
     <div className="min-h-screen bg-stone-100 text-zinc-950 font-sans selection:bg-zinc-200">
-      {/* ── HEADER ── (transparan di atas hero, jadi putih setelah hero terlewati) */}
+      {/* ── HEADER ── (transparan di atas hero, putih setelah hero terlewati) */}
       <header
         className={`fixed top-0 inset-x-0 z-40 px-5 md:px-10 lg:px-16 h-[60px] flex items-center justify-between border-b transition-[background-color,border-color,backdrop-filter] duration-300 ${
           headerSolid
@@ -334,11 +358,7 @@ export default function CatalogPage() {
             : "bg-transparent border-transparent"
         }`}
       >
-        <div
-          className={`text-base font-extrabold tracking-tight flex items-center gap-2 transition-colors duration-300 ${
-            headerSolid ? "text-zinc-950" : "text-white"
-          }`}
-        >
+        <div className="flex items-center gap-2 text-base font-extrabold tracking-tight text-zinc-950">
           {setting?.icon_image_url ? (
             <img
               src={setting.icon_image_url}
@@ -346,22 +366,24 @@ export default function CatalogPage() {
               className="w-7 h-7 rounded-md object-cover"
             />
           ) : (
-            <Package size={18} />
+            <Package
+              size={18}
+              className={headerSolid ? "text-zinc-950" : "text-white"}
+            />
           )}
-          <span>{brandName}</span>
-        </div>
-        <div className="flex items-center gap-2.5">
+          {/* Nama PO sudah jadi judul hero, jadi di header baru muncul setelah hero lewat */}
           <span
-            className={`hidden md:flex items-center gap-1.5 text-xs transition-colors duration-300 ${
-              headerSolid ? "text-gray-400" : "text-white/55"
+            className={`transition-opacity duration-300 ${
+              headerSolid ? "opacity-100" : "opacity-0"
             }`}
           >
-            <CalendarDays size={14} />
-            {periode}
+            {brandName}
           </span>
+        </div>
+        <div className="flex items-center gap-2.5">
           <Link
             href={`/po/${slug}/reseller`}
-            className={`flex items-center gap-1.5 bg-transparent border px-3 sm:px-4 py-2 rounded-full text-xs font-bold transition-all ${
+            className={`flex items-center gap-1.5 border px-3 sm:px-4 py-2 rounded-full text-xs font-bold transition-all ${
               headerSolid
                 ? "text-zinc-950 border-gray-300 hover:bg-stone-100 hover:border-zinc-950"
                 : "text-white border-white/30 hover:bg-white/10 hover:border-white/60"
@@ -372,11 +394,10 @@ export default function CatalogPage() {
             <span className="hidden sm:inline">Reseller</span>
           </Link>
 
-          {/* Tombol Keranjang */}
           {isActive && (
             <Link
               href={withSlug("/po/order")}
-              className={`relative flex items-center gap-1.5 bg-transparent border px-4 py-2 rounded-full text-xs font-bold transition-all ${
+              className={`relative flex items-center gap-1.5 border px-3 sm:px-4 py-2 rounded-full text-xs font-bold transition-all ${
                 headerSolid
                   ? "text-zinc-950 border-gray-300 hover:bg-stone-100 hover:border-zinc-950"
                   : "text-white border-white/30 hover:bg-white/10 hover:border-white/60"
@@ -397,37 +418,6 @@ export default function CatalogPage() {
               )}
             </Link>
           )}
-
-          {isActive ? (
-            <Link
-              href={withSlug("/po/order")}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold hover:opacity-80 transition-all ${
-                headerSolid
-                  ? "bg-zinc-950 text-white"
-                  : "bg-white text-zinc-950"
-              }`}
-            >
-              <ArrowRight size={14} />
-              <span className="hidden sm:inline">
-                {cartCount > 0
-                  ? `Pesan Sekarang (${cartCount})`
-                  : "Pesan Sekarang"}
-              </span>
-              <span className="sm:hidden">Pesan</span>
-            </Link>
-          ) : (
-            <button
-              disabled
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold cursor-not-allowed transition-colors ${
-                headerSolid
-                  ? "bg-zinc-300 text-zinc-500"
-                  : "bg-white/15 text-zinc-400"
-              }`}
-            >
-              <ArrowRight size={14} />
-              PO Ditutup
-            </button>
-          )}
         </div>
       </header>
 
@@ -436,13 +426,6 @@ export default function CatalogPage() {
         ref={heroRef}
         className="bg-zinc-950 text-white px-5 md:px-10 lg:px-16 pt-[60px] pb-16 min-h-[100svh] flex items-center relative overflow-hidden"
       >
-        <div
-          className="absolute inset-0 pointer-events-none opacity-80"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 72% 30%, #1f2937 0%, transparent 52%), radial-gradient(circle at 20% 80%, #111827 0%, transparent 45%)",
-          }}
-        />
         <PixelTrail water={false} ambientAlpha={0.2} />
 
         {/* Teks tengah: satu blok yang bergeser lebih lambat dari scroll (parallax) */}
@@ -451,29 +434,23 @@ export default function CatalogPage() {
             ref={stageRef}
             className="max-w-2xl mx-auto text-center will-change-transform"
           >
-            <div className="mb-5">
-              <div className="inline-flex items-center justify-center gap-2 text-[11px] font-bold tracking-widest uppercase text-white/55">
-                <div
-                  className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-green-400" : "bg-red-400"}`}
-                />
-                <span>{isActive ? "Pre-Order Aktif" : "PO Ditutup"}</span>
-              </div>
+            <div className="inline-flex items-center justify-center gap-2 mb-5 text-[11px] font-bold tracking-widest uppercase text-white/55">
+              <div
+                className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-green-400" : "bg-red-400"}`}
+              />
+              <span>{isActive ? "Pre-Order dibuka" : "Pre-Order ditutup"}</span>
             </div>
 
-            <div className="mb-5">
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-[1.08] tracking-tight">
-                Temukan produk{" "}
-                <em className="not-italic text-zinc-500">favorit</em> kamu di
-                sini
-              </h1>
-            </div>
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-[1.08] tracking-tight text-balance">
+              {loading ? " " : brandName}
+            </h1>
 
-            <div className="mb-7">
-              <p className="text-sm md:text-base text-white/60 max-w-md mx-auto leading-relaxed">
-                Periode PO: {periode}. Pilih produk, tambahkan ke keranjang,
-                lalu lanjut ke form pemesanan.
+            {periode && (
+              <p className="mt-5 mb-9 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-sm font-semibold text-white/85">
+                <CalendarDays size={15} />
+                {periode}
               </p>
-            </div>
+            )}
 
             {isActive && setting?.periode_selesai && (
               <div className="mb-9">
@@ -484,30 +461,17 @@ export default function CatalogPage() {
               </div>
             )}
 
-            <div>
-              <div className="flex flex-wrap justify-center gap-3">
-                <button
-                  onClick={() =>
-                    document
-                      .getElementById("sec-catalog")
-                      ?.scrollIntoView({ behavior: "smooth" })
-                  }
-                  className="inline-flex items-center gap-2 bg-white text-zinc-950 px-6 py-3 rounded-full font-extrabold text-sm hover:opacity-90 hover:-translate-y-px transition-all"
-                >
-                  <LayoutGrid size={16} />
-                  Lihat Katalog
-                </button>
-                {isActive && cartCount > 0 && (
-                  <Link
-                    href={withSlug("/po/order")}
-                    className="inline-flex items-center gap-2 bg-transparent border border-white/25 text-white/85 px-6 py-3 rounded-full font-bold text-sm hover:border-white/55 hover:text-white transition-all"
-                  >
-                    <ShoppingCart size={16} />
-                    Lihat Keranjang ({cartCount} item)
-                  </Link>
-                )}
-              </div>
-            </div>
+            <button
+              onClick={() =>
+                document
+                  .getElementById("sec-catalog")
+                  ?.scrollIntoView({ behavior: "smooth" })
+              }
+              className="inline-flex items-center gap-2.5 bg-white text-zinc-950 px-8 py-4 rounded-full font-extrabold text-base hover:opacity-90 hover:-translate-y-px transition-all"
+            >
+              <LayoutGrid size={18} />
+              Lihat Katalog
+            </button>
           </div>
         </div>
       </section>
@@ -517,19 +481,9 @@ export default function CatalogPage() {
         id="sec-catalog"
         className="max-w-7xl mx-auto px-5 md:px-10 lg:px-16 py-12 md:py-16 scroll-mt-10"
       >
-        <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
-          <div>
-            <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">
-              Katalog Produk
-            </h2>
-            <p className="text-sm text-gray-400 mt-1">
-              Klik produk untuk melihat detail dan menambahkannya ke keranjang.
-            </p>
-          </div>
-          <span className="text-xs font-bold text-gray-400 bg-gray-200/50 px-3 py-1 rounded-full">
-            {filteredProducts.length} produk
-          </span>
-        </div>
+        <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight mb-6">
+          Katalog Produk
+        </h2>
 
         {/* Tab Pemisah Kategori: Dewasa / Kids */}
         <div className="flex items-center gap-2 mb-8 bg-white border border-gray-200 rounded-full p-1.5 w-fit">
@@ -574,38 +528,6 @@ export default function CatalogPage() {
             </span>
           </button>
         </div>
-
-        {/* Status Banner */}
-        {!loading && (
-          <div className="mb-8">
-            {isActive ? (
-              <div className="flex items-start gap-2.5 p-3.5 md:px-5 md:py-3.5 bg-green-50 text-green-700 border border-green-200 rounded-xl text-sm font-semibold wrap-break-words">
-                <CheckCircle2 size={18} className="shrink-0 mt-0.5" />
-                <span>
-                  PO sedang <strong className="font-extrabold">AKTIF</strong> —
-                  Klik produk untuk memilih dan tambahkan ke keranjang.
-                  {setting?.periode_selesai && (
-                    <span className="block mt-1 text-green-800">
-                      <POCountdown
-                        endDate={setting.periode_selesai}
-                        variant="compact"
-                        onExpire={handlePoExpired}
-                      />
-                    </span>
-                  )}
-                </span>
-              </div>
-            ) : (
-              <div className="flex items-start gap-2.5 p-3.5 md:px-5 md:py-3.5 bg-red-50 text-red-700 border border-red-200 rounded-xl text-sm font-semibold wrap-break-words">
-                <XCircle size={18} className="shrink-0 mt-0.5" />
-                <span>
-                  PO sedang <strong className="font-extrabold">TUTUP</strong> —
-                  Pemesanan tidak tersedia saat ini.
-                </span>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Grid produk */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5">
