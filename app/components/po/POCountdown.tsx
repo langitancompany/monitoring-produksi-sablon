@@ -8,10 +8,10 @@
 // adalah pukul 23:59:59 WIB pada periode_selesai.
 //
 // Tampilan: angka besar polos dengan pemisah titik dua dan label kecil di
-// bawahnya. Saat angka berganti, angka lama naik lalu memudar sementara
-// angka baru naik dari bawah (keyframes po-cd-out / po-cd-in di globals.css).
+// bawahnya. Saat angka berganti, angka lama turun sambil mengabur sementara
+// angka baru turun dari atas (keyframes po-cd-in / po-cd-out di globals.css).
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
 
 type Props = {
@@ -37,33 +37,49 @@ function formatTanggal(endDate: string): string {
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
-/** Satu digit yang bergulir: yang lama naik & memudar, yang baru naik dari bawah. */
+/**
+ * Satu digit yang bergulir ke bawah: angka lama turun sambil mengabur lalu
+ * hilang, angka baru turun dari atas dengan gerakan yang sama. Isi dipotong
+ * di dalam kotak digit (overflow-hidden). Padding vertikal + margin negatif
+ * dipakai supaya ukuran/tata letak digit tetap sama seperti sebelumnya.
+ */
 function RollDigit({ value }: { value: string }) {
-  const last = useRef(value);
-  const [prev, setPrev] = useState<string | null>(null);
+  const [state, setState] = useState<{
+    cur: string;
+    prev: string | null;
+    tick: number;
+  }>({ cur: value, prev: null, tick: 0 });
+
+  // Diturunkan saat render supaya angka baru langsung beranimasi di frame
+  // yang sama, tanpa sempat tampil diam dulu.
+  if (value !== state.cur) {
+    setState({ cur: value, prev: state.cur, tick: state.tick + 1 });
+  }
 
   useEffect(() => {
-    if (value === last.current) return;
-    setPrev(last.current);
-    last.current = value;
-    const t = setTimeout(() => setPrev(null), 600);
+    if (state.prev === null) return;
+    const t = setTimeout(
+      () => setState((s) => (s.prev === null ? s : { ...s, prev: null })),
+      400,
+    );
     return () => clearTimeout(t);
-  }, [value]);
+  }, [state.tick, state.prev]);
 
   return (
-    <span className="relative inline-block tabular-nums">
+    <span className="relative inline-block overflow-hidden tabular-nums py-[0.1em] -my-[0.1em]">
       <span
-        key={value}
-        className={`inline-block ${prev !== null ? "po-cd-in" : ""}`}
+        key={`in-${state.tick}`}
+        className={`inline-block ${state.tick > 0 ? "po-cd-in" : ""}`}
       >
-        {value}
+        {state.cur}
       </span>
-      {prev !== null && (
+      {state.prev !== null && (
         <span
+          key={`out-${state.tick}`}
           aria-hidden
-          className="po-cd-out absolute inset-0 inline-block pointer-events-none"
+          className="po-cd-out absolute inset-x-0 top-[0.1em] inline-block pointer-events-none"
         >
-          {prev}
+          {state.prev}
         </span>
       )}
     </span>

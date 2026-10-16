@@ -59,15 +59,15 @@ button, .cursor-pointer {
    ============================================================ */
 /* ── Countdown PO: angka bergulir (komponen POCountdown) ── */
 @keyframes po-cd-in {
-  from { transform: translateY(55%); opacity: 0; }
-  to   { transform: translateY(0);   opacity: 1; }
+  from { transform: translateY(-100%); opacity: 0; filter: blur(6px); }
+  to   { transform: translateY(0);     opacity: 1; filter: blur(0); }
 }
 @keyframes po-cd-out {
-  from { transform: translateY(0);    opacity: 1; }
-  to   { transform: translateY(-55%); opacity: 0; }
+  from { transform: translateY(0);    opacity: 1; filter: blur(0); }
+  to   { transform: translateY(100%); opacity: 0; filter: blur(6px); }
 }
-.po-cd-in  { animation: po-cd-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
-.po-cd-out { animation: po-cd-out 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.po-cd-in  { animation: po-cd-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.po-cd-out { animation: po-cd-out 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
 @media (prefers-reduced-motion: reduce) {
   .po-cd-in, .po-cd-out { animation: none; }
