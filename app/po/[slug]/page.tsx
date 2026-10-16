@@ -446,7 +446,7 @@ export default function CatalogPage() {
             </h1>
 
             {periode && (
-              <p className="mt-5 mb-9 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-sm font-semibold text-white/85">
+              <p className="mt-5 mb-9 flex w-fit mx-auto items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-sm font-semibold text-white/85">
                 <CalendarDays size={15} />
                 {periode}
               </p>
