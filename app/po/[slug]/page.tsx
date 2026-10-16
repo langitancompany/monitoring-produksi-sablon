@@ -12,6 +12,7 @@ import { formatRupiah, calculateItemPrice } from "@/lib/po/pricing";
 import { thumbUrl, fallbackToOriginal } from "@/lib/po/images";
 import { getStoreInfo } from "@/lib/po/store-info";
 import PixelTrail from "@/app/components/po/PixelTrail";
+import POCountdown from "@/app/components/po/POCountdown";
 import { POSetting, POProduct } from "@/types/po";
 import {
   Package,
@@ -167,6 +168,10 @@ export default function CatalogPage() {
     if (!selectedProduct) return;
     preloadImages(selectedProduct.image_urls);
   }, [selectedProduct]);
+
+  // Saat hitung mundur habis, langsung tampilkan PO sebagai ditutup (tanpa refresh)
+  const handlePoExpired = () =>
+    setSetting((prev) => (prev ? { ...prev, is_active: false } : prev));
 
   const isActive = setting?.is_active ?? false;
   const brandName = setting?.title || "Katalog PO";
@@ -463,12 +468,21 @@ export default function CatalogPage() {
               </h1>
             </div>
 
-            <div className="mb-9">
+            <div className="mb-7">
               <p className="text-sm md:text-base text-white/60 max-w-md mx-auto leading-relaxed">
                 Periode PO: {periode}. Pilih produk, tambahkan ke keranjang,
                 lalu lanjut ke form pemesanan.
               </p>
             </div>
+
+            {isActive && setting?.periode_selesai && (
+              <div className="mb-9">
+                <POCountdown
+                  endDate={setting.periode_selesai}
+                  onExpire={handlePoExpired}
+                />
+              </div>
+            )}
 
             <div>
               <div className="flex flex-wrap justify-center gap-3">
@@ -570,6 +584,15 @@ export default function CatalogPage() {
                 <span>
                   PO sedang <strong className="font-extrabold">AKTIF</strong> —
                   Klik produk untuk memilih dan tambahkan ke keranjang.
+                  {setting?.periode_selesai && (
+                    <span className="block mt-1 text-green-800">
+                      <POCountdown
+                        endDate={setting.periode_selesai}
+                        variant="compact"
+                        onExpire={handlePoExpired}
+                      />
+                    </span>
+                  )}
                 </span>
               </div>
             ) : (

@@ -57,3 +57,19 @@ button, .cursor-pointer {
    / @media print / @page di sini — sengaja dihapus supaya tidak ada
    dua sumber CSS print yang bisa bentrok lagi seperti sebelumnya.
    ============================================================ */
+/* ── Countdown PO: angka bergulir (komponen POCountdown) ── */
+@keyframes po-cd-in {
+  from { transform: translateY(55%); opacity: 0; }
+  to   { transform: translateY(0);   opacity: 1; }
+}
+@keyframes po-cd-out {
+  from { transform: translateY(0);    opacity: 1; }
+  to   { transform: translateY(-55%); opacity: 0; }
+}
+.po-cd-in  { animation: po-cd-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.po-cd-out { animation: po-cd-out 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .po-cd-in, .po-cd-out { animation: none; }
+  .po-cd-out { display: none; }
+}
