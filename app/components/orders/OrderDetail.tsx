@@ -108,8 +108,11 @@ export default function OrderDetail({
     isSupervisor ||
     (perms?.finishing?.edit &&
       (currentStatus === "Kirim" || currentStatus === "Selesai"));
-  const canEditOrderInfo = isSupervisor || perms?.orders?.edit;
-  const canDeleteOrder = isSupervisor || perms?.orders?.delete;
+  // ── TAMBAHAN ── pesanan merchandise diatur lewat permission `merchandise`,
+  // pesanan kaos/sablon tetap lewat `orders`.
+  const orderPerms = isMerchandise ? perms?.merchandise : perms?.orders;
+  const canEditOrderInfo = isSupervisor || orderPerms?.edit;
+  const canDeleteOrder = isSupervisor || orderPerms?.delete;
   const canUploadApproval = isSupervisor || perms?.produksi?.create;
   const canDeleteApprovalFile = isSupervisor || perms?.produksi?.delete;
   const canResetQC = isSupervisor || perms?.finishing?.create;

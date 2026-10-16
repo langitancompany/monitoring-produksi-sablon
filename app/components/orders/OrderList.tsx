@@ -36,6 +36,8 @@ interface OrderListProps {
   newOrderLabel?: string;
   /** false = sembunyikan filter "Semua Jenis" (tidak relevan untuk merchandise). */
   showTypeFilter?: boolean;
+  /** Permission yang menentukan tombol Buat/Hapus. Default "orders"; daftar merchandise memakai "merchandise". */
+  permissionKey?: "orders" | "merchandise";
 }
 
 // Teks jenis pada kartu: merchandise menampilkan produknya (mis. "Lanyard · Dengan Stopper").
@@ -581,15 +583,15 @@ export default function OrderList({
   title = "Daftar Pesanan",
   newOrderLabel = "Pesanan baru",
   showTypeFilter = true,
+  permissionKey = "orders",
 }: OrderListProps) {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [monthFilter, setMonthFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
 
-  const canDeleteOrder =
-    role === "supervisor" || currentUser?.permissions?.orders?.delete === true;
-  const canCreateOrder =
-    role === "supervisor" || currentUser?.permissions?.orders?.create === true;
+  const listPerms = currentUser?.permissions?.[permissionKey];
+  const canDeleteOrder = role === "supervisor" || listPerms?.delete === true;
+  const canCreateOrder = role === "supervisor" || listPerms?.create === true;
   const isManagement = ["admin", "manager", "supervisor"].includes(role);
 
   const filteredOrders = orders.filter((o) => {

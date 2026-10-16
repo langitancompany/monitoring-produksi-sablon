@@ -182,7 +182,7 @@ Struktur di bawah mengikuti isi repositori saat ini (`node_modules/`, `.next/`, 
 
 Role user: `admin`, `produksi`, `qc`, `manager`, `supervisor`.
 
-Setiap user punya objek `permissions` granular per modul (lihat `types/index.ts`), contoh modul: `dashboard`, `orders`, `produksi`, `finishing`, `salary`, `logs`, `weekly_notes`, `settings`, `kalkulator`, `config_harga`, `trash`, `nota`, `keuangan`, `po_management`, dan `harga_pesanan` (kontrol khusus untuk boleh-tidaknya user tertentu melihat/mengisi harga jual di dalam detail order, terpisah dari hak edit order itu sendiri).
+Setiap user punya objek `permissions` granular per modul (lihat `types/index.ts`), contoh modul: `dashboard`, `orders`, `merchandise`, `produksi`, `finishing`, `salary`, `logs`, `weekly_notes`, `settings`, `kalkulator`, `config_harga`, `trash`, `nota`, `keuangan`, `po_management`, dan `harga_pesanan` (kontrol khusus untuk boleh-tidaknya user tertentu melihat/mengisi harga jual di dalam detail order, terpisah dari hak edit order itu sendiri).
 
 Catatan desain penting (dari komentar kode):
 

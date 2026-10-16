@@ -69,7 +69,7 @@ export default function Sidebar({
           id: "merchandise",
           label: "Merchandise",
           icon: Gift,
-          visible: p?.orders?.view,
+          visible: p?.merchandise?.view,
         },
         {
           id: "calendar",

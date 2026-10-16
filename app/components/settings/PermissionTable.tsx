@@ -39,6 +39,17 @@ const MODULES: ModuleDef[] = [
     editLabel: "Edit pesanan",
     deleteLabel: "Hapus pesanan",
   },
+  // ── TAMBAHAN ── Menu Merchandise (permission sendiri, terpisah dari Pesanan/Kaos)
+  {
+    key: "merchandise",
+    label: "Merchandise",
+    hasCreate: true,
+    hasEdit: true,
+    hasDelete: true,
+    createLabel: "Buat pesanan merchandise",
+    editLabel: "Edit pesanan merchandise",
+    deleteLabel: "Hapus pesanan merchandise",
+  },
   {
     key: "produksi",
     label: "Produksi",

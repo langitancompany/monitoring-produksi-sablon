@@ -57,6 +57,18 @@ export default function UsersTab({
         delete: false,
         ...((u.permissions as any)?.orders || {}),
       },
+      // ── TAMBAHAN ── user lama belum punya key ini → diwarisi dari `orders`
+      // (dulu menu Merchandise ikut permission Pesanan), jadi akses
+      // Merchandise-nya tidak hilang & kotaknya tampil sesuai kondisi nyata.
+      merchandise: {
+        view: false,
+        create: false,
+        edit: false,
+        delete: false,
+        ...(((u.permissions as any)?.merchandise ??
+          (u.permissions as any)?.orders) ||
+          {}),
+      },
       produksi: {
         view: false,
         create: false,

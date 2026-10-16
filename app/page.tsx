@@ -108,7 +108,7 @@ import {
   UserData,
   Order,
   ProductionTypeData,
-  DEFAULT_PERMISSIONS,
+  resolvePermissions,
   OrderStatus,
 } from "@/types";
 import { DEFAULT_PRODUCTION_TYPES, isMerchandiseOrder } from "@/lib/utils";
@@ -396,7 +396,7 @@ export default function ProductionApp() {
             name: userData.name || "User",
             role: userData.role || "produksi",
             password: "",
-            permissions: userData.permissions || DEFAULT_PERMISSIONS,
+            permissions: resolvePermissions(userData.permissions),
             address: userData.address,
             dob: userData.dob,
             avatar_url: userData.avatar_url,
@@ -533,12 +533,22 @@ export default function ProductionApp() {
     async (notificationId: string, orderId: string) => {
       await markAsRead(notificationId);
       const target = orders.find((o: Order) => o.id === orderId);
-      setActiveTab(isMerchandiseOrder(target) ? "merchandise" : "orders");
+      const isMerch = isMerchandiseOrder(target);
+      if (isMerch && !currentUser?.permissions?.merchandise?.view) {
+        setSidebarOpen(false);
+        showAlert(
+          "Akses ditolak",
+          "Anda tidak punya akses ke menu Merchandise.",
+          "error",
+        );
+        return;
+      }
+      setActiveTab(isMerch ? "merchandise" : "orders");
       setView("detail");
       setSelectedOrderId(orderId);
       setSidebarOpen(false);
     },
-    [markAsRead, orders],
+    [markAsRead, orders, currentUser, showAlert],
   );
 
   // ─── Guards ────────────────────────────────────────────────────────────────
@@ -558,8 +568,16 @@ export default function ProductionApp() {
   // Kalender, Pesanan Selesai): merchandise dibuka di tab Merchandise, sisanya di
   // tab Pesanan Aktif.
   const openOrderDetail = (id: string, fromTab?: ActiveTab) => {
-    if (fromTab) setPreviousTab(fromTab);
     const target = orders.find((o: Order) => o.id === id);
+    if (isMerchandiseOrder(target) && !p?.merchandise?.view) {
+      showAlert(
+        "Akses ditolak",
+        "Anda tidak punya akses ke menu Merchandise.",
+        "error",
+      );
+      return;
+    }
+    if (fromTab) setPreviousTab(fromTab);
     setSelectedOrderId(id);
     setView("detail");
     setActiveTab(isMerchandiseOrder(target) ? "merchandise" : "orders");
@@ -750,7 +768,7 @@ export default function ProductionApp() {
             )}
 
             {/* ── TAMBAHAN ── Menu Pesanan Merchandise (daftar, buat, edit, detail) */}
-            {activeTab === "merchandise" && p?.orders?.view && (
+            {activeTab === "merchandise" && p?.merchandise?.view && (
               <>
                 {view === "list" && (
                   <OrderList
@@ -760,6 +778,7 @@ export default function ProductionApp() {
                     title="Daftar Pesanan Merchandise"
                     newOrderLabel="Pesanan merchandise baru"
                     showTypeFilter={false}
+                    permissionKey="merchandise"
                     onSelectOrder={(id) => {
                       setSelectedOrderId(id);
                       setView("detail");

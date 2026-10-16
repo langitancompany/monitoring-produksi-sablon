@@ -25,6 +25,11 @@ interface ModuleViewCreateEdit { view: boolean; create: boolean; edit: boolean }
 export interface UserPermissions {
   dashboard:     ModuleView;
   orders:        ModuleFull;
+  // ── TAMBAHAN ── Menu Merchandise punya permission sendiri (dulu menumpang
+  // ke `orders`). view=lihat menu · create=buat pesanan merchandise ·
+  // edit=edit info pesanan · delete=hapus pesanan. Langkah produksi/QC
+  // tetap diatur lewat permission `produksi` & `finishing`.
+  merchandise:   ModuleFull;
   produksi:      ModuleFull;
   finishing:     ModuleFull;
   salary:        ModuleViewCreateEdit; // ── UBAH ── dulu ModuleView; sekarang
@@ -59,6 +64,7 @@ export interface UserPermissions {
 export const DEFAULT_PERMISSIONS: UserPermissions = {
   dashboard:     { view: true  },
   orders:        { view: true,  create: false, edit: false, delete: false },
+  merchandise:   { view: true,  create: false, edit: false, delete: false },
   produksi:      { view: true,  create: false, edit: false, delete: false },
   finishing:     { view: true,  create: false, edit: false, delete: false },
   salary:        { view: false, create: false, edit: false },
@@ -74,6 +80,31 @@ export const DEFAULT_PERMISSIONS: UserPermissions = {
   // ── TAMBAHAN ──
   harga_pesanan: { view: false, create: false, edit: false, delete: false },
 };
+
+/**
+ * Normalisasi `permissions` yang dibaca dari database.
+ *
+ * User yang dibuat SEBELUM permission `merchandise` ada tidak punya key itu di
+ * datanya (dulu menu Merchandise ikut permission `orders`). Supaya akses
+ * mereka tidak mendadak hilang, `merchandise` diwarisi dari `orders` sampai
+ * admin menyimpan ulang permission user tersebut lewat Pengaturan → Pengguna.
+ */
+export function resolvePermissions(
+  raw?: Partial<UserPermissions> | null,
+): UserPermissions {
+  if (!raw) return DEFAULT_PERMISSIONS;
+  if (raw.merchandise) return raw as UserPermissions;
+  const o = raw.orders;
+  return {
+    ...(raw as UserPermissions),
+    merchandise: {
+      view: !!o?.view,
+      create: !!o?.create,
+      edit: !!o?.edit,
+      delete: !!o?.delete,
+    },
+  };
+}
 
 // ─── User ────────────────────────────────────────────────────────────────────
 

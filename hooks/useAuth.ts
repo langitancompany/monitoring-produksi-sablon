@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { SupabaseClient } from '@supabase/supabase-js';
-import { UserData, DEFAULT_PERMISSIONS } from '@/types';
+import { UserData, resolvePermissions } from '@/types';
 
 interface CurrentUser extends UserData {
   id: string;
@@ -39,7 +39,7 @@ export function useAuth({ supabase, showAlert, showConfirm }: UseAuthProps) {
             name: userData.name || 'User',
             role: userData.role || 'produksi',
             password: '',
-            permissions: userData.permissions || DEFAULT_PERMISSIONS,
+            permissions: resolvePermissions(userData.permissions),
             address: userData.address,
             dob: userData.dob,
             avatar_url: userData.avatar_url,
