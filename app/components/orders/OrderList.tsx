@@ -407,9 +407,7 @@ function KanbanCard({
             {order.jumlah.toLocaleString("id-ID")} pcs
           </span>
           <span className="text-zinc-300 dark:text-zinc-600">·</span>
-          <span className="uppercase font-semibold">
-            {typeLabel(order)}
-          </span>
+          <span className="uppercase font-semibold">{typeLabel(order)}</span>
         </div>
         <div className="flex items-center gap-1">
           <Clock className="w-3 h-3 shrink-0" />
@@ -659,7 +657,7 @@ export default function OrderList({
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           <select
-            className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 text-xs rounded-md px-2 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors duration-150"
+            className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 text-xs rounded-md px-2 py-2 focus:ring-2 focus:ring-[#124540] focus:border-[#124540] outline-none transition-colors duration-150"
             value={monthFilter}
             onChange={(e) => setMonthFilter(e.target.value)}
           >
@@ -672,7 +670,7 @@ export default function OrderList({
           </select>
           {showTypeFilter && (
             <select
-              className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 text-xs rounded-md px-2 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors duration-150"
+              className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 text-xs rounded-md px-2 py-2 focus:ring-2 focus:ring-[#124540] focus:border-[#124540] outline-none transition-colors duration-150"
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
             >
@@ -703,7 +701,7 @@ export default function OrderList({
             onClick={() => setStatusFilter(f.id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors duration-150 border ${
               statusFilter === f.id
-                ? "bg-zinc-800 text-white border-zinc-800 dark:bg-[#124540] dark:border-[#124540]"
+                ? "bg-[#124540] text-white border-[#124540]"
                 : "bg-white text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700"
             }`}
           >

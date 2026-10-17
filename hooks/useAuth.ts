@@ -42,6 +42,7 @@ export function useAuth({ supabase, showAlert, showConfirm }: UseAuthProps) {
             permissions: resolvePermissions(userData.permissions),
             address: userData.address,
             dob: userData.dob,
+            no_wa: userData.no_wa || null,
             avatar_url: userData.avatar_url,
           });
         }
@@ -76,6 +77,7 @@ export function useAuth({ supabase, showAlert, showConfirm }: UseAuthProps) {
         name: newData.name,
         address: newData.address,
         dob: newData.dob,
+        no_wa: newData.no_wa?.trim() || null,
         avatar_url: newData.avatar_url,
       })
       .eq('id', currentUser.id);

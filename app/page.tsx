@@ -399,6 +399,7 @@ export default function ProductionApp() {
             permissions: resolvePermissions(userData.permissions),
             address: userData.address,
             dob: userData.dob,
+            no_wa: userData.no_wa || null, // nomor WA ikut dimuat ke Edit Profil
             avatar_url: userData.avatar_url,
           });
         }
@@ -520,15 +521,32 @@ export default function ProductionApp() {
         })
         .eq("id", currentUser.id);
       if (!error) {
-        setCurrentUser({ ...currentUser, ...newData });
+        setCurrentUser({
+          ...currentUser,
+          ...newData,
+          no_wa: newData.no_wa?.trim() || null,
+        });
         setShowProfileModal(false);
+        fetchUsers(); // sinkronkan daftar user di Pengaturan > Manajemen User
         showAlert("Sukses", "Profil diperbarui");
       } else {
         showAlert("Gagal", error.message, "error");
       }
     },
-    [currentUser, supabase, showAlert],
+    [currentUser, supabase, showAlert, fetchUsers],
   );
+
+  // Bila nomor WA user yang sedang login diubah lewat Pengaturan > Manajemen User,
+  // samakan juga ke currentUser supaya Edit Profil langsung menampilkan nomor terbaru.
+  useEffect(() => {
+    if (!currentUser) return;
+    const me = usersList.find((u) => u.id === currentUser.id);
+    if (!me) return;
+    const latest = me.no_wa || null;
+    if ((currentUser.no_wa || null) !== latest) {
+      setCurrentUser((prev) => (prev ? { ...prev, no_wa: latest } : prev));
+    }
+  }, [usersList, currentUser]);
 
   const handleNotificationClick = useCallback(
     async (notificationId: string, orderId: string) => {

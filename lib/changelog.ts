@@ -1,7 +1,7 @@
 // app/lib/changelog.ts
 
 export const APP_INFO = {
-  name: "LCO SuperApp",
+  name: "Langitan.co SuperApp",
   version: "V.18.0",
   purpose: "Aplikasi produksi Sablon, Langitan.co.",
   creator: "abdllahmajid",
