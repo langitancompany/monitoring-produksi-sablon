@@ -1,5 +1,5 @@
-import { memo, useEffect, useMemo, useState } from "react";
-import { Clock } from "lucide-react";
+import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Clock, Shirt, Package } from "lucide-react";
 import { DashboardStats } from "@/hooks/useDashboard";
 
 // ─── Stat Cell ────────────────────────────────────────────────────────────────
@@ -31,6 +31,81 @@ function StatCell({ label, value, hint, emphasize }: StatCellProps) {
           {hint}
         </p>
       )}
+    </div>
+  );
+}
+
+// ─── Badge status yang bisa diklik → scroll ke "Perlu Tindakan Segera" ────────
+
+const ACTION_SECTION_ID = "perlu-tindakan";
+
+function scrollToActionList() {
+  document
+    .getElementById(ACTION_SECTION_ID)
+    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+interface StatusBadgeProps {
+  count: number;
+  label: string;
+  className: string; // warna latar badge
+}
+
+function StatusBadge({ count, label, className }: StatusBadgeProps) {
+  return (
+    <button
+      type="button"
+      onClick={scrollToActionList}
+      aria-label={`${count} ${label}, klik untuk melihat daftar tindakan`}
+      title="Lihat di Perlu Tindakan Segera"
+      className={`text-[11px] font-semibold px-2.5 py-1 rounded-full text-white cursor-pointer transition hover:brightness-110 hover:shadow-md active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-zinc-400 dark:focus-visible:ring-offset-zinc-900 ${className}`}
+    >
+      {count} {label}
+    </button>
+  );
+}
+
+// ─── Monthly Group (satu kelompok: Kaos / Merchandise) ───────────────────────
+
+interface MonthlyGroupProps {
+  icon: ReactNode;
+  label: string;
+  orders: number;
+  pcs: number;
+  className?: string;
+}
+
+function MonthlyGroup({
+  icon,
+  label,
+  orders,
+  pcs,
+  className = "",
+}: MonthlyGroupProps) {
+  return (
+    <div className={className}>
+      <p className="flex items-center gap-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-3">
+        <span className="text-zinc-400">{icon}</span>
+        {label}
+      </p>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <p className="text-[10px] md:text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400 mb-1.5">
+            Pesanan Masuk
+          </p>
+          <p className="font-mono tabular-nums text-2xl md:text-3xl lg:text-4xl font-semibold leading-none text-zinc-900 dark:text-white">
+            {orders.toLocaleString("id-ID")}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] md:text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400 mb-1.5">
+            PCS Terproduksi
+          </p>
+          <p className="font-mono tabular-nums text-2xl md:text-3xl lg:text-4xl font-semibold leading-none text-zinc-900 dark:text-white">
+            {pcs.toLocaleString("id-ID")}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -97,19 +172,25 @@ const HeroSection = memo(function HeroSection({ stats }: HeroSectionProps) {
               {dateTimeLabel}
             </span>
             {stats.trouble > 0 && (
-              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-purple-600 text-white">
-                {stats.trouble} Kendala
-              </span>
+              <StatusBadge
+                count={stats.trouble}
+                label="Kendala"
+                className="bg-purple-600"
+              />
             )}
             {stats.overdue > 0 && (
-              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-red-600 text-white">
-                {stats.overdue} Telat
-              </span>
+              <StatusBadge
+                count={stats.overdue}
+                label="Telat"
+                className="bg-red-600"
+              />
             )}
             {stats.warning > 0 && (
-              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-orange-600 text-white">
-                {stats.warning} Urgent
-              </span>
+              <StatusBadge
+                count={stats.warning}
+                label="Urgent"
+                className="bg-orange-600"
+              />
             )}
           </div>
         </div>
@@ -134,13 +215,25 @@ const HeroSection = memo(function HeroSection({ stats }: HeroSectionProps) {
 
         <div className="h-px bg-zinc-200 dark:bg-zinc-800 my-5" />
 
-        {/* Grup 2 — Bulan ini */}
+        {/* Grup 2 — Bulan ini, dipisah Kaos & Merchandise */}
         <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400 mb-3">
           Bulan ini · {monthLabel}
         </p>
-        <div className="grid grid-cols-2 md:divide-x md:divide-zinc-200 dark:md:divide-zinc-800 gap-y-4">
-          <StatCell label="Pesanan Masuk" value={stats.monthlyOrders} />
-          <StatCell label="PCS Terproduksi" value={stats.monthlyPcs} />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-0 md:divide-x md:divide-zinc-200 dark:md:divide-zinc-800">
+          <MonthlyGroup
+            icon={<Shirt className="w-3.5 h-3.5" strokeWidth={2} />}
+            label="Kaos"
+            orders={stats.kaosMonthlyOrders}
+            pcs={stats.kaosMonthlyPcs}
+            className="md:pr-6"
+          />
+          <MonthlyGroup
+            icon={<Package className="w-3.5 h-3.5" strokeWidth={2} />}
+            label="Merchandise"
+            orders={stats.merchMonthlyOrders}
+            pcs={stats.merchMonthlyPcs}
+            className="md:pl-6"
+          />
         </div>
       </div>
     </section>

@@ -515,6 +515,7 @@ export default function ProductionApp() {
           name: newData.name,
           address: newData.address,
           dob: newData.dob,
+          no_wa: newData.no_wa?.trim() || null, // ── TAMBAHAN ── nomor WhatsApp
           avatar_url: newData.avatar_url,
         })
         .eq("id", currentUser.id);
@@ -688,7 +689,11 @@ export default function ProductionApp() {
           setSidebarOpen(false);
         }}
         onLogout={handleLogout}
-        onOpenProfile={() => setShowProfileModal(true)}
+        onOpenProfile={() => {
+          // Tutup sidebar (mode HP) supaya tidak menutupi modal Edit Profil
+          setSidebarOpen(false);
+          setShowProfileModal(true);
+        }}
       />
 
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
@@ -696,6 +701,7 @@ export default function ProductionApp() {
           currentUser={currentUser}
           onToggleSidebar={() => setSidebarOpen(true)}
           onLogout={handleLogout}
+          onOpenProfile={() => setShowProfileModal(true)}
           sidebarOpen={sidebarOpen}
           currentPage={activeTab}
           notifications={notifications}

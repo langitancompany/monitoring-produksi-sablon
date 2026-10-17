@@ -217,7 +217,10 @@ const ActionList = memo(function ActionList({
   onSelectOrder,
 }: ActionListProps) {
   return (
-    <section className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+    <section
+      id="perlu-tindakan"
+      className="scroll-mt-4 bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden"
+    >
       <header className="px-4 md:px-5 py-4 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800">
         <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm md:text-base tracking-tight">
           Perlu Tindakan Segera

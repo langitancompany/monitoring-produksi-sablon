@@ -209,10 +209,6 @@ export default function Sidebar({
 
         {/* Menu */}
         <div className="flex-1 overflow-y-auto px-4 py-2 space-y-6 md:space-y-3 custom-scrollbar">
-          <ProfileCardMobileMemo
-            currentUser={currentUser}
-            onOpenProfile={onOpenProfile}
-          />
           {menuGroups.map((group, idx) => (
             <div key={idx}>
               <h3 className="text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-[0.14em] mb-3 md:mb-1 px-3">
@@ -250,35 +246,6 @@ export default function Sidebar({
 }
 
 // ─── Memoized sub-components ─────────────────────────────────────────────────
-
-const ProfileCardMobileMemo = memo(
-  ({
-    currentUser,
-    onOpenProfile,
-  }: {
-    currentUser: UserData;
-    onOpenProfile: () => void;
-  }) => (
-    <div className="md:hidden mb-6 p-4 bg-zinc-50 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 flex items-center gap-3">
-      <div className="w-10 h-10 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center text-zinc-700 dark:text-zinc-200 font-semibold">
-        {currentUser.name.charAt(0)}
-      </div>
-      <div>
-        <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          {currentUser.name}
-        </div>
-        <button
-          onClick={onOpenProfile}
-          className="text-[10px] font-semibold text-[#2589ff] hover:underline transition-colors duration-150"
-          style={{ WebkitTapHighlightColor: "transparent" }}
-        >
-          Edit Profil
-        </button>
-      </div>
-    </div>
-  ),
-);
-ProfileCardMobileMemo.displayName = "ProfileCardMobileMemo";
 
 const MenuItemMemo = memo(
   ({

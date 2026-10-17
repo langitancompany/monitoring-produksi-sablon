@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { Order } from '@/types';
-import { getDeadlineStatus } from '@/lib/utils';
+import { Order, MERCHANDISE_PRODUCTS } from '@/types';
+import { getDeadlineStatus, isMerchandiseOrder, merchandiseProductLabel } from '@/lib/utils';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -24,6 +24,11 @@ export interface DashboardStats {
   selesai: number;
   monthlyOrders: number; // pesanan masuk bulan aktif
   monthlyPcs: number;    // pcs terproduksi bulan aktif
+  // ── TAMBAHAN ── bulan aktif dipisah per kelompok
+  kaosMonthlyOrders: number;
+  kaosMonthlyPcs: number;
+  merchMonthlyOrders: number;
+  merchMonthlyPcs: number;
 }
 
 export interface MonthlyDataPoint {
@@ -32,12 +37,28 @@ export interface MonthlyDataPoint {
   year: number;
   total: number;
   pcs: number;
+  [key: string]: unknown; // pcs per produk (p_<produk>) untuk grafik merchandise bertumpuk
 }
 
 export interface ProductionTypeDataPoint {
   name: string;
   value: number;
   [key: string]: unknown; // diperlukan oleh Recharts v3 ChartDataInput
+}
+
+/** Satu seri (produk merchandise) pada grafik tren bertumpuk. */
+export interface MerchSeries {
+  /** value produk di database, mis. 'lanyard' */
+  key: string;
+  /** kunci di dalam MonthlyDataPoint (diberi prefix agar tidak bentrok) */
+  dataKey: string;
+  label: string;
+}
+
+/** Ringkasan satu kelompok (Kaos / Merchandise). */
+export interface CategorySummary {
+  orders: number;
+  pcs: number;
 }
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
@@ -56,6 +77,46 @@ interface UseDashboardReturn {
   monthlyData: MonthlyDataPoint[];
   productionTypeData: ProductionTypeDataPoint[];
   actionItems: ActionItem[];
+  // ── TAMBAHAN ── data dipisah: Kaos (non-merchandise) vs Merchandise
+  kaosMonthlyData: MonthlyDataPoint[];
+  kaosTypeData: ProductionTypeDataPoint[];
+  kaosSummary: CategorySummary;
+  merchMonthlyData: MonthlyDataPoint[];
+  merchTypeData: ProductionTypeDataPoint[];
+  merchSeries: MerchSeries[];
+  merchSummary: CategorySummary;
+}
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Kunci produk merchandise untuk satu pesanan (fallback 'lainnya'). */
+const merchKey = (o: Order) => o.jenis_merchandise || 'lainnya';
+
+/** Tren 6 bulan terakhir. `seriesKey` (opsional) memecah pcs per produk. */
+function buildMonthly(
+  list: Order[],
+  seriesKey?: (o: Order) => string,
+): MonthlyDataPoint[] {
+  const last6: MonthlyDataPoint[] = [];
+  for (let i = 5; i >= 0; i--) {
+    // setDate(1) dulu supaya tanggal 31 tidak "melompat" ke bulan berikutnya
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - i);
+    last6.push({ name: MONTH_NAMES[d.getMonth()], monthIndex: d.getMonth(), year: d.getFullYear(), total: 0, pcs: 0 });
+  }
+  list.forEach((o) => {
+    const d = new Date(o.tanggal_masuk);
+    const item = last6.find((m) => m.monthIndex === d.getMonth() && m.year === d.getFullYear());
+    if (!item) return;
+    item.total += 1;
+    item.pcs += o.jumlah;
+    if (seriesKey) {
+      const k = `p_${seriesKey(o)}`;
+      item[k] = ((item[k] as number) || 0) + o.jumlah;
+    }
+  });
+  return last6;
 }
 
 export function useDashboard(orders: Order[]): UseDashboardReturn {
@@ -112,6 +173,9 @@ export function useDashboard(orders: Order[]): UseDashboardReturn {
       return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     });
 
+    const thisMonthKaos = thisMonthOrders.filter((o) => !isMerchandiseOrder(o));
+    const thisMonthMerch = thisMonthOrders.filter((o) => isMerchandiseOrder(o));
+
     return {
       totalOrders: orders.length,
       totalPcs: orders.reduce((acc, curr) => acc + curr.jumlah, 0),
@@ -122,6 +186,10 @@ export function useDashboard(orders: Order[]): UseDashboardReturn {
       selesai: orders.filter((o) => o.status === 'Selesai').length,
       monthlyOrders: thisMonthOrders.length,
       monthlyPcs: thisMonthOrders.reduce((acc, curr) => acc + curr.jumlah, 0),
+      kaosMonthlyOrders: thisMonthKaos.length,
+      kaosMonthlyPcs: thisMonthKaos.reduce((acc, curr) => acc + curr.jumlah, 0),
+      merchMonthlyOrders: thisMonthMerch.length,
+      merchMonthlyPcs: thisMonthMerch.reduce((acc, curr) => acc + curr.jumlah, 0),
     };
   }, [orders]);
 
@@ -175,5 +243,58 @@ export function useDashboard(orders: Order[]): UseDashboardReturn {
     return items.sort((a, b) => priority[b.type] - priority[a.type]);
   }, [orders]);
 
-  return { stats, monthlyData, productionTypeData, actionItems };
+  // ── Pemisahan Kaos vs Merchandise ─────────────────────────────────────────
+  const kaosOrders = useMemo(() => orders.filter((o) => !isMerchandiseOrder(o)), [orders]);
+  const merchOrders = useMemo(() => orders.filter((o) => isMerchandiseOrder(o)), [orders]);
+
+  const kaosMonthlyData = useMemo(() => buildMonthly(kaosOrders), [kaosOrders]);
+
+  const kaosTypeData = useMemo<ProductionTypeDataPoint[]>(() => {
+    const types: Record<string, number> = {};
+    kaosOrders.forEach((o) => {
+      const t = o.jenis_produksi || 'Lainnya';
+      types[t] = (types[t] || 0) + 1;
+    });
+    return Object.keys(types).map((k) => ({ name: k.toUpperCase(), value: types[k] }));
+  }, [kaosOrders]);
+
+  const kaosSummary = useMemo<CategorySummary>(
+    () => ({ orders: kaosOrders.length, pcs: kaosOrders.reduce((a, o) => a + o.jumlah, 0) }),
+    [kaosOrders],
+  );
+
+  // Produk merchandise yang ada pesanannya, urut sesuai MERCHANDISE_PRODUCTS
+  const merchSeries = useMemo<MerchSeries[]>(() => {
+    const present = new Set<string>(merchOrders.map(merchKey));
+    const known: string[] = MERCHANDISE_PRODUCTS.filter((p) => present.has(p.value)).map((p) => p.value);
+    const unknown: string[] = Array.from(present).filter((k) => !known.includes(k));
+    return [...known, ...unknown].map((key) => ({
+      key,
+      dataKey: `p_${key}`,
+      label: key === 'lainnya' ? 'Lainnya' : merchandiseProductLabel(key),
+    }));
+  }, [merchOrders]);
+
+  const merchMonthlyData = useMemo(() => buildMonthly(merchOrders, merchKey), [merchOrders]);
+
+  const merchTypeData = useMemo<ProductionTypeDataPoint[]>(() => {
+    const counts: Record<string, number> = {};
+    merchOrders.forEach((o) => {
+      const k = merchKey(o);
+      counts[k] = (counts[k] || 0) + 1;
+    });
+    // urutan sama dengan merchSeries supaya warna konsisten di bar & pie
+    return merchSeries.map((s) => ({ name: s.label.toUpperCase(), value: counts[s.key] || 0 }));
+  }, [merchOrders, merchSeries]);
+
+  const merchSummary = useMemo<CategorySummary>(
+    () => ({ orders: merchOrders.length, pcs: merchOrders.reduce((a, o) => a + o.jumlah, 0) }),
+    [merchOrders],
+  );
+
+  return {
+    stats, monthlyData, productionTypeData, actionItems,
+    kaosMonthlyData, kaosTypeData, kaosSummary,
+    merchMonthlyData, merchTypeData, merchSeries, merchSummary,
+  };
 }

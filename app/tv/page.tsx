@@ -35,6 +35,7 @@ import {
 } from "@/lib/tvQueue";
 import { orderTypeLabel } from "@/lib/utils";
 import ThemedLogo from "@/app/components/ui/ThemedLogo";
+import UserAvatar from "@/app/components/ui/UserAvatar";
 
 const TEAL = "#49bfb4";
 
@@ -186,9 +187,23 @@ function QueueRow({ order, rank }: { order: TVOrder; rank: number }) {
 
       {/* Penanggung jawab */}
       <div className="flex min-w-0 items-center gap-[0.8em]">
-        <span className="flex h-[2.3em] w-[2.3em] shrink-0 items-center justify-center rounded-full bg-zinc-100 font-mono text-[0.8em] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-          {initials(pj) || "-"}
-        </span>
+        {/* Foto PJ + foto helper (ukuran sama, helper terselip di belakang PJ) */}
+        <div className="flex shrink-0 items-center">
+          <UserAvatar
+            src={order.assigned_user?.avatar_url}
+            alt={pj ?? ""}
+            fallback={initials(pj) || "-"}
+            className="relative z-10 h-[2.3em] w-[2.3em] bg-zinc-100 font-mono text-[0.8em] font-medium text-zinc-600 ring-2 ring-white dark:bg-zinc-800 dark:text-zinc-300 dark:ring-zinc-950"
+          />
+          {helper && (
+            <UserAvatar
+              src={order.helper_user?.avatar_url}
+              alt={helper}
+              fallback={initials(helper)}
+              className="-ml-[0.9em] h-[2.3em] w-[2.3em] bg-zinc-200 font-mono text-[0.8em] font-medium text-zinc-600 ring-2 ring-white dark:bg-zinc-700 dark:text-zinc-300 dark:ring-zinc-950"
+            />
+          )}
+        </div>
         <div className="min-w-0 leading-tight">
           <p
             className={`truncate text-[1.1em] font-semibold ${

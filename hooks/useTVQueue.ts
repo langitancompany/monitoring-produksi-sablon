@@ -13,8 +13,8 @@ const SELECT_COLUMNS = `
   id, kode_produksi, nama_pemesan, jumlah, jenis_produksi, status,
   tanggal_masuk, deadline, link_approval, steps_manual, steps_dtf, steps_merchandise, jenis_merchandise, varian_merchandise,
   finishing_qc, finishing_packing, shipping, kendala,
-  assigned_user:users!assigned_to ( name ),
-  helper_user:users!helper_id ( name )
+  assigned_user:users!assigned_to ( name, avatar_url ),
+  helper_user:users!helper_id ( name, avatar_url )
 `;
 
 export type TVAuthState = "checking" | "ok" | "no-session";

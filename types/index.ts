@@ -174,10 +174,10 @@ export interface Order {
   status: OrderStatus;
 
   assigned_to?: string | null;
-  assigned_user?: { name: string } | null;
+  assigned_user?: { name: string; avatar_url?: string | null } | null;
 
   helper_id?: string | null;
-  helper_user?: { name: string } | null;
+  helper_user?: { name: string; avatar_url?: string | null } | null;
 
   link_approval: { link: string | null; by: string | null; timestamp: string | null } | null;
   steps_manual: ProductionStep[];

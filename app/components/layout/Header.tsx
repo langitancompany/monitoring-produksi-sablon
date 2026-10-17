@@ -6,6 +6,7 @@ import {
   Menu,
   Bell,
   LogOut,
+  Settings,
   AlertTriangle,
   Info,
   CheckCircle,
@@ -26,6 +27,8 @@ interface HeaderProps {
   currentUser: UserData;
   onToggleSidebar: () => void;
   onLogout: () => void;
+  /** Buka modal Edit Profil (dipakai di dropdown foto profil mode HP). */
+  onOpenProfile?: () => void;
   sidebarOpen: boolean;
   currentPage?: string;
   notifications?: Notification[];
@@ -183,6 +186,7 @@ export default function Header({
   currentUser,
   onToggleSidebar,
   onLogout,
+  onOpenProfile,
   sidebarOpen,
   currentPage = "dashboard",
   notifications = [],
@@ -335,6 +339,18 @@ export default function Header({
                     {currentUser.role}
                   </p>
                 </div>
+                {onOpenProfile && (
+                  <button
+                    onClick={() => {
+                      setShowProfile(false);
+                      onOpenProfile();
+                    }}
+                    className="w-full text-left px-4 py-3 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900 rounded-md flex items-center gap-2 font-semibold transition-colors duration-150 mt-1"
+                    style={{ WebkitTapHighlightColor: "transparent" }}
+                  >
+                    <Settings className="w-4 h-4" /> Edit Profil
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setShowProfile(false);

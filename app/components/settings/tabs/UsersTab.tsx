@@ -11,6 +11,7 @@ import {
   primaryRole,
   roleLabel,
 } from "@/lib/roles";
+import UserAvatar from "@/app/components/ui/UserAvatar";
 import { PermissionTable } from "@/app/components/settings/PermissionTable";
 import { inputCls, labelCls } from "@/app/components/settings/settingsShared";
 
@@ -215,15 +216,16 @@ export default function UsersTab({
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div
-                      className={`w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm border ${
+                    <UserAvatar
+                      src={u.avatar_url}
+                      alt={u.name}
+                      fallback={u.name.charAt(0).toUpperCase()}
+                      className={`w-9 h-9 shrink-0 font-semibold text-sm border ${
                         isSelected
                           ? "bg-[#124540] text-white border-[#124540]"
                           : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
                       }`}
-                    >
-                      {u.name.charAt(0).toUpperCase()}
-                    </div>
+                    />
                     <div>
                       <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                         {u.name}

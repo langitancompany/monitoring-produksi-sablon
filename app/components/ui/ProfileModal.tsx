@@ -78,8 +78,10 @@ export default function ProfileModal({ user, isOpen, onClose, onSave }: Props) {
     address: "",
     dob: "",
     role: "",
+    no_wa: "",
     avatar_url: "" as string | null,
   });
+  const [waError, setWaError] = useState<string | null>(null);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -93,8 +95,10 @@ export default function ProfileModal({ user, isOpen, onClose, onSave }: Props) {
         address: user.address || "",
         dob: user.dob || "",
         role: user.role || "",
+        no_wa: user.no_wa || "",
         avatar_url: user.avatar_url || null,
       });
+      setWaError(null);
       setShowDeleteConfirm(false);
       setShowPhotoMenu(false);
     }
@@ -169,14 +173,28 @@ export default function ProfileModal({ user, isOpen, onClose, onSave }: Props) {
   };
 
   const handleSaveWrapper = () => {
-    onSave({ ...formData, dob: formData.dob === "" ? null : formData.dob });
+    const noWa = formData.no_wa.trim();
+    // Boleh dikosongkan. Bila diisi, harus 9–15 digit (08xx / 62xx / +62xx).
+    if (noWa) {
+      const digits = noWa.replace(/\D/g, "");
+      if (digits.length < 9 || digits.length > 15) {
+        setWaError("Nomor WhatsApp tidak valid. Contoh: 081234567890");
+        return;
+      }
+    }
+    setWaError(null);
+    onSave({
+      ...formData,
+      dob: formData.dob === "" ? null : formData.dob,
+      no_wa: noWa || null,
+    });
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="bg-white dark:bg-zinc-950 rounded-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] relative border border-zinc-200 dark:border-zinc-800">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4">
+      <div className="bg-white dark:bg-zinc-950 rounded-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90dvh] relative border border-zinc-200 dark:border-zinc-800">
         {/* === POP UP KONFIRMASI HAPUS (Gaya CustomAlert) === */}
         {showDeleteConfirm && (
           <div className="absolute inset-0 z-[70] bg-white/90 dark:bg-zinc-950/90 flex items-center justify-center p-6">
@@ -210,7 +228,7 @@ export default function ProfileModal({ user, isOpen, onClose, onSave }: Props) {
         )}
 
         {/* HEADER */}
-        <div className="flex justify-between items-center p-6 border-b border-zinc-200 dark:border-zinc-800">
+        <div className="flex justify-between items-center p-4 sm:p-6 border-b border-zinc-200 dark:border-zinc-800">
           <h3 className="font-semibold text-base text-zinc-900 dark:text-zinc-100 tracking-tight">
             {isCropping ? "Sesuaikan Foto" : "Edit Profil"}
           </h3>
@@ -225,7 +243,7 @@ export default function ProfileModal({ user, isOpen, onClose, onSave }: Props) {
         </div>
 
         {/* CONTENT */}
-        <div className="overflow-y-auto p-6 no-scrollbar">
+        <div className="overflow-y-auto p-4 sm:p-6 no-scrollbar">
           {isCropping ? (
             /* --- MODE CROP --- */
             <div className="flex flex-col h-full">
@@ -281,7 +299,7 @@ export default function ProfileModal({ user, isOpen, onClose, onSave }: Props) {
           ) : (
             /* --- MODE EDIT FORM --- */
             <>
-              <div className="flex flex-col items-center mb-8 pt-2">
+              <div className="flex flex-col items-center mb-6 sm:mb-8 pt-1 sm:pt-2">
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -290,7 +308,7 @@ export default function ProfileModal({ user, isOpen, onClose, onSave }: Props) {
                   onChange={handleFileChange}
                 />
 
-                <div className="relative w-32 h-32">
+                <div className="relative w-28 h-28 sm:w-32 sm:h-32">
                   <div className="w-full h-full rounded-full bg-zinc-100 dark:bg-zinc-800 border-[5px] border-white dark:border-zinc-950 flex items-center justify-center overflow-hidden relative z-10">
                     {formData.avatar_url ? (
                       <img
@@ -356,21 +374,21 @@ export default function ProfileModal({ user, isOpen, onClose, onSave }: Props) {
                     Nama Lengkap
                   </label>
                   <input
-                    className="w-full border border-zinc-200 dark:border-zinc-700 rounded-md p-4 text-sm font-medium text-zinc-900 dark:text-zinc-100 focus:ring-1 focus:ring-zinc-900 dark:focus:ring-zinc-100 focus:border-zinc-900 dark:focus:border-zinc-100 outline-none bg-zinc-50 dark:bg-zinc-900 focus:bg-white dark:focus:bg-zinc-950 transition-colors duration-150"
+                    className="w-full border border-zinc-200 dark:border-zinc-700 rounded-md p-3.5 sm:p-4 text-base sm:text-sm font-medium text-zinc-900 dark:text-zinc-100 focus:ring-1 focus:ring-zinc-900 dark:focus:ring-zinc-100 focus:border-zinc-900 dark:focus:border-zinc-100 outline-none bg-zinc-50 dark:bg-zinc-900 focus:bg-white dark:focus:bg-zinc-950 transition-colors duration-150"
                     value={formData.name}
                     onChange={(e) =>
                       setFormData({ ...formData, name: e.target.value })
                     }
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-4">
                   <div>
                     <label className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-[0.12em] mb-2 block">
                       Tgl Lahir
                     </label>
                     <input
                       type="date"
-                      className="w-full border border-zinc-200 dark:border-zinc-700 rounded-md p-4 text-sm font-medium font-mono tabular-nums text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-zinc-900 outline-none focus:ring-1 focus:ring-zinc-900 dark:focus:ring-zinc-100 focus:border-zinc-900 dark:focus:border-zinc-100 transition-colors duration-150 [color-scheme:light] dark:[color-scheme:dark]"
+                      className="w-full border border-zinc-200 dark:border-zinc-700 rounded-md p-3.5 sm:p-4 text-base sm:text-sm font-medium font-mono tabular-nums text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-zinc-900 outline-none focus:ring-1 focus:ring-zinc-900 dark:focus:ring-zinc-100 focus:border-zinc-900 dark:focus:border-zinc-100 transition-colors duration-150 [color-scheme:light] dark:[color-scheme:dark]"
                       value={formData.dob}
                       onChange={(e) =>
                         setFormData({ ...formData, dob: e.target.value })
@@ -383,7 +401,7 @@ export default function ProfileModal({ user, isOpen, onClose, onSave }: Props) {
                     </label>
                     <input
                       disabled
-                      className="w-full border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/50 rounded-md p-4 text-sm font-medium text-zinc-400 dark:text-zinc-600 uppercase"
+                      className="w-full border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/50 rounded-md p-3.5 sm:p-4 text-base sm:text-sm font-medium text-zinc-400 dark:text-zinc-600 uppercase"
                       value={formData.role}
                       readOnly
                     />
@@ -391,10 +409,43 @@ export default function ProfileModal({ user, isOpen, onClose, onSave }: Props) {
                 </div>
                 <div>
                   <label className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-[0.12em] mb-2 block">
+                    No. WhatsApp
+                  </label>
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder="08xxxxxxxxxx"
+                    className={`w-full border rounded-md p-3.5 sm:p-4 text-base sm:text-sm font-medium font-mono tabular-nums text-zinc-900 dark:text-zinc-100 outline-none bg-zinc-50 dark:bg-zinc-900 focus:bg-white dark:focus:bg-zinc-950 focus:ring-1 transition-colors duration-150 ${
+                      waError
+                        ? "border-red-500 focus:ring-red-500 focus:border-red-500"
+                        : "border-zinc-200 dark:border-zinc-700 focus:ring-zinc-900 dark:focus:ring-zinc-100 focus:border-zinc-900 dark:focus:border-zinc-100"
+                    }`}
+                    value={formData.no_wa}
+                    onChange={(e) => {
+                      // hanya angka, spasi, + dan -
+                      const v = e.target.value.replace(/[^0-9+\-\s]/g, "");
+                      setFormData({ ...formData, no_wa: v });
+                      if (waError) setWaError(null);
+                    }}
+                  />
+                  {waError ? (
+                    <p className="text-[11px] text-red-600 dark:text-red-400 mt-1.5">
+                      {waError}
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1.5">
+                      Dipakai untuk notifikasi WhatsApp pesanan. Boleh
+                      dikosongkan.
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-[0.12em] mb-2 block">
                     Alamat
                   </label>
                   <textarea
-                    className="w-full border border-zinc-200 dark:border-zinc-700 rounded-md p-4 text-sm font-medium text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-zinc-900 focus:bg-white dark:focus:bg-zinc-950 outline-none focus:ring-1 focus:ring-zinc-900 dark:focus:ring-zinc-100 focus:border-zinc-900 dark:focus:border-zinc-100 h-24 resize-none transition-colors duration-150"
+                    className="w-full border border-zinc-200 dark:border-zinc-700 rounded-md p-3.5 sm:p-4 text-base sm:text-sm font-medium text-zinc-900 dark:text-zinc-100 bg-zinc-50 dark:bg-zinc-900 focus:bg-white dark:focus:bg-zinc-950 outline-none focus:ring-1 focus:ring-zinc-900 dark:focus:ring-zinc-100 focus:border-zinc-900 dark:focus:border-zinc-100 h-24 resize-none transition-colors duration-150"
                     value={formData.address}
                     onChange={(e) =>
                       setFormData({ ...formData, address: e.target.value })
@@ -406,7 +457,7 @@ export default function ProfileModal({ user, isOpen, onClose, onSave }: Props) {
               <button
                 onClick={handleSaveWrapper}
                 disabled={isUploading}
-                className="w-full bg-[#124540] text-white font-semibold py-5 rounded-xl mt-8 hover:bg-[#0d332f] transition-colors duration-150 flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full bg-[#124540] text-white font-semibold py-4 sm:py-5 rounded-xl mt-6 sm:mt-8 hover:bg-[#0d332f] transition-colors duration-150 flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {isUploading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
