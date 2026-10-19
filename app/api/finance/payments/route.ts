@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
 
   const settings = await loadSettings();
   // Default: SEMUA pembayaran masuk antrean verifikasi (status 'pending'), termasuk yang dicatat
-  // oleh supervisor / user yang punya hak verifikasi. Langsung 'verified' hanya bila pengaturan
+  // oleh Super Admin / user yang punya hak verifikasi. Langsung 'verified' hanya bila pengaturan
   // `auto_verify_own_payment` sengaja dinyalakan, pencatatnya berhak verifikasi, dan aturan
   // "pencatat harus beda dengan pemverifikasi" tidak aktif.
   const autoVerify =

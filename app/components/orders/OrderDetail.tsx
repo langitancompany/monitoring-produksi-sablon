@@ -66,8 +66,8 @@ export default function OrderDetail({
   // kalau order tidak ketemu — lihat komponen OrderNotFound di sana).
 
   // ─── Hak Akses (struktur baru) ────────────────────────────────────────────
-  const isSupervisor = currentUser.role === "supervisor";
-  const isManagement = ["admin", "manager", "supervisor"].includes(
+  const isSuperAdmin = currentUser.role === "super_admin";
+  const isManagement = ["admin", "manager", "super_admin"].includes(
     currentUser.role,
   );
   const perms = currentUser.permissions;
@@ -93,30 +93,30 @@ export default function OrderDetail({
   // harga_pesanan.delete → hapus bukti pembayaran                            ── TAMBAHAN ──
 
   const canUpdateStep =
-    isSupervisor ||
+    isSuperAdmin ||
     (perms?.produksi?.edit &&
       (currentStatus === "On Process" ||
         currentStatus === "Revisi" ||
         currentStatus === "Ada Kendala"));
   const canCheckQC =
-    isSupervisor ||
+    isSuperAdmin ||
     (perms?.finishing?.edit &&
       (currentStatus === "Finishing" || isProductionFinished));
   const canUpdatePacking =
-    isSupervisor || (perms?.finishing?.edit && order.finishing_qc.isPassed);
+    isSuperAdmin || (perms?.finishing?.edit && order.finishing_qc.isPassed);
   const canUpdateShipping =
-    isSupervisor ||
+    isSuperAdmin ||
     (perms?.finishing?.edit &&
       (currentStatus === "Kirim" || currentStatus === "Selesai"));
   // ── TAMBAHAN ── pesanan merchandise diatur lewat permission `merchandise`,
   // pesanan kaos/sablon tetap lewat `orders`.
   const orderPerms = isMerchandise ? perms?.merchandise : perms?.orders;
-  const canEditOrderInfo = isSupervisor || orderPerms?.edit;
-  const canDeleteOrder = isSupervisor || orderPerms?.delete;
-  const canUploadApproval = isSupervisor || perms?.produksi?.create;
-  const canDeleteApprovalFile = isSupervisor || perms?.produksi?.delete;
-  const canResetQC = isSupervisor || perms?.finishing?.create;
-  const canDeleteFinishingFile = isSupervisor || perms?.finishing?.delete;
+  const canEditOrderInfo = isSuperAdmin || orderPerms?.edit;
+  const canDeleteOrder = isSuperAdmin || orderPerms?.delete;
+  const canUploadApproval = isSuperAdmin || perms?.produksi?.create;
+  const canDeleteApprovalFile = isSuperAdmin || perms?.produksi?.delete;
+  const canResetQC = isSuperAdmin || perms?.finishing?.create;
+  const canDeleteFinishingFile = isSuperAdmin || perms?.finishing?.delete;
   const financeCaps = getFinanceCaps(currentUser);
 
   // ─── Hook ─────────────────────────────────────────────────────────────────
@@ -222,7 +222,7 @@ export default function OrderDetail({
         order={order}
         currentUser={currentUser}
         canUpdateStep={!!canUpdateStep}
-        isSupervisor={isSupervisor}
+        isSuperAdmin={isSuperAdmin}
         isManagement={isManagement}
         kendalaNote={kendalaNote}
         setKendalaNote={setKendalaNote}

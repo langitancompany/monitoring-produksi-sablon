@@ -531,7 +531,7 @@ export default function WhatsAppSettings() {
                   ))}
                 </ol>
                 <p className="mt-4 text-[11px] text-zinc-500 dark:text-zinc-400">
-                  Kode diperbarui otomatis. Hanya admin, manager, dan supervisor
+                  Kode diperbarui otomatis. Hanya admin, manager, dan Super Admin
                   yang bisa melihat halaman ini.
                 </p>
               </div>

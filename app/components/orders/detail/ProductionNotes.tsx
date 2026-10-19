@@ -88,7 +88,7 @@ export default function ProductionNotes({
   };
 
   const canDelete = (note: ProductionNote) =>
-    note.created_by_id === currentUser.id || currentUser.role === "supervisor";
+    note.created_by_id === currentUser.id || currentUser.role === "super_admin";
 
   // ─── Format waktu ───────────────────────────────────────────────────────
 

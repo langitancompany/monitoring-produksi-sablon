@@ -26,7 +26,7 @@ import {
   sectionLabelCls,
 } from "../ui";
 
-/** Keuangan > Pengaturan: header, rekening pembayaran, dan tanda tangan untuk invoice customer. Hanya supervisor. */
+/** Keuangan > Pengaturan: header, rekening pembayaran, dan tanda tangan untuk invoice customer. Hanya Super Admin. */
 export default function SettingsTab() {
   const { notify } = useDialog();
   const { settings, loaded, error, save } = useInvoiceSettings();

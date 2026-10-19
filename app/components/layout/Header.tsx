@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { UserData } from "@/types";
 
+import { roleLabel } from "@/lib/roles";
 interface Notification {
   id: string;
   title: string;
@@ -336,7 +337,7 @@ export default function Header({
                     {currentUser.name}
                   </p>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">
-                    {currentUser.role}
+                    {roleLabel(currentUser.role)}
                   </p>
                 </div>
                 {onOpenProfile && (

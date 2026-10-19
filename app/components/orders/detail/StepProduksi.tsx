@@ -23,7 +23,7 @@ interface StepProduksiProps {
   order: Order;
   currentUser: UserData;
   canUpdateStep: boolean;
-  isSupervisor: boolean;
+  isSuperAdmin: boolean;
   isManagement: boolean;
   kendalaNote: string;
   setKendalaNote: (v: string) => void;
@@ -47,7 +47,7 @@ export default function StepProduksi({
   order,
   currentUser,
   canUpdateStep,
-  isSupervisor,
+  isSuperAdmin,
   isManagement,
   kendalaNote,
   setKendalaNote,
@@ -151,7 +151,7 @@ export default function StepProduksi({
                       Selesaikan
                     </button>
                   )}
-                  {isSupervisor && (
+                  {isSuperAdmin && (
                     <button
                       onClick={() => onDeleteKendala(k.id)}
                       className="text-zinc-400 hover:text-red-500 p-1.5 rounded-md transition-colors duration-150"

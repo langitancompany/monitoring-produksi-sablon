@@ -19,6 +19,7 @@ import imageCompression from "browser-image-compression";
 import Cropper from "react-easy-crop";
 import { Point, Area } from "react-easy-crop";
 
+import { roleLabel } from "@/lib/roles";
 interface Props {
   user: UserData;
   isOpen: boolean;
@@ -402,7 +403,7 @@ export default function ProfileModal({ user, isOpen, onClose, onSave }: Props) {
                     <input
                       disabled
                       className="w-full border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900/50 rounded-md p-3.5 sm:p-4 text-base sm:text-sm font-medium text-zinc-400 dark:text-zinc-600 uppercase"
-                      value={formData.role}
+                      value={roleLabel(formData.role)}
                       readOnly
                     />
                   </div>

@@ -1,6 +1,6 @@
 // app/api/wa/settings/route.ts
 // Baca / simpan pengaturan WhatsApp Bot dari menu Pengaturan.
-// Hanya admin / manager / supervisor. Token gateway TIDAK pernah dikembalikan ke browser
+// Hanya admin / manager / Super Admin. Token gateway TIDAK pernah dikembalikan ke browser
 // (hanya status "sudah diisi" + 4 karakter terakhir).
 
 import { NextResponse, type NextRequest } from 'next/server';
@@ -10,7 +10,7 @@ import { getWaSettings } from '@/lib/waSettings';
 
 export const dynamic = 'force-dynamic';
 
-const ROLES = ['admin', 'manager', 'supervisor'];
+const ROLES = ['admin', 'manager', 'super_admin'];
 
 const tampil = (s: Awaited<ReturnType<typeof getWaSettings>>) => ({
   enabled: s.enabled,

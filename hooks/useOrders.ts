@@ -480,7 +480,7 @@ export function useOrders({
     if (hasFin && !fin.can_purge) {
       showAlert(
         'Tidak Bisa Dihapus',
-        'Order ini punya data keuangan. Hanya supervisor atau user dengan izin Keuangan → Void yang boleh menghapusnya permanen.',
+        'Order ini punya data keuangan. Hanya Super Admin atau user dengan izin Keuangan → Void yang boleh menghapusnya permanen.',
         'error',
       );
       return;

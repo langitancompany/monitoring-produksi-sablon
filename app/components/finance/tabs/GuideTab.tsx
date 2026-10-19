@@ -163,7 +163,7 @@ export default function GuideTab({
     : [];
 
   const roles = [
-    caps.isSupervisor && "Supervisor",
+    caps.isSuperAdmin && "Super Admin",
     caps.create && "Pencatat",
     caps.edit && "Verifikator",
     caps.delete && "Hak Void",

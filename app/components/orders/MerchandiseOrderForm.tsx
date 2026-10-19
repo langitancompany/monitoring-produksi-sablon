@@ -11,7 +11,7 @@
 import React, { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Order, UserData, MERCHANDISE_PRODUCTS } from "@/types";
-import { hasRole, getUserRoles } from "@/lib/roles";
+import { hasRole, getUserRoles, roleLabel } from "@/lib/roles";
 import { toLocalISODate } from "@/lib/utils";
 import CustomerAutocompleteInput from "./CustomerAutocompleteInput";
 import type { Customer } from "@/lib/customers";
@@ -335,7 +335,7 @@ export default function MerchandiseOrderForm({
                     value={user.id}
                     className="dark:bg-zinc-800"
                   >
-                    {user.name} ({user.role})
+                    {user.name} ({roleLabel(user.role)})
                   </option>
                 ))}
               </select>
@@ -360,7 +360,7 @@ export default function MerchandiseOrderForm({
                     value={user.id}
                     className="dark:bg-zinc-800"
                   >
-                    {user.name} ({user.role})
+                    {user.name} ({roleLabel(user.role)})
                   </option>
                 ))}
               </select>

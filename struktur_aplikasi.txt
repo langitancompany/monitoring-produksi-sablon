@@ -9,8 +9,6 @@
 |  |  |  └── route.ts
 |  |  ├── cron
 |  |  |  └── check-overdue
-|  |  ├── delete-user
-|  |  |  └── route.ts
 |  |  ├── po
 |  |  |  └── orders
 |  |  ├── send-notification

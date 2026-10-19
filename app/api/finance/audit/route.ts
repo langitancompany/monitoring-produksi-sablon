@@ -1,4 +1,4 @@
-// GET /api/finance/audit?from=&to=&entity=&limit=  -> log audit keuangan (HANYA supervisor)
+// GET /api/finance/audit?from=&to=&entity=&limit=  -> log audit keuangan (HANYA Super Admin)
 // Log bersifat append-only di database; endpoint ini hanya membaca.
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -20,7 +20,7 @@ function slim(v: unknown): unknown {
 export async function GET(req: NextRequest) {
   const guard = await requireFinance(req, 'view');
   if (!guard.ok) return guard.response;
-  if (!guard.actor.caps.isSupervisor) return bad('Hanya supervisor yang boleh melihat log audit', 403);
+  if (!guard.actor.caps.isSuperAdmin) return bad('Hanya Super Admin yang boleh melihat log audit', 403);
 
   const sp = req.nextUrl.searchParams;
   const from = sp.get('from');

@@ -17,7 +17,7 @@ interface SettingsPageProps {
   users: UserData[];
   productionTypes: ProductionTypeData[];
   currentUser: UserData;
-  onSaveUser: (u: any) => void;
+  onSaveUser: (u: any) => Promise<boolean>;
   onDeleteUser: (id: string) => void;
   onSaveProductionType: (t: any) => void;
   onDeleteProductionType: (id: string) => void;
@@ -40,10 +40,10 @@ export default function SettingsPage({
   onSaveProductionType,
   onDeleteProductionType,
 }: SettingsPageProps) {
-  const isManagement = ["admin", "manager", "supervisor"].includes(
+  const isManagement = ["admin", "manager", "super_admin"].includes(
     currentUser.role,
   );
-  const isSupervisor = currentUser.role === "supervisor";
+  const isSuperAdmin = currentUser.role === "super_admin";
 
   // Daftar tab + siapa yang boleh melihatnya
   const tabs: { id: TabId; label: string; icon: React.ElementType }[] = (
@@ -58,7 +58,7 @@ export default function SettingsPage({
         show: isManagement,
       },
       { id: "notifikasi", label: "Notifikasi", icon: Bell, show: true },
-      { id: "backup", label: "Backup", icon: Database, show: isSupervisor },
+      { id: "backup", label: "Backup", icon: Database, show: isSuperAdmin },
     ] as {
       id: TabId;
       label: string;

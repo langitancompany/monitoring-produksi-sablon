@@ -54,8 +54,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: 'Tidak ada pesanan telat hari ini.' });
     }
 
-    // 3. Cari Token User Target (Produksi, Admin, Supervisor)
-    const targetRoles = ['produksi', 'admin', 'supervisor'];
+    // 3. Cari Token User Target (Produksi, Admin, Super Admin)
+    const targetRoles = ['produksi', 'admin', 'super_admin'];
     // Cek `role` (role utama) DAN `roles` (role ganda) — lihat lib/notificationHelper.ts
     const targetList = targetRoles.join(',');
     const { data: targetUsers } = await supabase

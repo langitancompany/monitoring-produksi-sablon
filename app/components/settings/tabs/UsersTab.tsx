@@ -17,7 +17,7 @@ import { inputCls, labelCls } from "@/app/components/settings/settingsShared";
 
 interface UsersTabProps {
   users: UserData[];
-  onSaveUser: (u: any) => void;
+  onSaveUser: (u: any) => Promise<boolean>;
   onDeleteUser: (id: string) => void;
 }
 
@@ -33,6 +33,7 @@ export default function UsersTab({
     useState<UserPermissions>(DEFAULT_PERMISSIONS);
   const [showPassword, setShowPassword] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // ─── User handlers ──────────────────────────────────────────────────────────
 
@@ -158,10 +159,16 @@ export default function UsersTab({
     setPermissions(DEFAULT_PERMISSIONS);
   };
 
-  const handleSubmitUser = () => {
-    onSaveUser({ ...formData, permissions });
-    setSelectedUser(null);
-    setIsNewUser(false);
+  // Tutup form hanya kalau server berhasil menyimpan (kalau gagal, isian tetap ada).
+  const handleSubmitUser = async () => {
+    if (saving) return;
+    setSaving(true);
+    const ok = await onSaveUser({ ...formData, permissions });
+    setSaving(false);
+    if (ok) {
+      setSelectedUser(null);
+      setIsNewUser(false);
+    }
   };
 
   const handleCancel = () => {
@@ -287,15 +294,23 @@ export default function UsersTab({
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Username</label>
+                  <label className={labelCls}>Email Login</label>
                   <input
-                    className={inputCls}
+                    type="email"
+                    autoComplete="off"
+                    className={`${inputCls} ${isNewUser ? "" : "opacity-60 cursor-not-allowed"}`}
                     value={formData.username || ""}
+                    disabled={!isNewUser}
                     onChange={(e) =>
                       setFormData({ ...formData, username: e.target.value })
                     }
-                    placeholder="Username"
+                    placeholder="nama@langitan.co"
                   />
+                  {!isNewUser && (
+                    <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+                      Email login tidak bisa diubah (akun dipakai bersama aplikasi Langitan lain).
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className={labelCls}>No. WhatsApp</label>
@@ -319,8 +334,11 @@ export default function UsersTab({
                       onChange={(e) =>
                         setFormData({ ...formData, password: e.target.value })
                       }
+                      autoComplete="new-password"
                       placeholder={
-                        isNewUser ? "Password" : "Kosongkan jika tidak diubah"
+                        isNewUser
+                          ? "Minimal 8 karakter"
+                          : "Kosongkan jika tidak diubah"
                       }
                     />
                     <button
@@ -331,6 +349,11 @@ export default function UsersTab({
                       {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                   </div>
+                  <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+                    {isNewUser
+                      ? "Jika email ini sudah punya akun di aplikasi Langitan lain (mis. Konveksi), akun itu dipakai bersama dan password-nya tidak diubah."
+                      : "Password baru berlaku di semua aplikasi Langitan."}
+                  </p>
                 </div>
                 <div>
                   <label className={labelCls}>
@@ -394,9 +417,10 @@ export default function UsersTab({
               </button>
               <button
                 onClick={handleSubmitUser}
-                className="px-5 py-2 rounded-md bg-[#124540] hover:bg-[#0d332f] text-white text-sm font-semibold transition-colors duration-150"
+                disabled={saving}
+                className="px-5 py-2 rounded-md bg-[#124540] hover:bg-[#0d332f] disabled:opacity-60 text-white text-sm font-semibold transition-colors duration-150"
               >
-                Simpan Perubahan
+                {saving ? "Menyimpan..." : isNewUser ? "Buat User" : "Simpan Perubahan"}
               </button>
             </div>
           </div>

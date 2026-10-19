@@ -49,7 +49,7 @@ export const sendNotification = async (
 
 // 2. Kirim ke User berdasarkan Role (Massal)
 // ✅ UPDATED: Tambah parameter orderId
-// Contoh usage: sendToRoles(['produksi', 'supervisor'], 'Judul', 'Pesan', 'order-uuid')
+// Contoh usage: sendToRoles(['produksi', 'super_admin'], 'Judul', 'Pesan', 'order-uuid')
 export const sendToRoles = async (
   roles: string[], 
   title: string, 

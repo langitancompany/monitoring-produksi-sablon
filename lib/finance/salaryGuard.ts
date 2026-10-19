@@ -1,5 +1,5 @@
 // lib/finance/salaryGuard.ts  (SERVER ONLY)
-// Akses untuk memposting gaji ke Keuangan. Yang boleh: supervisor, atau pengguna yang memang
+// Akses untuk memposting gaji ke Keuangan. Yang boleh: Super Admin, atau pengguna yang memang
 // punya akses menu Gaji & Upah (permission `salary`). Mereka sudah bisa menandai gaji "dibayar"
 // di menu Gaji, jadi tidak diminta punya izin `keuangan` terpisah. Pengeluaran yang dibuat selalu
 // berstatus PENDING sehingga tetap perlu disetujui pemegang izin `keuangan.edit`.
@@ -11,8 +11,8 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 export interface SalaryActor {
   userId: string;
   name: string;
-  isSupervisor: boolean;
-  /** boleh membatalkan (void) pengeluaran yang SUDAH disetujui: supervisor atau keuangan.delete */
+  isSuperAdmin: boolean;
+  /** boleh membatalkan (void) pengeluaran yang SUDAH disetujui: Super Admin atau keuangan.delete */
   canVoidApproved: boolean;
 }
 
@@ -31,13 +31,13 @@ export async function requireSalaryAccess(req: NextRequest): Promise<Result> {
     return { ok: false, response: NextResponse.json({ error: 'Pengguna tidak ditemukan' }, { status: 403 }) };
   }
 
-  const isSupervisor =
-    row.role === 'supervisor' || (Array.isArray(row.roles) && row.roles.includes('supervisor'));
+  const isSuperAdmin =
+    row.role === 'super_admin' || (Array.isArray(row.roles) && row.roles.includes('super_admin'));
   const p = row.permissions?.salary;
-  const allowed = isSupervisor || p?.view === true || p?.edit === true || p?.create === true;
+  const allowed = isSuperAdmin || p?.view === true || p?.edit === true || p?.create === true;
   if (!allowed) {
     return { ok: false, response: NextResponse.json({ error: 'Anda tidak memiliki akses ke menu Gaji' }, { status: 403 }) };
   }
-  const canVoidApproved = isSupervisor || row.permissions?.keuangan?.delete === true;
-  return { ok: true, actor: { userId: auth.userId, name: row.name || 'User', isSupervisor, canVoidApproved } };
+  const canVoidApproved = isSuperAdmin || row.permissions?.keuangan?.delete === true;
+  return { ok: true, actor: { userId: auth.userId, name: row.name || 'User', isSuperAdmin, canVoidApproved } };
 }

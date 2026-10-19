@@ -6,7 +6,7 @@
 // packing DTF sekaligus, gajinya digabung & dihitung per-pcs). Jadi tidak
 // perlu role baru; cukup pakai role === 'qc' (lihat SalaryView.tsx,
 // CreateOrder.tsx, EditOrder.tsx).
-export type UserRole = 'admin' | 'produksi' | 'qc' | 'manager' | 'supervisor' | 'designer';
+export type UserRole = 'admin' | 'produksi' | 'qc' | 'manager' | 'super_admin' | 'designer';
 
 // ─── Tipe dasar per modul ────────────────────────────────────────────────────
 

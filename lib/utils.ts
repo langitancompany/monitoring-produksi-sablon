@@ -110,10 +110,10 @@ export const MONTHS = [
 export const DEFAULT_USERS: UserData[] = [
   { 
     id: '1', 
-    username: 'supervisor', 
+    username: 'superadmin', 
     password: '123', 
-    name: 'Supervisor', 
-    role: 'supervisor', 
+    name: 'Super Admin', 
+    role: 'super_admin', 
     permissions: DEFAULT_PERMISSIONS 
   },
   { 

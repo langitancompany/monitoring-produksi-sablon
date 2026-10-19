@@ -2,7 +2,7 @@
 //
 // GET  -> ringkasan data keuangan yang akan ikut terhapus + apakah user boleh menghapusnya
 // POST -> hapus PERMANEN data keuangan order (tagihan, pembayaran, file bukti).
-//         Hanya untuk order yang sudah di Sampah. Butuh izin Keuangan -> Hapus (atau supervisor),
+//         Hanya untuk order yang sudah di Sampah. Butuh izin Keuangan -> Hapus (atau Super Admin),
 //         kecuali order tidak punya data keuangan sama sekali (tidak ada yang dihapus).
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/apiAuth';
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ orderId: s
   const guard = await requireFinance(req, 'delete');
   if (!guard.ok) {
     return bad(
-      'Order ini punya data keuangan. Hanya supervisor atau user dengan izin Keuangan → Void yang boleh menghapusnya permanen.',
+      'Order ini punya data keuangan. Hanya Super Admin atau user dengan izin Keuangan → Void yang boleh menghapusnya permanen.',
       403,
     );
   }

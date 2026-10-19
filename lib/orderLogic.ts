@@ -41,9 +41,9 @@ export const triggerOrderNotifications = async (orderData: Order, oldStatus?: st
   if (oldStatus !== finalStatus) {
     switch (finalStatus) {
       case 'On Process':
-        // Produksi & Supervisor
+        // Produksi & Super Admin
         await sendToRoles(
-          ['produksi', 'supervisor'], 
+          ['produksi', 'super_admin'], 
           title, 
           "Pesanan mulai diproses produksi.",
           orderId // ✅ Kirim order_id
@@ -51,9 +51,9 @@ export const triggerOrderNotifications = async (orderData: Order, oldStatus?: st
         break;
       
       case 'Ada Kendala':
-        // Admin, Supervisor, Manager
+        // Admin, Super Admin, Manager
         await sendToRoles(
-          ['admin', 'supervisor', 'manager'], 
+          ['admin', 'super_admin', 'manager'], 
           "⚠️ ADA KENDALA!", 
           `Order ${orderData.kode_produksi} melaporkan kendala.`,
           orderId // ✅ Kirim order_id
@@ -61,9 +61,9 @@ export const triggerOrderNotifications = async (orderData: Order, oldStatus?: st
         break;
 
       case 'Finishing':
-        // QC & Supervisor
+        // QC & Super Admin
         await sendToRoles(
-          ['qc', 'supervisor'], 
+          ['qc', 'super_admin'], 
           title, 
           "Pesanan masuk tahap Finishing & QC.",
           orderId // ✅ Kirim order_id
@@ -71,9 +71,9 @@ export const triggerOrderNotifications = async (orderData: Order, oldStatus?: st
         break;
 
       case 'Revisi':
-        // Produksi, Supervisor, Manager
+        // Produksi, Super Admin, Manager
         await sendToRoles(
-          ['produksi', 'supervisor', 'manager'], 
+          ['produksi', 'super_admin', 'manager'], 
           "⚠️ REVISI QC", 
           `QC Gagal: ${orderData.finishing_qc?.notes}`,
           orderId // ✅ Kirim order_id
@@ -99,17 +99,17 @@ export const triggerOrderNotifications = async (orderData: Order, oldStatus?: st
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays < 0) {
-      // Telat -> Produksi, Admin, Supervisor
+      // Telat -> Produksi, Admin, Super Admin
       await sendToRoles(
-        ['produksi', 'admin', 'supervisor'], 
+        ['produksi', 'admin', 'super_admin'], 
         "⛔ PESANAN TELAT", 
         `Order ${orderData.kode_produksi} sudah melewati deadline!`,
         orderId // ✅ Kirim order_id
       );
     } else if (diffDays <= 2) {
-      // Urgent -> Produksi, Admin, Supervisor
+      // Urgent -> Produksi, Admin, Super Admin
       await sendToRoles(
-        ['produksi', 'admin', 'supervisor'], 
+        ['produksi', 'admin', 'super_admin'], 
         "🔥 URGENT / MEPET", 
         `Order ${orderData.kode_produksi} deadline tinggal ${diffDays} hari!`,
         orderId // ✅ Kirim order_id

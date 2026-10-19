@@ -588,9 +588,9 @@ export default function OrderList({
   const [typeFilter, setTypeFilter] = useState<string>("all");
 
   const listPerms = currentUser?.permissions?.[permissionKey];
-  const canDeleteOrder = role === "supervisor" || listPerms?.delete === true;
-  const canCreateOrder = role === "supervisor" || listPerms?.create === true;
-  const isManagement = ["admin", "manager", "supervisor"].includes(role);
+  const canDeleteOrder = role === "super_admin" || listPerms?.delete === true;
+  const canCreateOrder = role === "super_admin" || listPerms?.create === true;
+  const isManagement = ["admin", "manager", "super_admin"].includes(role);
 
   const filteredOrders = orders.filter((o) => {
     if (statusFilter !== "completed" && o.status === "Selesai") return false;

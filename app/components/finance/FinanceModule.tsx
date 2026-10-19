@@ -115,7 +115,7 @@ export default function FinanceModule({
       id: "audit",
       label: "Audit",
       icon: <History size={14} className="shrink-0" />,
-      show: caps.isSupervisor,
+      show: caps.isSuperAdmin,
     },
     {
       id: "guide",
@@ -127,7 +127,7 @@ export default function FinanceModule({
       id: "settings",
       label: "Pengaturan",
       icon: <Settings size={14} className="shrink-0" />,
-      show: caps.isSupervisor,
+      show: caps.isSuperAdmin,
     },
   ];
 
@@ -250,7 +250,7 @@ export default function FinanceModule({
           />
         )}
         {tab === "report" && caps.edit && <ReportTab version={version} />}
-        {tab === "audit" && caps.isSupervisor && <AuditTab version={version} />}
+        {tab === "audit" && caps.isSuperAdmin && <AuditTab version={version} />}
         {tab === "guide" && (
           <GuideTab
             caps={caps}
@@ -262,7 +262,7 @@ export default function FinanceModule({
             }}
           />
         )}
-        {tab === "settings" && caps.isSupervisor && <SettingsTab />}
+        {tab === "settings" && caps.isSuperAdmin && <SettingsTab />}
         {tab === "verify" && caps.edit && (
           <PaymentsTab
             key="pending"

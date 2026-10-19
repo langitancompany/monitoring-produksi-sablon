@@ -16,7 +16,7 @@ import { normalizeWa } from '@/lib/waQueue';
 
 export const dynamic = 'force-dynamic';
 
-const ROLES = ['admin', 'manager', 'supervisor'];
+const ROLES = ['admin', 'manager', 'super_admin'];
 const TIMEOUT_MS = 8000;
 
 async function panggilGateway(path: string, init?: { method?: string; body?: unknown }) {

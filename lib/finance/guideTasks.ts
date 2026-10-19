@@ -6,7 +6,7 @@ import type { FinCaps } from './caps';
 
 export type GuideTarget = 'overview' | 'invoices' | 'payments' | 'verify' | 'expenses' | 'report' | 'audit' | 'settings';
 export type Freq = 'daily' | 'weekly' | 'monthly';
-export type Needs = 'create' | 'edit' | 'supervisor';
+export type Needs = 'create' | 'edit' | 'super_admin';
 
 export interface GuideTask {
   id: string;
@@ -174,7 +174,7 @@ export const TASKS: GuideTask[] = [
     go: { tab: 'report', label: 'Buka Laporan' },
   },
   {
-    id: 'm-audit', freq: 'monthly', needs: 'supervisor',
+    id: 'm-audit', freq: 'monthly', needs: 'super_admin',
     title: 'Tinjau log audit',
     why: 'Void, revisi tagihan, dan ekspor yang tidak biasa perlu ditanyakan alasannya.',
     steps: [
@@ -209,11 +209,11 @@ export const FAQ: { q: string; a: string }[] = [
   { q: 'Laba di laporan terlihat terlalu besar.',
     a: 'Biasanya biaya belum lengkap dicatat atau belum disetujui. Lengkapi pengeluaran dan proses antreannya.' },
   { q: 'Gaji tidak bisa ditandai dibayar.',
-    a: 'Baca pesan errornya. Penyebab umum: pengaturan akun default gaji belum benar, atau periode sudah ditutup. Hubungi supervisor.' },
+    a: 'Baca pesan errornya. Penyebab umum: pengaturan akun default gaji belum benar, atau periode sudah ditutup. Hubungi Super Admin.' },
 ];
 
 export const canDo = (t: GuideTask, caps: FinCaps): boolean =>
-  !t.needs || (t.needs === 'supervisor' ? caps.isSupervisor : caps[t.needs]);
+  !t.needs || (t.needs === 'super_admin' ? caps.isSuperAdmin : caps[t.needs]);
 
 export const tasksFor = (caps: FinCaps): GuideTask[] => TASKS.filter((t) => canDo(t, caps));
 

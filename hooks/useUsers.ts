@@ -1,14 +1,40 @@
 // hooks/useUsers.ts
+//
+// Daftar user + simpan/hapus user (dipakai Pengaturan → Pengguna).
+// Tambah/ubah/hapus user lewat API server (/api/users) yang mengurus akun
+// login Supabase Auth DAN profilnya sekaligus — browser tidak menulis ke
+// tabel `users` dan tidak pernah menerima kolom password.
 import { useState, useCallback } from 'react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { UserData, ProductionTypeData } from '@/types';
 import { DEFAULT_PRODUCTION_TYPES } from '@/lib/utils';
-import { primaryRole } from '@/lib/roles';
 
 interface UseUsersProps {
   supabase: SupabaseClient;
   showAlert: (title: string, message: string, type?: 'success' | 'error') => void;
   showConfirm: (title: string, message: string, onConfirm: () => void) => void;
+}
+
+// Kolom yang dimuat ke browser (sengaja tanpa `password`).
+const USER_COLUMNS =
+  'id, username, name, role, roles, permissions, address, dob, avatar_url, no_wa';
+
+async function callUsersApi(method: 'POST' | 'PATCH' | 'DELETE', body: unknown) {
+  try {
+    const res = await fetch('/api/users', {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json().catch(() => ({}));
+    return { ok: res.ok, status: res.status, json } as const;
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      json: { error: 'Tidak bisa menghubungi server. Periksa koneksi internet.' },
+    } as const;
+  }
 }
 
 export function useUsers({ supabase, showAlert, showConfirm }: UseUsersProps) {
@@ -18,8 +44,8 @@ export function useUsers({ supabase, showAlert, showConfirm }: UseUsersProps) {
   // ─── Fetch ────────────────────────────────────────────────────────────────
 
   const fetchUsers = useCallback(async () => {
-    const { data } = await supabase.from('users').select('*').order('name');
-    if (data) setUsersList(data);
+    const { data } = await supabase.from('users').select(USER_COLUMNS).order('name');
+    if (data) setUsersList(data as unknown as UserData[]);
   }, [supabase]);
 
   const fetchProductionTypes = useCallback(async () => {
@@ -30,48 +56,64 @@ export function useUsers({ supabase, showAlert, showConfirm }: UseUsersProps) {
 
   // ─── User CRUD ────────────────────────────────────────────────────────────
 
-  const handleSaveUser = useCallback(async (u: any) => {
-    // Role ganda: `roles` = semua pilihan, `role` = role utama (lihat lib/roles.ts).
-    const roles: string[] =
-      Array.isArray(u.roles) && u.roles.length > 0
-        ? u.roles
-        : [u.role || 'produksi'];
-    const p: any = {
+  /** Tambah (tanpa id) atau ubah (dengan id). Mengembalikan true bila berhasil. */
+  const handleSaveUser = useCallback(async (u: any): Promise<boolean> => {
+    const isEdit = !!u.id;
+    const res = await callUsersApi(isEdit ? 'PATCH' : 'POST', {
+      id: u.id || undefined,
       name: u.name,
-      role: primaryRole(roles),
-      roles,
       username: u.username,
-      no_wa: u.no_wa?.trim() || null, // ── TAMBAHAN ── nomor WhatsApp untuk notifikasi
-    };
-    if (u.permissions) p.permissions = u.permissions;
-    if (u.password?.trim()) p.password = u.password;
-    const { error } = u.id
-      ? await supabase.from('users').update(p).eq('id', u.id)
-      : await supabase.from('users').insert([p]);
-    if (!error) { fetchUsers(); showAlert('Sukses', 'User tersimpan'); }
-    else showAlert('Gagal', `${error.message} (pastikan migration kolom "roles" sudah dijalankan)`, 'error');
-  }, [supabase, fetchUsers, showAlert]);
-
-  const handleDeleteUser = useCallback(async (id: string) => {
-    showConfirm('Hapus User?', 'User akan dihapus dari aplikasi dan akun login.', async () => {
-      try {
-        // 1. Hapus dari tabel users
-        await supabase.from('users').delete().eq('id', id);
-
-        // 2. Hapus dari auth via API route
-        await fetch('/api/delete-user', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: id }),
-        });
-
-        fetchUsers();
-        showAlert('Sukses', 'User berhasil dihapus');
-      } catch (err: any) {
-        showAlert('Gagal', err.message, 'error');
-      }
+      password: u.password || undefined,
+      roles: u.roles,
+      no_wa: u.no_wa,
+      permissions: u.permissions,
     });
-  }, [showConfirm, supabase, fetchUsers, showAlert]);
+
+    if (!res.ok) {
+      showAlert('Gagal', res.json?.error ?? 'User gagal disimpan', 'error');
+      return false;
+    }
+
+    await fetchUsers();
+    if (isEdit) {
+      showAlert(
+        'Sukses',
+        res.json?.passwordChanged
+          ? 'User tersimpan. Password baru berlaku di semua aplikasi Langitan.'
+          : 'User tersimpan',
+      );
+    } else if (res.json?.linked) {
+      showAlert(
+        'Sukses',
+        'User ditambahkan ke Sablon. Email ini sudah punya akun login di aplikasi lain, jadi password-nya tidak diubah.',
+      );
+    } else {
+      showAlert('Sukses', 'User dan akun login berhasil dibuat');
+    }
+    return true;
+  }, [fetchUsers, showAlert]);
+
+  const handleDeleteUser = useCallback((id: string) => {
+    showConfirm(
+      'Hapus User?',
+      'User dihapus dari Sablon. Akun login ikut dihapus hanya bila tidak dipakai aplikasi lain.',
+      async () => {
+        const res = await callUsersApi('DELETE', { userId: id });
+        if (!res.ok) {
+          showAlert('Gagal', res.json?.error ?? 'User gagal dihapus', 'error');
+          return;
+        }
+        await fetchUsers();
+        showAlert(
+          'Sukses',
+          res.json?.authKept
+            ? 'User dihapus dari Sablon. Akun login dipertahankan karena masih dipakai aplikasi lain.'
+            : 'User dan akun login berhasil dihapus',
+        );
+      },
+    );
+  }, [showConfirm, fetchUsers, showAlert]);
+
   // ─── Production Type CRUD ─────────────────────────────────────────────────
 
   const handleSaveType = useCallback(async (t: any) => {

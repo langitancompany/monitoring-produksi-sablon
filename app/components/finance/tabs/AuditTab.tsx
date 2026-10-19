@@ -14,7 +14,7 @@ const pretty = (v: unknown) => {
   return s.length > MAX_JSON ? `${s.slice(0, MAX_JSON)}\n… (dipotong)` : s;
 };
 
-/** Log audit keuangan (hanya supervisor). Hanya-baca; log tidak bisa diubah atau dihapus di database. */
+/** Log audit keuangan (hanya Super Admin). Hanya-baca; log tidak bisa diubah atau dihapus di database. */
 export default function AuditTab({ version }: { version: number }) {
   const [from, setFrom] = useState(monthStartYmd());
   const [to, setTo] = useState(todayYmd());

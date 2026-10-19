@@ -49,7 +49,7 @@ export default function OrderDetailHeader({
   onDelete,
   onPrintLabel,
 }: OrderDetailHeaderProps) {
-  const isManagement = ["admin", "manager", "supervisor"].includes(
+  const isManagement = ["admin", "manager", "super_admin"].includes(
     currentUser.role,
   );
   const isLate = getDeadlineStatus(order.deadline, order.status) === "overdue";

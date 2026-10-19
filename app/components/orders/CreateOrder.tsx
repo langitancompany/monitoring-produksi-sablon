@@ -11,7 +11,7 @@ import {
   JenisPakaian,
   JENIS_PAKAIAN_OPTIONS,
 } from "@/types";
-import { hasRole, getUserRoles } from "@/lib/roles";
+import { hasRole, getUserRoles, roleLabel } from "@/lib/roles";
 import MultiSelectDropdown from "./MultiSelectDropdown"; // ── TAMBAHAN ──
 import SizeInputForm, { SizeEntry } from "./SizeInputForm";
 import GesutInputForm from "./GesutInputForm"; // ── TAMBAHAN ──
@@ -431,7 +431,7 @@ export default function CreateOrder({
                     value={user.id}
                     className="dark:bg-zinc-800"
                   >
-                    {user.name} ({user.role})
+                    {user.name} ({roleLabel(user.role)})
                   </option>
                 ))}
               </select>
@@ -460,7 +460,7 @@ export default function CreateOrder({
                     value={user.id}
                     className="dark:bg-zinc-800"
                   >
-                    {user.name} ({user.role})
+                    {user.name} ({roleLabel(user.role)})
                   </option>
                 ))}
               </select>

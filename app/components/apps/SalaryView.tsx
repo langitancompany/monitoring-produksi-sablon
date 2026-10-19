@@ -286,14 +286,14 @@ export default function SalaryView({
   onEditOrder,
 }: SalaryViewProps) {
   // ── TAMBAHAN ── Hak akses. Pola sama persis dgn OrderDetail.tsx:
-  // supervisor selalu boleh, selain itu ikuti tabel permission di
+  // Super Admin selalu boleh, selain itu ikuti tabel permission di
   // Pengaturan → modul "Gaji & Upah". Kolom Buat dipakai utk "Cetak"
   // (bukan bikin data baru) — sama seperti kolom Buat di modul Produksi
   // dipakai utk "Upload approval" & di Finishing utk "Reset QC".
-  const isSupervisor = currentUser.role === "supervisor";
+  const isSuperAdmin = currentUser.role === "super_admin";
   const perms = currentUser.permissions;
-  const canEditOrder = isSupervisor || !!perms?.salary?.edit;
-  const canPrint = isSupervisor || !!perms?.salary?.create;
+  const canEditOrder = isSuperAdmin || !!perms?.salary?.edit;
+  const canPrint = isSuperAdmin || !!perms?.salary?.create;
 
   const handleEditOrder = (order: Order) => {
     if (onEditOrder) {
@@ -1357,7 +1357,7 @@ export default function SalaryView({
               selectedMonth={selectedMonth}
               selectedYear={selectedYear}
               productionTotals={productionTotals}
-              canManage={isSupervisor || !!perms?.salary?.edit}
+              canManage={isSuperAdmin || !!perms?.salary?.edit}
               canPrint={canPrint}
               printing={printing}
               onPrintSlip={printFixedSlip}

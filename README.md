@@ -42,7 +42,7 @@ Struktur di bawah mengikuti isi repositori saat ini (`node_modules/`, `.next/`, 
 │   │   ├── cron/
 │   │   │   ├── check-overdue/        #   deteksi pesanan telat + kirim push notification
 │   │   │   └── wa-reminders/         #   pengingat WhatsApp harian (dijadwalkan di Coolify, pakai CRON_SECRET)
-│   │   ├── delete-user/              #   hapus user dari Supabase Auth (admin)
+│   │   ├── users/                    #   tambah/ubah/hapus user + akun login Supabase Auth sekaligus (admin/Super Admin)
 │   │   ├── finance/                  #   API modul Keuangan
 │   │   │   ├── audit/ expense-meta/ export-log/ invoice-settings/ meta/ order-lookup/
 │   │   │   ├── expenses/[id]/        #     pengeluaran + aksi decide / proof / void
@@ -171,7 +171,7 @@ Struktur di bawah mengikuti isi repositori saat ini (`node_modules/`, `.next/`, 
 | `GET /api/backup`             | Backup seluruh tabel database ke JSON (pakai service role, bypass RLS).                                                       |
 | `GET /api/cleanup-storage`    | Membersihkan file di Supabase Storage yang sudah tidak direferensikan order manapun.                                          |
 | `GET /api/cron/check-overdue` | Cron job (dijadwalkan via Vercel Cron) untuk mendeteksi pesanan telat & kirim notifikasi push.                                |
-| `DELETE /api/delete-user`     | Hapus user dari Supabase Auth (admin only).                                                                                   |
+| `POST/PATCH/DELETE /api/users`| Tambah/ubah/hapus user sekaligus akun login Supabase Auth (admin & Super Admin; hanya Super Admin yang boleh mengurus Super Admin).|
 | `DELETE /api/po/orders`       | Hapus pesanan PO tertentu (service role).                                                                                     |
 | `POST /api/send-notification` | Kirim push notification via Firebase Admin.                                                                                   |
 | `GET/POST /api/sync-sheets`   | Sinkronisasi data pesanan ke Google Sheets.                                                                                   |
@@ -180,7 +180,7 @@ Struktur di bawah mengikuti isi repositori saat ini (`node_modules/`, `.next/`, 
 
 ## 5. Role & Hak Akses (Permission System)
 
-Role user: `admin`, `produksi`, `qc`, `manager`, `supervisor`.
+Role user: `admin`, `produksi`, `qc`, `manager`, `designer`, `super_admin` (tampil sebagai "Super Admin"; akses penuh).
 
 Setiap user punya objek `permissions` granular per modul (lihat `types/index.ts`), contoh modul: `dashboard`, `orders`, `merchandise`, `produksi`, `finishing`, `salary`, `logs`, `weekly_notes`, `settings`, `kalkulator`, `config_harga`, `trash`, `nota`, `keuangan`, `po_management`, dan `harga_pesanan` (kontrol khusus untuk boleh-tidaknya user tertentu melihat/mengisi harga jual di dalam detail order, terpisah dari hak edit order itu sendiri).
 
