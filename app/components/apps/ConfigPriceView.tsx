@@ -17,6 +17,74 @@ const HIDDEN_CONFIG_KEYS = new Set([
   "gesut_sistem_baru_aktif",
 ]);
 
+// Pengelompokan tampilan di dalam tiap kartu kategori. Hanya mengatur
+// TAMPILAN: key tetap sama dan tersimpan di kategori aslinya. Urutan key di
+// dalam kelompok = urutan tampil. Key yang belum terdaftar di sini otomatis
+// masuk kelompok "Lainnya" di bagian bawah, jadi tidak ada yang hilang.
+const CONFIG_GROUPS: { title: string; keys: string[] }[] = [
+  {
+    title: "Tinta",
+    keys: [
+      "cost_plastisol_ink",
+      "biaya_tambahan_tinta_per_screen",
+      "cost_dtf_ink",
+    ],
+  },
+  {
+    title: "Screen & Warna",
+    keys: ["manual_screen_cost", "cost_print_film", "batas_warna_normal"],
+  },
+  {
+    title: "Upah Gesut & Packing",
+    keys: [
+      "gaji_pj_gesut",
+      "gaji_helper_gesut",
+      "gaji_press_packing",
+      "bonus_ekstra_warna",
+    ],
+  },
+  {
+    title: "Upah Gesut (Sistem Lama)",
+    keys: [
+      "gesut_manual_kecil",
+      "gesut_manual_sedang",
+      "gesut_manual_besar",
+      "manual_finishing",
+    ],
+  },
+  {
+    title: "DTF",
+    keys: [
+      "dtf_price_per_cm",
+      "dtf_press_cost",
+      "dtf_finishing",
+      "dtf_packing",
+    ],
+  },
+  {
+    title: "Operasional & Bahan",
+    keys: ["cost_listrik_lpg", "cost_bahan_penunjang"],
+  },
+  {
+    title: "Margin",
+    keys: [
+      "margin_percentage",
+      "margin_tier2_qty",
+      "margin_tier2_percentage",
+      "margin_tier3_qty",
+      "margin_tier3_percentage",
+    ],
+  },
+  {
+    title: "Bonus Admin",
+    keys: [
+      "bonus_admin_closing",
+      "batas_pcs_bonus_admin",
+      "bonus_admin_per_pcs",
+    ],
+  },
+];
+
 export default function ConfigPriceView() {
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -114,6 +182,7 @@ export default function ConfigPriceView() {
         bonus_admin_closing: 10,
         batas_pcs_bonus_admin: 11,
         bonus_admin_per_pcs: 12,
+        biaya_tambahan_tinta_per_screen: 13,
       };
       const sortedConfigs = currentConfigs.sort((a, b) => {
         if (a.category !== b.category)
@@ -279,6 +348,55 @@ export default function ConfigPriceView() {
       </div>
     );
 
+  // Satu baris input nilai config (dipakai di semua kelompok)
+  const renderConfigItem = (item: any) => {
+    // ── PERBAIKAN ── `unit` cuma menjelaskan BASIS hitungnya
+    // (per pcs, per cm², dst), bukan menentukan apakah nilainya
+    // uang atau bukan. Sebelumnya unit === "pcs" dikira "bukan
+    // Rupiah" dan prefix "Rp" disembunyikan — padahal field
+    // seperti "Finishing (DTF)"/"Packing (DTF)" tetap Rupiah,
+    // cuma basisnya per pcs. Satu-satunya yang benar-benar
+    // bukan uang di tabel ini adalah field persen (%).
+    const isPercentage =
+      item.unit === "%" || item.unit?.toLowerCase() === "persen";
+    // satuan "warna" & "batas pcs" = jumlah, bukan Rupiah
+    const isCurrency =
+      !isPercentage && item.unit !== "warna" && item.unit !== "batas pcs";
+    return (
+      <div key={item.id}>
+        <div className="flex justify-between items-center mb-1.5">
+          <label className="text-sm text-zinc-600 dark:text-zinc-400 font-medium">
+            {item.display_name}
+          </label>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full border border-zinc-200 dark:border-zinc-700">
+            {item.unit}
+          </span>
+        </div>
+        <div className="relative">
+          {isCurrency && (
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 dark:text-zinc-400 text-sm font-medium">
+              Rp
+            </span>
+          )}
+          <input
+            type="text"
+            inputMode="numeric"
+            value={item.value_amount
+              .toString()
+              .replace(/\B(?=(\d{3})+(?!\d))/g, ".")}
+            onChange={(e) => handleConfigChange(e, item.id)}
+            className={`block w-full py-2.5 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#124540] focus:border-[#124540] text-zinc-900 dark:text-zinc-100 font-mono tabular-nums font-semibold text-lg transition-colors duration-150 ${isCurrency ? "pl-9 pr-3" : isPercentage ? "pl-4 pr-8" : "pl-4 pr-3"}`}
+          />
+          {isPercentage && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 dark:text-zinc-400 text-sm font-semibold">
+              %
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const categories = ["GENERAL", "DTF", "MANUAL", "GROSIR"];
 
   return (
@@ -321,56 +439,39 @@ export default function ConfigPriceView() {
                   {cat}
                 </h3>
               </div>
-              <div className="space-y-5 flex-1">
-                {categoryItems.map((item) => {
-                  // ── PERBAIKAN ── `unit` cuma menjelaskan BASIS hitungnya
-                  // (per pcs, per cm², dst), bukan menentukan apakah nilainya
-                  // uang atau bukan. Sebelumnya unit === "pcs" dikira "bukan
-                  // Rupiah" dan prefix "Rp" disembunyikan — padahal field
-                  // seperti "Finishing (DTF)"/"Packing (DTF)" tetap Rupiah,
-                  // cuma basisnya per pcs. Satu-satunya yang benar-benar
-                  // bukan uang di tabel ini adalah field persen (%).
-                  const isPercentage =
-                    item.unit === "%" || item.unit?.toLowerCase() === "persen";
-                  // satuan "warna" & "batas pcs" = jumlah, bukan Rupiah
-                  const isCurrency =
-                    !isPercentage &&
-                    item.unit !== "warna" &&
-                    item.unit !== "batas pcs";
-                  return (
-                    <div key={item.id}>
-                      <div className="flex justify-between items-center mb-1.5">
-                        <label className="text-sm text-zinc-600 dark:text-zinc-400 font-medium">
-                          {item.display_name}
-                        </label>
-                        <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full border border-zinc-200 dark:border-zinc-700">
-                          {item.unit}
-                        </span>
-                      </div>
-                      <div className="relative">
-                        {isCurrency && (
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 dark:text-zinc-400 text-sm font-medium">
-                            Rp
-                          </span>
-                        )}
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={item.value_amount
-                            .toString()
-                            .replace(/\B(?=(\d{3})+(?!\d))/g, ".")}
-                          onChange={(e) => handleConfigChange(e, item.id)}
-                          className={`block w-full py-2.5 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#124540] focus:border-[#124540] text-zinc-900 dark:text-zinc-100 font-mono tabular-nums font-semibold text-lg transition-colors duration-150 ${isCurrency ? "pl-9 pr-3" : isPercentage ? "pl-4 pr-8" : "pl-4 pr-3"}`}
-                        />
-                        {isPercentage && (
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 dark:text-zinc-400 text-sm font-semibold">
-                            %
-                          </span>
-                        )}
-                      </div>
-                    </div>
+              <div className="space-y-6 flex-1">
+                {(() => {
+                  const used = new Set<string>();
+                  const sections = CONFIG_GROUPS.map((g) => ({
+                    title: g.title,
+                    items: g.keys
+                      .map((k) => categoryItems.find((it) => it.key_name === k))
+                      .filter(Boolean),
+                  })).filter((g) => g.items.length > 0);
+                  sections.forEach((g) =>
+                    g.items.forEach((it: any) => used.add(it.key_name)),
                   );
-                })}
+                  const rest = categoryItems.filter(
+                    (it) => !used.has(it.key_name),
+                  );
+                  if (rest.length > 0)
+                    sections.push({ title: "Lainnya", items: rest });
+                  return sections.map((g) => (
+                    <div key={g.title} className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">
+                          {g.title}
+                        </span>
+                        <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+                      </div>
+                      {g.items.map((item: any) => (
+                        <React.Fragment key={item.id}>
+                          {renderConfigItem(item)}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  ));
+                })()}
               </div>
             </div>
           );

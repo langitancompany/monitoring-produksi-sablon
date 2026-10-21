@@ -190,8 +190,26 @@ export default function CalculatorView() {
       currentGesutCost = pressCost;
     } else {
       const screenCost = config.manual_screen_cost ?? 0;
-      const plastisolCostPerPcs = config.cost_plastisol_ink ?? 0;
-      const setupCostPerPcs = (screenCost * totalColorsEfektif) / safeQty;
+      // Cost tinta standar + biaya tambahan tinta untuk screen di atas
+      // batas_warna_normal (batas yang sama dengan bonus gesut). Tiap screen
+      // tambahan kena biaya_tambahan_tinta_per_screen per pcs. Berlaku untuk
+      // sistem gesut lama maupun baru karena ini biaya bahan, bukan upah.
+      const batasWarnaTinta = config.batas_warna_normal ?? 4;
+      const tambahanTintaPerScreen =
+        config.biaya_tambahan_tinta_per_screen ?? 500;
+      const warnaTintaEkstra = Math.max(
+        0,
+        totalColorsEfektif - batasWarnaTinta,
+      );
+      const plastisolCostPerPcs =
+        (config.cost_plastisol_ink ?? 0) +
+        warnaTintaEkstra * tambahanTintaPerScreen;
+      // Biaya print film (key cost_print_film, kategori MANUAL, satuan
+      // rupiah/warna): film dicetak sekali per warna per order, jadi dibagi
+      // qty seperti biaya screen.
+      const filmCost = config.cost_print_film ?? 0;
+      const setupCostPerPcs =
+        ((screenCost + filmCost) * totalColorsEfektif) / safeQty;
 
       if (sistemEfektif === "lama") {
         // ── SISTEM LAMA: komposisi warna kecil/sedang/besar × rate gesut_manual_* ──
@@ -267,6 +285,11 @@ export default function CalculatorView() {
       ? inputs.colorsKecil + inputs.colorsSedang + inputs.colorsBesar
       : inputs.totalColors;
   const manualNormalLimit = config.batas_warna_normal ?? 4;
+  // Biaya tambahan tinta: berlaku di kedua sistem gesut
+  const batasWarnaTintaUI = config.batas_warna_normal ?? 4;
+  const tambahanTintaUI =
+    Math.max(0, totalManualColors - batasWarnaTintaUI) *
+    (config.biaya_tambahan_tinta_per_screen ?? 500);
   // Bonus warna ekstra hanya ada di sistem baru
   const manualExtraColors =
     sistemEfektif === "baru"
@@ -399,9 +422,23 @@ export default function CalculatorView() {
             </span>
           </div>
           <div className="flex justify-between text-sm">
+            <span className="text-zinc-500 dark:text-zinc-400">
+              Beban Print Film ({totalManualColors} warna)
+            </span>
+            <span className="font-mono tabular-nums font-semibold text-zinc-900 dark:text-white">
+              {formatResult(
+                ((config.cost_print_film ?? 0) * totalManualColors) /
+                  (inputs.qty || 1),
+              )}{" "}
+              <span className="text-[10px] font-normal text-zinc-400 dark:text-zinc-500">
+                /pcs
+              </span>
+            </span>
+          </div>
+          <div className="flex justify-between text-sm">
             <span className="text-zinc-500 dark:text-zinc-400">Cost Tinta</span>
             <span className="font-mono tabular-nums font-semibold text-zinc-900 dark:text-white">
-              {formatResult(config.cost_plastisol_ink ?? 0)}{" "}
+              {formatResult((config.cost_plastisol_ink ?? 0) + tambahanTintaUI)}{" "}
               <span className="text-[10px] font-normal text-zinc-400 dark:text-zinc-500">
                 /pcs
               </span>
@@ -616,10 +653,6 @@ export default function CalculatorView() {
                         className="w-full text-lg md:text-xl font-mono tabular-nums font-semibold text-zinc-900 dark:text-white bg-transparent border-zinc-300 dark:border-zinc-700 border rounded-lg p-3 focus:ring-2 focus:ring-[#124540] outline-none placeholder-zinc-300 dark:placeholder-zinc-600 transition-colors duration-150"
                         placeholder="0"
                       />
-                      <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-                        Normal sampai {config.batas_warna_normal ?? 4} warna.
-                        Lebih dari itu kena bonus kompleksitas.
-                      </p>
                     </>
                   )}
                 </div>
