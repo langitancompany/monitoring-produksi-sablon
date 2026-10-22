@@ -2,7 +2,7 @@
 
 export const APP_INFO = {
   name: "Langitan.co SuperApp",
-  version: "V.18.0",
+  version: "V.18.5",
   purpose: "Aplikasi produksi Sablon, Langitan.co.",
   creator: "abdllahmajid",
   creationDate: "13 Desember 2025",
