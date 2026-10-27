@@ -16,7 +16,7 @@
 
 // app/layout.tsx
 
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -25,6 +25,7 @@ import { ThemeProvider } from "next-themes";
 
 // ✅ 1. IMPORT KOMPONEN FCM MANAGER DI SINI
 import FCMManager from "@/app/components/misc/FCMManager";
+import InstallPrompt from "@/app/components/misc/InstallPrompt";
 import { DialogProvider } from "@/app/components/ui/DialogProvider";
 
 const geistSans = Geist({
@@ -40,6 +41,26 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Sabmoon",
   description: "Aplikasi Sablon Monitoring LCO.",
+  applicationName: "Sabmoon",
+  // iOS: ikon layar utama & mode aplikasi penuh
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Sabmoon",
+    statusBarStyle: "black-translucent",
+  },
+  formatDetection: { telephone: false },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#000000",
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -57,6 +78,9 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           {/* ✅ 2. PASANG KOMPONEN DI SINI AGAR BERJALAN OTOMATIS */}
           <FCMManager />
+
+          {/* Ajakan "Pasang aplikasi" — hanya muncul jika belum terpasang */}
+          <InstallPrompt />
 
           <DialogProvider>{children}</DialogProvider>
         </ThemeProvider>

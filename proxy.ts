@@ -66,6 +66,6 @@ export const config = {
     // tidak memicu request ke Supabase tiap beberapa detik.
     // api/version juga dikecualikan: endpoint publik yang di-polling Dashboard
     // tiap 5 menit dan tidak butuh sesi login.
-    '/((?!_next/static|_next/image|favicon.ico|api/health|api/version|firebase-messaging-sw\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/health|api/version|firebase-messaging-sw\\.js|manifest\\.webmanifest|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
