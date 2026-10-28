@@ -32,8 +32,6 @@ export function useUnitAccess(userId: string | undefined) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('[DEBUG] userId yang diterima:', userId); // TEMPORARY
-
     if (!userId) {
       setUnits([]);
       setLoading(false);
@@ -50,8 +48,6 @@ export function useUnitAccess(userId: string | undefined) {
         .select('unit_code')
         .eq('user_id', userId);
 
-      console.log('[DEBUG] hasil query direksi_access:', { data, error }); // TEMPORARY
-
       if (cancelled) return;
 
       if (error || !data) {
@@ -62,8 +58,6 @@ export function useUnitAccess(userId: string | undefined) {
 
       const codes = data.map((row) => row.unit_code as string);
       const accessible = ALL_UNITS.filter((u) => codes.includes(u.code));
-
-      console.log('[DEBUG] unit yang cocok:', accessible); // TEMPORARY
 
       setUnits(accessible);
       setLoading(false);

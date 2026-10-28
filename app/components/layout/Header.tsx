@@ -14,6 +14,11 @@ import {
 import { UserData } from "@/types";
 
 import { roleLabel } from "@/lib/roles";
+import UnitSwitcher from "@/app/components/layout/UnitSwitcher";
+
+// Kode unit aplikasi ini — harus sama dengan `code` di ALL_UNITS (hooks/useUnitAccess.ts)
+// dan kolom direksi_access.unit_code.
+const UNIT_CODE = process.env.NEXT_PUBLIC_UNIT_CODE || "sablon";
 interface Notification {
   id: string;
   title: string;
@@ -270,6 +275,9 @@ export default function Header({
 
       {/* ── KANAN ── */}
       <div className="flex items-center gap-3">
+        {/* Pindah unit usaha — hanya muncul untuk direksi (akses > 1 unit) */}
+        <UnitSwitcher userId={currentUser.id} currentUnitCode={UNIT_CODE} />
+
         {/* Bell notifikasi */}
         <div className="relative">
           <button

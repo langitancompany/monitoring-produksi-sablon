@@ -33,7 +33,7 @@ export default function UnitSwitcher({
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl text-slate-600 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 transition shadow-sm active:scale-95 text-sm font-bold"
+        className="flex items-center gap-2 px-3 py-2.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-600 dark:text-zinc-200 hover:text-[#124540] dark:hover:text-[#49BFB4] transition-colors duration-150 text-sm font-semibold"
         style={{ WebkitTapHighlightColor: "transparent" }}
       >
         <Building2 className="w-4 h-4" />
@@ -52,11 +52,11 @@ export default function UnitSwitcher({
           <div
             className="
             fixed md:absolute right-4 md:right-0 left-4 md:left-auto top-24 md:top-full md:mt-2
-            md:w-56 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700
-            z-40 p-2 animate-in fade-in slide-in-from-top-2 duration-200
+            md:w-56 bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800
+            z-40 p-2
           "
           >
-            <p className="px-3 py-2 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+            <p className="px-3 py-2 text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-[0.14em]">
               Pindah Unit Usaha
             </p>
             {units.map((unit) => {
@@ -65,11 +65,11 @@ export default function UnitSwitcher({
                 <button
                   key={unit.code}
                   onClick={() => handleSelect(unit)}
-                  className={`w-full text-left px-3 py-2.5 rounded-xl flex items-center justify-between gap-2 text-sm font-semibold transition
+                  className={`w-full text-left px-3 py-2.5 rounded-md flex items-center justify-between gap-2 text-sm font-semibold transition-colors duration-150
                     ${
                       isActive
-                        ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-                        : "text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+                        ? "bg-zinc-100 dark:bg-zinc-900 text-[#124540] dark:text-[#49BFB4]"
+                        : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900"
                     }`}
                   style={{ WebkitTapHighlightColor: "transparent" }}
                 >
