@@ -88,17 +88,11 @@ export function useOrders({
 
   const activeOrders = useMemo(() => orders.filter(o => !o.deleted_at), [orders]);
 
-  // ─── Generate Kode Produksi ───────────────────────────────────────────────
-
-  const generateProductionCode = useCallback(() => {
-    const now = new Date();
-    const prefix = `LCO-${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getFullYear()).slice(-2)}-`;
-    const existingCodes = orders
-      .filter(o => o.kode_produksi?.startsWith(prefix))
-      .map(o => parseInt(o.kode_produksi.split('-').pop()!) || 0);
-    const max = existingCodes.length > 0 ? Math.max(...existingCodes) : 0;
-    return `${prefix}${String(max + 1).padStart(4, '0')}`;
-  }, [orders]);
+  // ─── Kode Produksi ────────────────────────────────────────────────────────
+  // Kode (LCO-MM/YY-NNNN) TIDAK lagi dibuat di browser. Nomornya dibuat atomik oleh
+  // database (trigger di tabel orders, migrasi 014_kode_produksi_atomic.sql) dan
+  // dipakai bersama oleh SEMUA jenis produksi (manual, DTF, merchandise), jadi
+  // tidak bisa kembar walau dua orang menyimpan pesanan bersamaan.
 
   // ─── Write Log ────────────────────────────────────────────────────────────
 
@@ -211,7 +205,7 @@ export function useOrders({
     setIsCreating(true);
     try {
     const payload: any = {
-      kode_produksi: generateProductionCode(),
+      // kode_produksi diisi otomatis oleh database (lihat migrasi 014)
       nama_pemesan: formData.nama,
       no_hp: formData.hp,
       alamat_pemesan: formData.alamat_pemesan || null,
@@ -266,7 +260,7 @@ export function useOrders({
     } finally {
       setIsCreating(false);
     }
-  }, [generateProductionCode, supabase, fetchOrders, showAlert, writeLog, setView, isCreating]);
+  }, [supabase, fetchOrders, showAlert, writeLog, setView, isCreating]);
 
   const handleEditOrder = useCallback(async (d: any, selectedOrderId: string) => {
     if (isUpdating) return; // ── TAMBAHAN ── cegah klik ganda saat sedang menyimpan
@@ -317,7 +311,7 @@ export function useOrders({
     setIsCreating(true);
     try {
       const payload: any = {
-        kode_produksi: generateProductionCode(),
+        // kode_produksi diisi otomatis oleh database (lihat migrasi 014)
         nama_pemesan: formData.nama,
         no_hp: formData.hp,
         alamat_pemesan: formData.alamat_pemesan?.trim() || null,
@@ -362,7 +356,7 @@ export function useOrders({
     } finally {
       setIsCreating(false);
     }
-  }, [generateProductionCode, supabase, fetchOrders, showAlert, writeLog, setView, isCreating]);
+  }, [supabase, fetchOrders, showAlert, writeLog, setView, isCreating]);
 
   const handleEditMerchandiseOrder = useCallback(async (d: any, selectedOrderId: string) => {
     if (isUpdating) return; // cegah klik ganda saat sedang menyimpan
