@@ -100,7 +100,7 @@ export function PaymentRow({
             <Paperclip className="w-3 h-3" /> Lihat bukti
           </button>
         )}
-        {p.status === "pending" && caps.edit && (
+        {p.status === "pending" && caps.approver && (
           <>
             <button
               onClick={() => actions.verify(p)}

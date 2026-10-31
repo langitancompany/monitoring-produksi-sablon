@@ -2,7 +2,7 @@
 // Akses untuk memposting gaji ke Keuangan. Yang boleh: Super Admin, atau pengguna yang memang
 // punya akses menu Gaji & Upah (permission `salary`). Mereka sudah bisa menandai gaji "dibayar"
 // di menu Gaji, jadi tidak diminta punya izin `keuangan` terpisah. Pengeluaran yang dibuat selalu
-// berstatus PENDING sehingga tetap perlu disetujui pemegang izin `keuangan.edit`.
+// berstatus PENDING sehingga tetap perlu disetujui pemegang izin Approver keuangan.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/apiAuth';

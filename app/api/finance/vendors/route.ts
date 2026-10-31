@@ -6,7 +6,7 @@ import { requireFinance, finFail, bad } from '@/lib/finance/server';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
-  const guard = await requireFinance(req, 'create');
+  const guard = await requireFinance(req, 'maker');
   if (!guard.ok) return guard.response;
   const { actor } = guard;
 

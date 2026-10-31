@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await requireFinance(req, 'create');
+  const guard = await requireFinance(req, 'maker');
   if (!guard.ok) return guard.response;
   const { actor } = guard;
 
@@ -63,8 +63,8 @@ export async function POST(req: NextRequest) {
   if (!isDate(paidAt)) return bad('Tanggal pembayaran tidak valid');
   if (!/^\d{1,12}$/.test(str('amount')) || Number(str('amount')) <= 0) return bad('Nominal tidak valid');
   if (kind !== null && kind !== 'refund') return bad('Jenis pembayaran tidak valid');
-  // Refund = uang keluar ke pelanggan -> hanya yang berhak memverifikasi.
-  if (kind === 'refund' && !actor.caps.edit) return bad('Refund hanya dapat dicatat oleh yang berhak memverifikasi', 403);
+  // Refund = uang keluar ke pelanggan -> dicatat oleh Maker, lalu tetap harus diverifikasi Approver.
+  if (kind === 'refund' && !actor.caps.maker) return bad('Refund hanya dapat dicatat oleh Maker', 403);
 
   // Bukti (opsional di sini; wajib-tidaknya diputuskan database sesuai pengaturan)
   let proofPath: string | null = null;
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
   // `auto_verify_own_payment` sengaja dinyalakan, pencatatnya berhak verifikasi, dan aturan
   // "pencatat harus beda dengan pemverifikasi" tidak aktif.
   const autoVerify =
-    settings.auto_verify_own_payment && actor.caps.edit && !settings.require_separate_verifier;
+    settings.auto_verify_own_payment && actor.caps.approver && !settings.require_separate_verifier;
 
   const { data: id, error } = await admin.rpc('fin_record_payment', {
     p_order: orderId,

@@ -120,7 +120,7 @@ export default function GuideTab({
               ? `${formatRupiah(todo.pending_payments.amount)}${todo.pending_payments.oldest_days != null ? ` · tertua ${todo.pending_payments.oldest_days} hari` : ""}`
               : "Antrean kosong",
           tone: todo.pending_payments.count > 0 ? "amber" : "neutral",
-          go: caps.edit ? { tab: "verify" } : null,
+          go: caps.approver ? { tab: "verify" } : null,
           note: "Diproses bagian verifikasi",
         },
         {
@@ -132,7 +132,7 @@ export default function GuideTab({
               ? `${formatRupiah(todo.pending_expenses.amount)}${todo.pending_expenses.oldest_days != null ? ` · tertua ${todo.pending_expenses.oldest_days} hari` : ""}`
               : "Antrean kosong",
           tone: todo.pending_expenses.count > 0 ? "amber" : "neutral",
-          go: caps.edit ? { tab: "expenses", pending: true } : null,
+          go: caps.approver ? { tab: "expenses", pending: true } : null,
           note: "Diproses bagian verifikasi",
         },
         {
@@ -156,7 +156,7 @@ export default function GuideTab({
               ? "Belum punya tagihan"
               : "Semua sudah ditagih",
           tone: todo.unbilled_recent.count > 0 ? "amber" : "neutral",
-          go: caps.create ? { tab: "invoices" } : null,
+          go: caps.maker ? { tab: "invoices" } : null,
           note: "Ditagih oleh admin pencatat",
         },
       ]
@@ -164,8 +164,8 @@ export default function GuideTab({
 
   const roles = [
     caps.isSuperAdmin && "Super Admin",
-    caps.create && "Pencatat",
-    caps.edit && "Verifikator",
+    caps.maker && "Maker (pencatat)",
+    caps.approver && "Approver (verifikator)",
     caps.delete && "Hak Void",
   ].filter(Boolean) as string[];
 

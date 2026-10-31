@@ -52,6 +52,13 @@ export function sanitizePermissions(raw: unknown): UserPermissions {
       out[mod][action] = typeof v === 'boolean' ? v : defaults[action];
     }
   }
+  // User lama (sebelum Maker/Approver): create -> maker, edit -> approver. Sama dengan
+  // normalizePermissions (UI) & resolveFinanceCaps, supaya data lama tidak hilang saat disimpan.
+  const k = src?.keuangan;
+  if (k && typeof k === 'object') {
+    if (typeof k.maker !== 'boolean') out.keuangan.maker = k.create === true;
+    if (typeof k.approver !== 'boolean') out.keuangan.approver = k.edit === true;
+  }
   return out as unknown as UserPermissions;
 }
 

@@ -11,6 +11,14 @@ export type UserRole = 'admin' | 'produksi' | 'qc' | 'manager' | 'super_admin' |
 // ─── Tipe dasar per modul ────────────────────────────────────────────────────
 
 interface ModuleFull     { view: boolean; create: boolean; edit: boolean; delete: boolean }
+/**
+ * Keuangan: view + delete (void) + dua peran terpisah.
+ *  - maker    : menerbitkan/merevisi tagihan & mencatat pembayaran/pengeluaran/refund
+ *  - approver : memverifikasi/menolak pembayaran & pengeluaran (+ laporan)
+ * Kolom lama create/edit tidak dipakai lagi; hanya dibaca sebagai cadangan untuk user lama
+ * yang belum punya maker/approver (lihat lib/finance/caps.ts & lib/permissionModules.ts).
+ */
+interface ModuleKeuangan { view: boolean; maker: boolean; approver: boolean; delete: boolean }
 interface ModuleView     { view: boolean }
 interface ModuleViewEdit { view: boolean; edit: boolean }
 interface ModuleTrash    { view: boolean; delete: boolean }
@@ -42,9 +50,9 @@ export interface UserPermissions {
   config_harga:  ModuleViewEdit;
   trash:         ModuleTrash;
   nota:          ModuleView;
-  // Menu Keuangan v2: view=lihat · create=terbitkan tagihan & catat pembayaran ·
-  // edit=verifikasi pembayaran · delete=void (koreksi). Lihat lib/finance/caps.ts.
-  keuangan:      ModuleFull;
+  // Menu Keuangan v2: view=lihat · maker=terbitkan tagihan & catat pembayaran/pengeluaran ·
+  // approver=verifikasi/tolak · delete=void (koreksi). Lihat lib/finance/caps.ts.
+  keuangan:      ModuleKeuangan;
   po_management: ModuleFull;
   // ── TAMBAHAN ──
   // Kontrol khusus untuk input harga & status pembayaran DI DALAM modul Order
@@ -75,7 +83,7 @@ export const DEFAULT_PERMISSIONS: UserPermissions = {
   config_harga:  { view: false, edit: false },
   trash:         { view: false, delete: false },
   nota:          { view: false },
-  keuangan:      { view: false, create: false, edit: false, delete: false },
+  keuangan:      { view: false, maker: false, approver: false, delete: false },
   po_management: { view: false, create: false, edit: false, delete: false },
   // ── TAMBAHAN ──
   harga_pesanan: { view: false, create: false, edit: false, delete: false },

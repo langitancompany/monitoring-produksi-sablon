@@ -143,14 +143,14 @@ export default function OrderFinancePanel({
       ) : (
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
           Order ini belum ditagih.{" "}
-          {caps.create
+          {caps.maker
             ? "Terbitkan tagihan untuk mulai mencatat pembayaran."
             : "Hubungi bagian keuangan."}
         </p>
       )}
 
       <div className="flex flex-wrap gap-2">
-        {caps.create && (
+        {caps.maker && (
           <button
             onClick={() => setShowInvoice(true)}
             className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-md border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors duration-150"
@@ -159,7 +159,7 @@ export default function OrderFinancePanel({
             {hasInvoice ? "Revisi tagihan" : "Terbitkan tagihan"}
           </button>
         )}
-        {caps.create && hasInvoice && (
+        {caps.maker && hasInvoice && (
           <button
             onClick={() => setShowRecord(true)}
             className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-md bg-[#124540] text-white hover:bg-[#0d332f] transition-colors duration-150"
@@ -231,7 +231,7 @@ export default function OrderFinancePanel({
       {showRecord && hasInvoice && (
         <RecordPaymentModal
           target={{ ...f, total: f.total }}
-          canRefund={caps.edit}
+          canRefund={caps.maker}
           onClose={() => setShowRecord(false)}
           onDone={changed}
         />

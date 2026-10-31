@@ -187,6 +187,7 @@ Setiap user punya objek `permissions` granular per modul (lihat `types/index.ts`
 Catatan desain penting (dari komentar kode):
 
 - Role `qc` dipakai untuk satu tim yang mengerjakan QC + finishing + packing DTF sekaligus (gaji dihitung gabungan per-pcs) — **tidak ada role terpisah** untuk finishing.
+- `keuangan` memakai dua peran terpisah: **Maker** (terbitkan/revisi tagihan, catat pembayaran, pengeluaran, refund) dan **Approver** (verifikasi/tolak pembayaran & pengeluaran, Laporan), ditambah `view` dan `delete` (void). Kolom lama `create`/`edit` hanya dibaca sebagai cadangan untuk user lama (migration `013_finance_maker_approver.sql`). Definisi modul di layar Hak Akses ada di `lib/permissionModules.ts` (`MODULE_DEFS`); tambah modul baru cukup satu objek di sana.
 - `harga_pesanan` sengaja dipisah dari `orders` (CRUD detail produksi) dan `keuangan` (mode koreksi), supaya admin yang boleh input data produksi belum tentu otomatis boleh melihat/mengisi harga jual.
 
 ## 6. Model Data Inti (ringkas)

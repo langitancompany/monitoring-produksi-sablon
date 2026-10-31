@@ -2,7 +2,7 @@
 
 export const APP_INFO = {
   name: "Langitan.co SuperApp",
-  version: "V.18.5",
+  version: "V.18.6",
   purpose: "Aplikasi produksi Sablon, Langitan.co.",
   creator: "abdllahmajid",
   creationDate: "13 Desember 2025",
@@ -16,6 +16,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "18.6",
+    date: "2026-10-31",
+    changes: [
+      "Izin Keuangan kini punya dua peran terpisah: Maker dan Approver. Maker boleh menerbitkan/merevisi tagihan dan mencatat pembayaran, pengeluaran, dan refund. Approver boleh memverifikasi atau menolak pembayaran & pengeluaran, serta melihat Laporan.",
+      "Punya akses menu Keuangan (Lihat) saja tidak lagi otomatis boleh membuat tagihan atau memverifikasi. Pemisahan ini dicek di server, bukan hanya menyembunyikan tombol. Refund dicatat Maker dan tetap diverifikasi Approver.",
+      "Tampilan Pengaturan → Pengguna dirombak: daftar user (cari + halaman) dengan ikon kunci \"Lihat Akses\", lalu halaman detail berisi Informasi Pengguna dan Hak Akses Modul berbentuk toggle. Maker dan Approver satu baris dengan Keuangan.",
+      "Modul ditambahkan lewat modal \"Tambah Akses Modul\": pilih satu atau banyak modul sekaligus (atau Pilih Semua), tentukan izin awal, lalu simpan. Ikon sampah di tiap baris mencabut akses modul itu. Perubahan baru tersimpan setelah klik Simpan Perubahan.",
+      "Perbaikan: daftar pilihan (dropdown) di mode gelap tampil putih dan tidak terbaca, mis. memilih Order Closing di menu Gaji & Upah → Admin. Sekarang mengikuti tema gelap.",
+      "User yang sebelumnya punya Keuangan: Buat otomatis menjadi Maker, dan yang punya Keuangan: Edit menjadi Approver, sehingga akses mereka tidak berubah. Jalankan migration 013 agar tersimpan permanen.",
+    ],
+  },
   {
     version: "18.0",
     date: "2026-10-11",

@@ -75,7 +75,7 @@ export function ExpenseRow({ x, caps, actions }: { x: Row; caps: FinCaps; action
             <Paperclip className="w-3 h-3" /> Lihat bukti
           </button>
         )}
-        {x.status === "pending" && caps.edit && (
+        {x.status === "pending" && caps.approver && (
           <>
             <button
               onClick={() => actions.approve(x)}

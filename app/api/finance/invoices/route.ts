@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await requireFinance(req, 'create');
+  const guard = await requireFinance(req, 'maker');
   if (!guard.ok) return guard.response;
   const { actor } = guard;
 

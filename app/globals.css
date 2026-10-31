@@ -73,3 +73,16 @@ button, .cursor-pointer {
   .po-cd-in, .po-cd-out { animation: none; }
   .po-cd-out { display: none; }
 }
+/* Dropdown <select> bawaan browser di mode gelap.
+   Mode gelap aplikasi memakai class "dark" (next-themes), bukan pengaturan OS, jadi browser
+   tetap menggambar daftar pilihan (popup) dengan latar putih sementara teks <select> berwarna
+   terang (dark:text-white) → daftar tampak kosong/putih. Dua aturan ini membuat popup
+   mengikuti tema aplikasi untuk SEMUA <select>. */
+html.dark {
+  color-scheme: dark;
+}
+html.dark select option,
+html.dark select optgroup {
+  background-color: #18181b; /* zinc-900 */
+  color: #f4f4f5;            /* zinc-100 */
+}

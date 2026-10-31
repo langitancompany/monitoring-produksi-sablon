@@ -126,7 +126,7 @@ export default function ExpensesTab({
               className={filterInputCls}
             />
           </FilterField>
-          {caps.create && (
+          {caps.maker && (
             <div className="col-span-2 sm:col-span-1 sm:ml-auto">
               <PrimaryButton onClick={() => setShowRecord(true)} className="w-full sm:w-auto h-10">
                 <Plus className="w-4 h-4" /> Catat pengeluaran

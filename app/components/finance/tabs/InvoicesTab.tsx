@@ -252,7 +252,7 @@ export default function InvoicesTab({
                         <Send className="w-3 h-3" /> Invoice
                       </button>
                     )}
-                    {caps.create && r.invoice_id && r.balance > 0 && (
+                    {caps.maker && r.invoice_id && r.balance > 0 && (
                       <button
                         onClick={() => setRecordRow(r)}
                         className="text-[11px] font-semibold px-3 py-1.5 rounded-md bg-[#124540] text-white hover:bg-[#0d332f] transition-colors duration-150"

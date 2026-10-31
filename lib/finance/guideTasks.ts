@@ -6,7 +6,7 @@ import type { FinCaps } from './caps';
 
 export type GuideTarget = 'overview' | 'invoices' | 'payments' | 'verify' | 'expenses' | 'report' | 'audit' | 'settings';
 export type Freq = 'daily' | 'weekly' | 'monthly';
-export type Needs = 'create' | 'edit' | 'super_admin';
+export type Needs = 'maker' | 'approver' | 'super_admin';
 
 export interface GuideTask {
   id: string;
@@ -36,7 +36,7 @@ export const FREQ_PERIOD_HINT: Record<Freq, string> = {
 export const TASKS: GuideTask[] = [
   // ───────────── Harian ─────────────
   {
-    id: 'd-verify', freq: 'daily', needs: 'edit',
+    id: 'd-verify', freq: 'daily', needs: 'approver',
     title: 'Proses antrean verifikasi pembayaran',
     why: 'Pembayaran baru belum dihitung sebagai uang masuk sampai diverifikasi.',
     steps: [
@@ -48,7 +48,7 @@ export const TASKS: GuideTask[] = [
     go: { tab: 'verify', label: 'Buka antrean' },
   },
   {
-    id: 'd-approve', freq: 'daily', needs: 'edit',
+    id: 'd-approve', freq: 'daily', needs: 'approver',
     title: 'Setujui atau tolak pengeluaran',
     why: 'Pengeluaran yang belum disetujui tidak dihitung di laporan.',
     steps: [
@@ -59,7 +59,7 @@ export const TASKS: GuideTask[] = [
     go: { tab: 'expenses', pending: true, label: 'Buka antrean' },
   },
   {
-    id: 'd-invoice', freq: 'daily', needs: 'create',
+    id: 'd-invoice', freq: 'daily', needs: 'maker',
     title: 'Terbitkan tagihan untuk order baru',
     why: 'Pembayaran hanya bisa dicatat pada order yang sudah punya tagihan.',
     steps: [
@@ -71,7 +71,7 @@ export const TASKS: GuideTask[] = [
     go: { tab: 'invoices', label: 'Buka Tagihan' },
   },
   {
-    id: 'd-payment', freq: 'daily', needs: 'create',
+    id: 'd-payment', freq: 'daily', needs: 'maker',
     title: 'Catat pembayaran yang masuk',
     why: 'Uang yang diterima tetapi tidak dicatat tidak akan muncul di laporan.',
     steps: [
@@ -83,7 +83,7 @@ export const TASKS: GuideTask[] = [
     go: { tab: 'invoices', label: 'Buka Tagihan' },
   },
   {
-    id: 'd-expense', freq: 'daily', needs: 'create',
+    id: 'd-expense', freq: 'daily', needs: 'maker',
     title: 'Catat pengeluaran hari ini',
     why: 'Biaya yang tidak dicatat membuat laba terlihat lebih besar dari kenyataan.',
     steps: [
@@ -107,7 +107,7 @@ export const TASKS: GuideTask[] = [
     go: { tab: 'overview', label: 'Buka Ringkasan' },
   },
   {
-    id: 'w-unbilled', freq: 'weekly', needs: 'create',
+    id: 'w-unbilled', freq: 'weekly', needs: 'maker',
     title: 'Tagih order yang belum ditagih',
     why: 'Order tanpa tagihan tidak tercatat sebagai pendapatan.',
     steps: [
@@ -117,7 +117,7 @@ export const TASKS: GuideTask[] = [
     go: { tab: 'invoices', label: 'Buka Tagihan' },
   },
   {
-    id: 'w-complete', freq: 'weekly', needs: 'create',
+    id: 'w-complete', freq: 'weekly', needs: 'maker',
     title: 'Pastikan pengeluaran minggu ini lengkap',
     why: 'Laporan laba rugi hanya seakurat kelengkapan biaya yang dicatat.',
     steps: [
@@ -135,14 +135,14 @@ export const TASKS: GuideTask[] = [
     steps: [
       'Buka menu Gaji, pilih bulan dan karyawan.',
       'Klik Tandai Sudah Dibayar. Sistem otomatis mencatat pengeluaran gaji per order.',
-      'Kembali ke Keuangan, tab Pengeluaran, lalu setujui pengeluaran gajinya (pemegang hak Verifikasi).',
+      'Kembali ke Keuangan, tab Pengeluaran, lalu setujui pengeluaran gajinya (pemegang izin Approver).',
       'Jangan mencatat gaji yang sama secara manual agar tidak terhitung dobel.',
     ],
     outside: 'Dikerjakan di menu Gaji, di luar tab Keuangan.',
     go: { tab: 'expenses', pending: true, label: 'Buka antrean pengeluaran' },
   },
   {
-    id: 'm-reconcile', freq: 'monthly', needs: 'edit',
+    id: 'm-reconcile', freq: 'monthly', needs: 'approver',
     title: 'Cocokkan kas dan bank dengan mutasi',
     why: 'Selisih menandakan ada transaksi yang belum dicatat atau salah catat.',
     steps: [
@@ -153,7 +153,7 @@ export const TASKS: GuideTask[] = [
     go: { tab: 'payments', label: 'Buka Transaksi' },
   },
   {
-    id: 'm-report', freq: 'monthly', needs: 'edit',
+    id: 'm-report', freq: 'monthly', needs: 'approver',
     title: 'Periksa laporan bulan ini',
     why: 'Mendeteksi biaya yang belum lengkap dan order yang merugi.',
     steps: [
@@ -164,7 +164,7 @@ export const TASKS: GuideTask[] = [
     go: { tab: 'report', label: 'Buka Laporan' },
   },
   {
-    id: 'm-export', freq: 'monthly', needs: 'edit',
+    id: 'm-export', freq: 'monthly', needs: 'approver',
     title: 'Ekspor dan arsipkan laporan',
     why: 'Arsip bulanan memudahkan pemeriksaan di kemudian hari.',
     steps: [
@@ -201,7 +201,7 @@ export const FAQ: { q: string; a: string }[] = [
   { q: 'Harga pada tagihan salah.',
     a: 'Klik Revisi tagihan pada order itu dan isi alasannya. Versi lama tetap tersimpan di Riwayat tagihan.' },
   { q: 'Customer meminta uangnya dikembalikan.',
-    a: 'Catat sebagai Refund lewat kotak centang pada form pembayaran. Hanya pemegang hak Verifikasi yang bisa.' },
+    a: 'Catat sebagai Refund lewat kotak centang pada form pembayaran. Bisa dicatat oleh Maker (lalu diverifikasi Approver).' },
   { q: 'Cara mengirim invoice ke customer.',
     a: 'Klik Invoice pada order. Pilih Unduh PDF, Bagikan file (HP), Kirim via WhatsApp, atau Cetak. Untuk WhatsApp, lampirkan PDF-nya secara manual.' },
   { q: 'Pembayaran sudah dicatat tetapi Terbayar belum bertambah.',

@@ -95,7 +95,7 @@ export default function FinanceModule({
       id: "verify",
       label: "Verifikasi",
       icon: <ShieldCheck size={14} className="shrink-0" />,
-      show: caps.edit,
+      show: caps.approver,
       badge: pending,
     },
     {
@@ -103,13 +103,13 @@ export default function FinanceModule({
       label: "Pengeluaran",
       icon: <ArrowUpFromLine size={14} className="shrink-0" />,
       show: true,
-      badge: caps.edit ? (meta?.expense_pending_count ?? 0) : 0,
+      badge: caps.approver ? (meta?.expense_pending_count ?? 0) : 0,
     },
     {
       id: "report",
       label: "Laporan",
       icon: <TrendingUp size={14} className="shrink-0" />,
-      show: caps.edit,
+      show: caps.approver,
     },
     {
       id: "audit",
@@ -220,7 +220,7 @@ export default function FinanceModule({
         {tab === "overview" && (
           <OverviewTab
             version={version}
-            canVerify={caps.edit}
+            canVerify={caps.approver}
             onGoVerify={() => setTab("verify")}
             onGoExpenses={() => {
               setExpensePreset("pending");
@@ -249,7 +249,7 @@ export default function FinanceModule({
             initialStatus={expensePreset}
           />
         )}
-        {tab === "report" && caps.edit && <ReportTab version={version} />}
+        {tab === "report" && caps.approver && <ReportTab version={version} />}
         {tab === "audit" && caps.isSuperAdmin && <AuditTab version={version} />}
         {tab === "guide" && (
           <GuideTab
@@ -263,7 +263,7 @@ export default function FinanceModule({
           />
         )}
         {tab === "settings" && caps.isSuperAdmin && <SettingsTab />}
-        {tab === "verify" && caps.edit && (
+        {tab === "verify" && caps.approver && (
           <PaymentsTab
             key="pending"
             mode="pending"

@@ -670,9 +670,9 @@ export default function FixedSalaryView({
                               {c.order?.kode_produksi ||
                                 "Order tidak ditemukan"}
                             </p>
-                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
                               {c.order
-                                ? `${c.order.jumlah} pcs`
+                                ? `${c.order.nama_pemesan || "Tanpa nama pemesan"} · ${c.order.jumlah} pcs`
                                 : "Belum berstatus Selesai / tidak ada di periode ini"}
                             </p>
                           </div>

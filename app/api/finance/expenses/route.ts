@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const guard = await requireFinance(req, 'create');
+  const guard = await requireFinance(req, 'maker');
   if (!guard.ok) return guard.response;
   const { actor } = guard;
 
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
   // hanya bila pengaturan `auto_approve_own_expense` dinyalakan, pencatatnya berhak menyetujui, dan aturan
   // "pencatat harus beda dengan penyetuju" tidak aktif.
   const autoApprove =
-    settings.auto_approve_own_expense && actor.caps.edit && !settings.require_separate_verifier;
+    settings.auto_approve_own_expense && actor.caps.approver && !settings.require_separate_verifier;
 
   const { data: id, error } = await admin.rpc('fin_record_expense', {
     p_actor: actor.userId,
