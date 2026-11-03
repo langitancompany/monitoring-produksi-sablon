@@ -416,7 +416,12 @@ export default function SalaryView({
     kategori: "manual" | "qc",
   ): { lines: SalaryLine[]; total: number } => {
     const name = users.find((u) => u.id === userId)?.name || "Karyawan";
-    const items: { order: Order; exact: number; label: string; role?: string }[] =
+    const items: {
+      order: Order;
+      exact: number;
+      label: string;
+      role?: string;
+    }[] =
       kategori === "manual"
         ? (userProductionStats[userId]?.orders ?? []).map((r) => ({
             order: r.data,
@@ -431,7 +436,8 @@ export default function SalaryView({
               order: o,
               exact:
                 ((o.jumlah || 0) *
-                  (getRateAt("dtf_finishing", d) + getRateAt("dtf_packing", d))) /
+                  (getRateAt("dtf_finishing", d) +
+                    getRateAt("dtf_packing", d))) /
                 team,
               label: `Gaji tim finishing ${name} · ${o.kode_produksi}`,
             };
@@ -1618,9 +1624,15 @@ export default function SalaryView({
                         return (
                           <div key={index} className="p-4 space-y-2.5">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs font-mono tabular-nums font-semibold text-zinc-700 dark:text-zinc-300">
-                                {item.data.kode_produksi}
-                              </span>
+                              <div className="min-w-0">
+                                <div className="text-xs font-mono tabular-nums font-semibold text-zinc-700 dark:text-zinc-300">
+                                  {item.data.kode_produksi}
+                                </div>
+                                <div className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
+                                  {item.data.nama_pemesan ||
+                                    "Tanpa nama pemesan"}
+                                </div>
+                              </div>
                               <div className="flex items-center gap-2 shrink-0">
                                 <span className="text-[11px] font-mono tabular-nums text-zinc-500 dark:text-zinc-400">
                                   {new Date(
@@ -1718,7 +1730,7 @@ export default function SalaryView({
                             Tanggal
                           </th>
                           <th className="p-3 text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-                            Kode
+                            Kode / Pemesan
                           </th>
                           <th className="p-3 text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
                             Peran
@@ -1759,8 +1771,14 @@ export default function SalaryView({
                                   month: "short",
                                 })}
                               </td>
-                              <td className="p-3 text-xs font-mono tabular-nums font-semibold text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
-                                {item.data.kode_produksi}
+                              <td className="p-3 whitespace-nowrap">
+                                <div className="text-xs font-mono tabular-nums font-semibold text-zinc-700 dark:text-zinc-300">
+                                  {item.data.kode_produksi}
+                                </div>
+                                <div className="text-xs text-zinc-500 dark:text-zinc-400 max-w-[180px] truncate">
+                                  {item.data.nama_pemesan ||
+                                    "Tanpa nama pemesan"}
+                                </div>
                               </td>
                               <td className="p-3">
                                 <div className="flex flex-wrap items-center gap-1.5">
