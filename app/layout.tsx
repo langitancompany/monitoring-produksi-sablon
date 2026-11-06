@@ -61,7 +61,11 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "Sabmoon",
-    statusBarStyle: "black-translucent",
+    // "black" = status bar iPhone solid hitam & konten mulai DI BAWAH-nya.
+    // Jangan pakai "black-translucent": konten jadi tergambar sampai ke bawah
+    // jam/baterai (header & judul tertimpa) kecuali semua halaman diberi
+    // padding env(safe-area-inset-top).
+    statusBarStyle: "black",
   },
   formatDetection: { telephone: false },
 };
