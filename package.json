@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
-    "@supabase/supabase-js": "^2.87.1",
+    "@supabase/supabase-js": "^2.118.0",
     "browser-image-compression": "^2.0.2",
     "date-fns": "^4.1.0",
     "firebase": "^12.19.0",

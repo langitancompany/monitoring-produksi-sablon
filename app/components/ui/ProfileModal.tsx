@@ -20,6 +20,7 @@ import Cropper from "react-easy-crop";
 import { Point, Area } from "react-easy-crop";
 
 import { roleLabel } from "@/lib/roles";
+import PasskeyPanel from "@/app/components/ui/PasskeyPanel";
 interface Props {
   user: UserData;
   isOpen: boolean;
@@ -454,6 +455,8 @@ export default function ProfileModal({ user, isOpen, onClose, onSave }: Props) {
                   />
                 </div>
               </div>
+
+              <PasskeyPanel />
 
               <button
                 onClick={handleSaveWrapper}

@@ -1,13 +1,14 @@
 // app/(auth)/login/page.tsx (atau lokasi file LoginScreen Anda)
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   BarChart3,
   ClipboardList,
   Clock,
   Eye,
   EyeOff,
+  Fingerprint,
   LayoutDashboard,
   Loader2,
   Lock,
@@ -18,6 +19,8 @@ import {
 } from "lucide-react";
 import { createBrowserClient } from "@supabase/ssr";
 import ThemedLogo from "@/app/components/ui/ThemedLogo";
+import { describePasskeyError } from "@/lib/passkeyErrors";
+import { isPasskeySupported, signInWithPasskey } from "@/lib/supabase/passkey";
 
 // ─────────────────────────────────────────────────────────────────────
 // Tampilan dashboard di panel kiri dibangun dari JSX (bukan gambar) supaya
@@ -274,6 +277,11 @@ const inputClass =
   "focus:border-[#49bfb4] focus:ring-2 focus:ring-[#49bfb4]/30 " +
   "transition-colors duration-150";
 
+// Dukungan passkey tidak berubah selama halaman terbuka, jadi tidak ada yang
+// perlu di-subscribe; fungsi kosong ini hanya memenuhi tanda tangan
+// useSyncExternalStore.
+const subscribeNoop = () => () => {};
+
 export default function LoginScreen() {
   // PERBAIKAN: dibuat SEKALI saja lewat lazy initializer useState,
   // bukan setiap render. Sebelumnya client dibuat ulang di setiap
@@ -291,6 +299,31 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // `window` tidak ada di server, jadi dukungan WebAuthn dibaca lewat
+  // useSyncExternalStore: snapshot server selalu false, klien membaca nilai
+  // asli setelah hydration (tidak ada mismatch HTML).
+  const passkeyReady = useSyncExternalStore(
+    subscribeNoop,
+    isPasskeySupported,
+    () => false,
+  );
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+
+  // Akun dipilih dari passkey yang tersimpan di perangkat, jadi tidak perlu
+  // email. Setelah sukses alurnya sama dengan login password (muat ulang halaman).
+  const handlePasskeySignIn = async () => {
+    setError("");
+    setPasskeyLoading(true);
+    try {
+      await signInWithPasskey(supabase);
+      window.location.reload();
+    } catch (err) {
+      console.error("[passkey] login gagal:", err);
+      setError(describePasskeyError(err, "login"));
+      setPasskeyLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -519,13 +552,39 @@ export default function LoginScreen() {
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || passkeyLoading}
                 className="mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#124540] text-sm font-semibold text-white transition-colors duration-150 hover:bg-[#0d332f] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#49bfb4] focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-60 dark:bg-[#49bfb4] dark:text-[#0a2724] dark:hover:bg-[#5fd0c5] dark:focus-visible:ring-offset-zinc-900"
               >
                 {loading && <Loader2 className="h-4 w-4 animate-spin" />}
                 {loading ? "Memproses..." : "Masuk"}
               </button>
             </form>
+
+            {passkeyReady && (
+              <div className="mt-6">
+                <div className="mb-4 flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+                  <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+                  atau
+                  <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handlePasskeySignIn()}
+                  disabled={loading || passkeyLoading}
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-md border border-zinc-300 text-sm font-semibold text-zinc-800 transition-colors duration-150 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#49bfb4] disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                >
+                  {passkeyLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Fingerprint className="h-4 w-4" />
+                  )}
+                  Masuk dengan passkey
+                </button>
+                <p className="mt-2 text-center text-xs text-zinc-500 dark:text-zinc-400">
+                  Pakai sidik jari, Face ID, atau kunci layar perangkat ini.
+                </p>
+              </div>
+            )}
 
             <p className="mt-8 text-sm text-zinc-500 dark:text-zinc-400">
               Belum punya akun? Minta admin mendaftarkan email kamu.
