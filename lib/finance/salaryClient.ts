@@ -48,7 +48,7 @@ async function call<T>(url: string, body: unknown): Promise<T> {
   return json as T;
 }
 
-/** Mencatat gaji ke Keuangan (pengeluaran berstatus menunggu persetujuan). Idempoten. */
+/** Mencatat gaji ke Keuangan sebagai pengeluaran yang langsung disetujui. Idempoten. */
 export const postSalaryToFinance = (a: {
   kind: SalaryKind;
   userId: string;

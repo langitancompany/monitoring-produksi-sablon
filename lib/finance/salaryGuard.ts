@@ -2,7 +2,7 @@
 // Akses untuk memposting gaji ke Keuangan. Yang boleh: Super Admin, atau pengguna yang memang
 // punya akses menu Gaji & Upah (permission `salary`). Mereka sudah bisa menandai gaji "dibayar"
 // di menu Gaji, jadi tidak diminta punya izin `keuangan` terpisah. Pengeluaran yang dibuat selalu
-// berstatus PENDING sehingga tetap perlu disetujui pemegang izin Approver keuangan.
+// langsung berstatus disetujui (lihat fin_post_salary), tanpa antrean verifikasi di Keuangan.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/apiAuth';
@@ -12,8 +12,6 @@ export interface SalaryActor {
   userId: string;
   name: string;
   isSuperAdmin: boolean;
-  /** boleh membatalkan (void) pengeluaran yang SUDAH disetujui: Super Admin atau keuangan.delete */
-  canVoidApproved: boolean;
 }
 
 type Result = { ok: true; actor: SalaryActor } | { ok: false; response: NextResponse };
@@ -38,6 +36,5 @@ export async function requireSalaryAccess(req: NextRequest): Promise<Result> {
   if (!allowed) {
     return { ok: false, response: NextResponse.json({ error: 'Anda tidak memiliki akses ke menu Gaji' }, { status: 403 }) };
   }
-  const canVoidApproved = isSuperAdmin || row.permissions?.keuangan?.delete === true;
-  return { ok: true, actor: { userId: auth.userId, name: row.name || 'User', isSuperAdmin, canVoidApproved } };
+  return { ok: true, actor: { userId: auth.userId, name: row.name || 'User', isSuperAdmin } };
 }

@@ -461,7 +461,7 @@ export default function SalaryView({
   ) => {
     const key = paymentKey(userId, kategori);
     setMarkingPaidKey(key);
-    // Catat dulu ke Keuangan (pengeluaran masuk antrean persetujuan). Gagal = jangan tandai
+    // Catat dulu ke Keuangan (pengeluaran langsung disetujui). Gagal = jangan tandai
     // lunas, supaya status "lunas" selalu berarti sudah tercatat di Keuangan.
     const { lines, total: postTotal } = buildSalaryLines(userId, kategori);
     let posted = false;

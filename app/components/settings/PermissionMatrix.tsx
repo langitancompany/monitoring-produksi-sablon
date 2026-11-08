@@ -19,6 +19,7 @@ import {
   type PermColumn,
   type PermKey,
 } from "@/lib/permissionModules";
+import { iconBtnCls, tapCls } from "@/app/components/settings/responsive";
 
 // ─── Switch ──────────────────────────────────────────────────────────────────
 
@@ -44,7 +45,7 @@ export function Switch({
       title={title}
       disabled={disabled}
       onClick={onChange}
-      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#124540] focus-visible:ring-offset-1 dark:focus-visible:ring-offset-zinc-950 ${
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-150 after:absolute after:-inset-x-1.5 after:-inset-y-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#124540] focus-visible:ring-offset-1 dark:focus-visible:ring-offset-zinc-950 ${
         checked ? "bg-[#124540]" : "bg-zinc-200 dark:bg-zinc-700"
       } ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
     >
@@ -96,6 +97,18 @@ export function PermissionMatrix({
     return undefined;
   };
 
+  // Semua toggle satu modul dalam urutan kolom, lalu izin tambahan. Dipakai tampilan kartu.
+  const togglesOf = (d: ModuleDef) => [
+    ...PERM_COLUMNS.filter((c) => d.columns[c] !== undefined).map((c) => {
+      const checked = allGranted || getField(permissions, d.key, c);
+      return { field: c as string, label: COLUMN_HEAD[c], hint: d.columns[c] as string, checked, why: reasonFor(d.key, c, checked) };
+    }),
+    ...(d.extras ?? []).map((x) => {
+      const checked = allGranted || getField(permissions, d.key, x.field);
+      return { field: x.field, label: x.label, hint: x.hint, checked, why: reasonFor(d.key, x.field, checked) };
+    }),
+  ];
+
   if (rows.length === 0) {
     return (
       <div className="px-6 py-12 text-center">
@@ -109,90 +122,143 @@ export function PermissionMatrix({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm border-collapse min-w-[620px]">
-        <thead>
-          <tr className="bg-zinc-50 dark:bg-zinc-900">
-            <th className={`${thCls} !text-left w-[34%]`}>Modul</th>
-            {PERM_COLUMNS.map((c) => (
-              <th key={c} className={thCls}>
-                {COLUMN_HEAD[c]}
-              </th>
-            ))}
-            <th className={thCls}>Aksi</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-          {rows.map((d) => (
-            <tr key={d.key} className="hover:bg-zinc-50/60 dark:hover:bg-zinc-900/60 transition-colors duration-150">
-              <td className="px-3 py-3 align-middle">
-                <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{d.label}</span>
-                {d.extras?.map((x) => {
-                  const cur = allGranted || getField(permissions, d.key, x.field);
-                  const why = reasonFor(d.key, x.field, cur);
-                  return (
-                    <label
-                      key={x.field}
-                      title={why ?? x.hint}
-                      className={`mt-1.5 flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400 ${
-                        why ? "cursor-not-allowed" : "cursor-pointer"
-                      }`}
-                    >
-                      <Switch
-                        label={`${d.label}: ${x.label}`}
-                        checked={cur}
-                        disabled={!!why}
-                        title={why ?? x.hint}
-                        onChange={() => onChange(setField(permissions, d.key, x.field, !cur, canGrant))}
-                      />
-                      {x.label}
-                    </label>
-                  );
-                })}
-              </td>
-              {PERM_COLUMNS.map((c) => {
-                const hint = d.columns[c];
-                if (hint === undefined) {
-                  return (
-                    <td key={c} className="px-3 py-3 text-center text-zinc-300 dark:text-zinc-700 select-none">
-                      –
-                    </td>
-                  );
-                }
-                const cur = allGranted || getField(permissions, d.key, c);
-                const why = reasonFor(d.key, c, cur);
-                return (
-                  <td key={c} className="px-3 py-3 text-center">
-                    <Switch
-                      label={`${d.label}: ${COLUMN_HEAD[c]}`}
-                      checked={cur}
-                      disabled={!!why}
-                      title={why ?? hint}
-                      onChange={() => onChange(setField(permissions, d.key, c, !cur, canGrant))}
-                    />
-                  </td>
-                );
-              })}
-              <td className="px-3 py-3 text-center">
-                {allGranted ? (
-                  <span className="text-zinc-300 dark:text-zinc-700 select-none">–</span>
-                ) : (
+    <div className="@container">
+      <ul className="@[40rem]:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+        {rows.map((d) => {
+          const toggles = togglesOf(d);
+          return (
+            <li key={d.key} className="p-3 sm:p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="min-w-0 text-sm font-semibold text-zinc-800 dark:text-zinc-200">{d.label}</p>
+                {!allGranted && (
                   <button
                     type="button"
                     disabled={readOnly}
                     onClick={() => onChange(revokeModule(permissions, d.key))}
-                    title={readOnly ? "Anda tidak bisa mengubah izin akun Anda sendiri" : `Cabut akses ${d.label}`}
                     aria-label={`Cabut akses ${d.label}`}
-                    className="p-1.5 rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors duration-150"
+                    className="-mr-2 inline-flex size-11 shrink-0 items-center justify-center rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors duration-150"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 )}
-              </td>
+              </div>
+              {toggles.length === 0 ? (
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Tidak ada izin tambahan.</p>
+              ) : (
+                <div className="mt-2 grid gap-2 @md:grid-cols-2">
+                  {toggles.map((t) => (
+                    <label
+                      key={t.field}
+                      title={t.why}
+                      className={`flex min-h-11 items-center justify-between gap-3 rounded-lg border border-zinc-200 dark:border-zinc-800 px-3 py-2 ${
+                        t.why ? "cursor-not-allowed" : "cursor-pointer"
+                      }`}
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-zinc-800 dark:text-zinc-200">{t.label}</span>
+                        <span className="block text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">{t.hint}</span>
+                      </span>
+                      <Switch
+                        label={`${d.label}: ${t.label}`}
+                        checked={t.checked}
+                        disabled={!!t.why}
+                        title={t.why ?? t.hint}
+                        onChange={() => onChange(setField(permissions, d.key, t.field, !t.checked, canGrant))}
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="hidden @[40rem]:block overflow-x-auto">
+        <table className="w-full text-sm border-collapse min-w-[620px]">
+          <thead>
+            <tr className="bg-zinc-50 dark:bg-zinc-900">
+              <th className={`${thCls} !text-left w-[34%]`}>Modul</th>
+              {PERM_COLUMNS.map((c) => (
+                <th key={c} className={thCls}>
+                  {COLUMN_HEAD[c]}
+                </th>
+              ))}
+              <th className={thCls}>Aksi</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {rows.map((d) => (
+              <tr key={d.key} className="hover:bg-zinc-50/60 dark:hover:bg-zinc-900/60 transition-colors duration-150">
+                <td className="px-3 py-3 align-middle">
+                  <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{d.label}</span>
+                  {d.extras?.map((x) => {
+                    const cur = allGranted || getField(permissions, d.key, x.field);
+                    const why = reasonFor(d.key, x.field, cur);
+                    return (
+                      <label
+                        key={x.field}
+                        title={why ?? x.hint}
+                        className={`mt-1.5 flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400 ${
+                          why ? "cursor-not-allowed" : "cursor-pointer"
+                        }`}
+                      >
+                        <Switch
+                          label={`${d.label}: ${x.label}`}
+                          checked={cur}
+                          disabled={!!why}
+                          title={why ?? x.hint}
+                          onChange={() => onChange(setField(permissions, d.key, x.field, !cur, canGrant))}
+                        />
+                        {x.label}
+                      </label>
+                    );
+                  })}
+                </td>
+                {PERM_COLUMNS.map((c) => {
+                  const hint = d.columns[c];
+                  if (hint === undefined) {
+                    return (
+                      <td key={c} className="px-3 py-3 text-center text-zinc-300 dark:text-zinc-700 select-none">
+                        –
+                      </td>
+                    );
+                  }
+                  const cur = allGranted || getField(permissions, d.key, c);
+                  const why = reasonFor(d.key, c, cur);
+                  return (
+                    <td key={c} className="px-3 py-3 text-center">
+                      <Switch
+                        label={`${d.label}: ${COLUMN_HEAD[c]}`}
+                        checked={cur}
+                        disabled={!!why}
+                        title={why ?? hint}
+                        onChange={() => onChange(setField(permissions, d.key, c, !cur, canGrant))}
+                      />
+                    </td>
+                  );
+                })}
+                <td className="px-3 py-3 text-center">
+                  {allGranted ? (
+                    <span className="text-zinc-300 dark:text-zinc-700 select-none">–</span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={readOnly}
+                      onClick={() => onChange(revokeModule(permissions, d.key))}
+                      title={readOnly ? "Anda tidak bisa mengubah izin akun Anda sendiri" : `Cabut akses ${d.label}`}
+                      aria-label={`Cabut akses ${d.label}`}
+                      className="p-1.5 rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors duration-150"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -290,9 +356,9 @@ export function AddModuleModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-module-title"
-        className="bg-white dark:bg-zinc-950 rounded-2xl w-full max-w-md max-h-[92vh] overflow-y-auto border border-zinc-200 dark:border-zinc-800 shadow-xl"
+        className="bg-white dark:bg-zinc-950 rounded-2xl w-full max-w-md max-h-[92dvh] flex flex-col border border-zinc-200 dark:border-zinc-800 shadow-xl"
       >
-        <div className="px-5 pt-5 pb-4 flex items-start gap-3 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="shrink-0 px-5 pt-5 pb-4 flex items-start gap-3 border-b border-zinc-100 dark:border-zinc-800">
           <div className="w-10 h-10 shrink-0 rounded-xl bg-[#124540]/10 text-[#124540] dark:text-[#49BFB4] flex items-center justify-center">
             <Layers className="w-5 h-5" />
           </div>
@@ -308,13 +374,13 @@ export function AddModuleModal({
             type="button"
             onClick={onClose}
             aria-label="Tutup"
-            className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors duration-150"
+            className={`${iconBtnCls} -mt-2 -mr-2 shrink-0 rounded-md p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors duration-150`}
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto">
           {available.length === 0 ? (
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
               Semua modul yang boleh Anda berikan sudah punya akses.
@@ -332,7 +398,7 @@ export function AddModuleModal({
                       setSelected(allSelected ? [] : available.map((d) => d.key));
                       setShowError(false);
                     }}
-                    className="text-xs font-semibold text-[#124540] dark:text-[#49BFB4] hover:underline"
+                    className={`${tapCls} -mr-2 px-2 text-xs font-semibold text-[#124540] dark:text-[#49BFB4] hover:underline`}
                   >
                     {allSelected ? "Batal Pilih Semua" : "Pilih Semua"}
                   </button>
@@ -344,7 +410,7 @@ export function AddModuleModal({
                       setOpen(true);
                       inputRef.current?.focus();
                     }}
-                    className={`flex items-center gap-1.5 min-h-[42px] rounded-lg border px-2 py-1.5 bg-white dark:bg-zinc-900 cursor-text transition-colors duration-150 ${
+                    className={`flex items-center gap-1.5 min-h-11 rounded-lg border px-2 py-1.5 bg-white dark:bg-zinc-900 cursor-text transition-colors duration-150 ${
                       err
                         ? "border-red-300 ring-2 ring-red-100 dark:border-red-900 dark:ring-red-950"
                         : open
@@ -352,11 +418,11 @@ export function AddModuleModal({
                           : "border-zinc-200 dark:border-zinc-800"
                     }`}
                   >
-                    <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5 max-lg:gap-y-3 flex-1 min-w-0">
                       {selected.map((k) => (
                         <span
                           key={k}
-                          className="inline-flex items-center gap-1 rounded-md bg-[#124540]/15 text-[#124540] dark:bg-[#49BFB4]/20 dark:text-[#49BFB4] pl-2 pr-1 py-0.5 text-xs font-semibold"
+                          className="inline-flex items-center gap-1 rounded-md bg-[#124540]/15 text-[#124540] dark:bg-[#49BFB4]/20 dark:text-[#49BFB4] pl-2 pr-1 py-0.5 text-xs font-semibold max-lg:min-h-8 max-lg:pl-3 max-lg:pr-0"
                         >
                           {labelOf(k)}
                           <button
@@ -366,7 +432,7 @@ export function AddModuleModal({
                               e.stopPropagation();
                               unpick(k);
                             }}
-                            className="p-0.5 rounded hover:bg-black/10"
+                            className={`${iconBtnCls} p-0.5 rounded hover:bg-black/10 max-lg:-my-1.5`}
                           >
                             <X className="w-3 h-3" />
                           </button>
@@ -390,7 +456,7 @@ export function AddModuleModal({
                         }}
                         placeholder={selected.length === 0 ? "Pilih satu atau beberapa modul..." : ""}
                         aria-label="Cari modul"
-                        className="flex-1 min-w-[80px] bg-transparent outline-none text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 px-1 py-0.5"
+                        className="flex-1 min-w-[80px] max-lg:min-h-11 bg-transparent outline-none text-sm max-md:text-base text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 px-1 py-0.5"
                       />
                     </div>
                     {selected.length > 0 && (
@@ -401,7 +467,7 @@ export function AddModuleModal({
                           e.stopPropagation();
                           setSelected([]);
                         }}
-                        className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                        className={`${iconBtnCls} p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200`}
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -429,7 +495,7 @@ export function AddModuleModal({
                             aria-selected={false}
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => pick(d.key)}
-                            className="px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                            className="px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 max-lg:flex max-lg:min-h-11 max-lg:items-center"
                           >
                             {d.label}
                           </li>
@@ -445,17 +511,17 @@ export function AddModuleModal({
                 <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-3">Izin Awal Modul</p>
                 <div className="space-y-3">
                   {INITIAL_ROWS.map((r) => (
-                    <div key={r.field} className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{r.title}</p>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">{r.hint}</p>
-                      </div>
+                    <label key={r.field} className="flex min-h-11 cursor-pointer items-center justify-between gap-3">
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-zinc-800 dark:text-zinc-200">{r.title}</span>
+                        <span className="block text-xs text-zinc-500 dark:text-zinc-400">{r.hint}</span>
+                      </span>
                       <Switch
                         label={r.title}
                         checked={initial[r.field]}
                         onChange={() => setInitial((s) => ({ ...s, [r.field]: !s[r.field] }))}
                       />
-                    </div>
+                    </label>
                   ))}
                   {hasKeuangan && (
                     <>
@@ -467,34 +533,34 @@ export function AddModuleModal({
                           Keuangan memakai Maker dan Approver sebagai pengganti Buat/Ubah. Keduanya terpisah.
                         </p>
                       </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Maker (Pembuat)</p>
-                          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3">
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-zinc-800 dark:text-zinc-200">Maker (Pembuat)</span>
+                          <span className="block text-xs text-zinc-500 dark:text-zinc-400">
                             Menerbitkan tagihan, mencatat pembayaran & pengeluaran
-                          </p>
-                        </div>
+                          </span>
+                        </span>
                         <Switch
                           label="Keuangan: Maker"
                           checked={initial.maker}
                           onChange={() => setInitial((s) => ({ ...s, maker: !s.maker }))}
                         />
-                      </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+                      </label>
+                      <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3">
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-zinc-800 dark:text-zinc-200">
                             Approver (Pemverifikasi)
-                          </p>
-                          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          </span>
+                          <span className="block text-xs text-zinc-500 dark:text-zinc-400">
                             Memverifikasi atau menolak pembayaran & pengeluaran
-                          </p>
-                        </div>
+                          </span>
+                        </span>
                         <Switch
                           label="Keuangan: Approver"
                           checked={initial.approver}
                           onChange={() => setInitial((s) => ({ ...s, approver: !s.approver }))}
                         />
-                      </div>
+                      </label>
                     </>
                   )}
                 </div>
@@ -503,11 +569,11 @@ export function AddModuleModal({
           )}
         </div>
 
-        <div className="px-5 py-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-end gap-3">
+        <div className="shrink-0 px-4 sm:px-5 py-4 border-t border-zinc-100 dark:border-zinc-800 grid grid-cols-2 gap-2 sm:flex sm:justify-end sm:gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 text-sm font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors duration-150"
+            className={`${tapCls} px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 text-sm font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors duration-150`}
           >
             Batalkan
           </button>
@@ -515,7 +581,7 @@ export function AddModuleModal({
             type="button"
             onClick={submit}
             disabled={available.length === 0}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed ${
+            className={`${tapCls} px-3 sm:px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed ${
               selected.length === 0 ? "bg-[#124540]/50 hover:bg-[#124540]/60" : "bg-[#124540] hover:bg-[#0d332f]"
             }`}
           >

@@ -130,16 +130,15 @@ export const TASKS: GuideTask[] = [
   // ───────────── Bulanan ─────────────
   {
     id: 'm-salary', freq: 'monthly',
-    title: 'Tandai gaji dibayar, lalu setujui pengeluaran gajinya',
-    why: 'Biaya gaji baru masuk laporan setelah dicatat dan disetujui.',
+    title: 'Tandai gaji dibayar di menu Gaji',
+    why: 'Pengeluaran gaji tercatat dan disetujui otomatis, jadi biaya gaji langsung masuk laporan.',
     steps: [
       'Buka menu Gaji, pilih bulan dan karyawan.',
-      'Klik Tandai Sudah Dibayar. Sistem otomatis mencatat pengeluaran gaji per order.',
-      'Kembali ke Keuangan, tab Pengeluaran, lalu setujui pengeluaran gajinya (pemegang izin Approver).',
+      'Klik Tandai Sudah Dibayar. Sistem otomatis mencatat dan menyetujui pengeluaran gaji per order.',
       'Jangan mencatat gaji yang sama secara manual agar tidak terhitung dobel.',
     ],
     outside: 'Dikerjakan di menu Gaji, di luar tab Keuangan.',
-    go: { tab: 'expenses', pending: true, label: 'Buka antrean pengeluaran' },
+    go: { tab: 'expenses', label: 'Buka Pengeluaran' },
   },
   {
     id: 'm-reconcile', freq: 'monthly', needs: 'approver',

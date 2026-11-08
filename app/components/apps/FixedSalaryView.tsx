@@ -354,7 +354,7 @@ export default function FixedSalaryView({
       "Tandai Sudah Dibayar",
       `Tandai gaji ${u.name} sebesar ${currency(total)} sebagai SUDAH DIBAYAR?`,
       async () => {
-        // Catat dulu ke Keuangan (antrean persetujuan). Gaji tetap & bonus manual = biaya umum;
+        // Catat dulu ke Keuangan (langsung disetujui). Gaji tetap & bonus manual = biaya umum;
         // bonus closing terikat order = biaya langsung per order. Gagal = jangan tandai lunas.
         const s = summary(u);
         const items: { order_id: string | null; exact: number; label: string }[] = [

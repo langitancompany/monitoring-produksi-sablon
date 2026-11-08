@@ -14,6 +14,8 @@ interface Props {
   onPage: (page: number) => void;
   onPerPage: (perPage: number) => void;
   perPageOptions?: number[];
+  /** Target sentuh 44px dan isian 16px sampai `lg`. Mati secara bawaan supaya layar lain tidak berubah. */
+  comfortable?: boolean;
 }
 
 const btnCls =
@@ -26,11 +28,13 @@ export default function TablePagination({
   onPage,
   onPerPage,
   perPageOptions = [10, 20, 50],
+  comfortable = false,
 }: Props) {
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const current = Math.min(page, totalPages);
   const from = total === 0 ? 0 : (current - 1) * perPage + 1;
   const to = Math.min(current * perPage, total);
+  const btn = comfortable ? `${btnCls} max-lg:size-11 max-lg:inline-flex max-lg:items-center max-lg:justify-center` : btnCls;
 
   return (
     <div className="bg-zinc-50 dark:bg-zinc-900 px-4 py-3 md:px-6 md:py-4 border-t border-zinc-200 dark:border-zinc-800 flex flex-col md:flex-row justify-between items-center gap-3">
@@ -43,7 +47,7 @@ export default function TablePagination({
               onPerPage(Number(e.target.value));
               onPage(1);
             }}
-            className="h-8 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 text-[10px] md:text-xs font-mono tabular-nums rounded-lg px-2 focus:outline-none focus:ring-2 focus:ring-[#124540] cursor-pointer"
+            className={`${comfortable ? "max-lg:h-11 max-md:text-base " : ""}h-8 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 text-[10px] md:text-xs font-mono tabular-nums rounded-lg px-2 focus:outline-none focus:ring-2 focus:ring-[#124540] cursor-pointer`}
           >
             {perPageOptions.map((n) => (
               <option key={n} value={n}>
@@ -60,7 +64,7 @@ export default function TablePagination({
       </div>
 
       <div className="flex items-center gap-2 w-full md:w-auto justify-center md:justify-end">
-        <button onClick={() => onPage(current - 1)} disabled={current <= 1} className={btnCls} aria-label="Halaman sebelumnya">
+        <button onClick={() => onPage(current - 1)} disabled={current <= 1} className={btn} aria-label="Halaman sebelumnya">
           <ChevronLeft className="w-4 h-4" />
         </button>
         <div className="text-[10px] md:text-xs font-mono tabular-nums font-semibold text-zinc-500 dark:text-zinc-400 px-2 whitespace-nowrap">
@@ -69,7 +73,7 @@ export default function TablePagination({
         <button
           onClick={() => onPage(current + 1)}
           disabled={current >= totalPages}
-          className={btnCls}
+          className={btn}
           aria-label="Halaman berikutnya"
         >
           <ChevronRight className="w-4 h-4" />
