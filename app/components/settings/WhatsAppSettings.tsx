@@ -10,6 +10,10 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { Plus, X, ShieldCheck, TriangleAlert } from "lucide-react";
+import WaUsageCard, {
+  type WaQueueInfo,
+  type WaUsage,
+} from "@/app/components/settings/WaUsageCard";
 
 interface WaSettingsData {
   enabled: boolean;
@@ -26,6 +30,7 @@ type GwState = "starting" | "qr" | "open" | "closed";
 interface GwStatus {
   state: GwState | null;
   error?: string;
+  usage?: WaUsage;
 }
 
 interface WaGroup {
@@ -173,6 +178,7 @@ export default function WhatsAppSettings() {
   const [gw, setGw] = useState<GwStatus>({ state: null });
   const [qr, setQr] = useState<string | null>(null);
   const [tick, setTick] = useState(0); // naikkan untuk memaksa cek status ulang
+  const [queue, setQueue] = useState<WaQueueInfo | null>(null);
 
   // Grup & tes
   const [groups, setGroups] = useState<WaGroup[] | null>(null);
@@ -221,7 +227,23 @@ export default function WhatsAppSettings() {
         return;
       }
       const state = (st.data?.wa ?? "starting") as GwState;
-      setGw({ state });
+      const d = st.data ?? {};
+      // Gateway lama tanpa field ini → kartu pemakaian tidak ditampilkan (tidak error)
+      const usage: WaUsage | undefined =
+        typeof d.sent_last_hour === "number" && typeof d.sent_last_day === "number" && d.limits
+          ? {
+              sentHour: d.sent_last_hour,
+              sentDay: d.sent_last_day,
+              limits: {
+                perHour: Number(d.limits.per_hour) || 0,
+                perDay: Number(d.limits.per_day) || 0,
+              },
+              pausedUntil: d.paused_until ?? null,
+              pausedReason: d.paused_reason ?? null,
+              enabled: d.enabled === true,
+            }
+          : undefined;
+      setGw({ state, usage });
       if (state === "open") {
         setQr(null);
         return;
@@ -232,6 +254,26 @@ export default function WhatsAppSettings() {
 
     cek();
     const t = setInterval(cek, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [configured, tick]);
+
+  // ─── Antrian & pesan gagal (tiap 15 detik, berhenti saat tab tidak terlihat) ──
+  useEffect(() => {
+    if (!configured) {
+      setQueue(null);
+      return;
+    }
+    let cancelled = false;
+    const muat = async () => {
+      if (document.visibilityState === "hidden") return;
+      const r = await api("/api/wa/queue");
+      if (!cancelled && r.ok) setQueue(r.data as WaQueueInfo);
+    };
+    muat();
+    const t = setInterval(muat, 15000);
     return () => {
       cancelled = true;
       clearInterval(t);
@@ -443,6 +485,9 @@ export default function WhatsAppSettings() {
           </button>
         </div>
       </div>
+
+      {/* Pemakaian kirim (progress bar batas per jam / per hari) */}
+      {configured && gw.usage && <WaUsageCard usage={gw.usage} queue={queue} />}
 
       {/* Koneksi gateway */}
       <div className={`${cardCls} p-5 md:p-6 space-y-4`}>
