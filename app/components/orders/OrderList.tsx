@@ -7,6 +7,7 @@ import {
   MONTHS,
   orderTypeLabel,
 } from "@/lib/utils";
+import { orderActiveStage, orderProgress } from "@/lib/orderProgress";
 import { Order, ProductionTypeData, UserData } from "@/types";
 import {
   AlertTriangle,
@@ -45,30 +46,6 @@ function typeLabel(o: Order): string {
   return orderTypeLabel(o);
 }
 
-// ─── Konstanta Alur Status ───────────────────────────────────────────────────
-
-const STATUS_FLOW = [
-  "Pesanan Masuk",
-  "On Process",
-  "Finishing",
-  "Kirim",
-  "Selesai",
-] as const;
-
-function getStepIndex(status: string): number {
-  const map: Record<string, number> = {
-    "Pesanan Masuk": 0,
-    "On Process": 1,
-    Finishing: 2,
-    Kirim: 3,
-    Selesai: 4,
-    Revisi: 1,
-    "Ada Kendala": 1,
-    Telat: 1,
-  };
-  return map[status] ?? 0;
-}
-
 const isSpecialStatus = (status: string) =>
   ["Revisi", "Ada Kendala", "Telat"].includes(status);
 
@@ -95,60 +72,41 @@ function statusBadgeClass(status: string): string {
   }
 }
 
-// ─── Progress Bar ────────────────────────────────────────────────────────────
+// ─── Progress tahap (dipakai kartu HP & Kanban) ──────────────────────────────
+// Bar = persentase tahap yang sudah selesai; di bawahnya tertulis sedang di tahap
+// apa ("Tahap: Proofing"). Warna bar berubah bila telat / kendala / revisi.
 
-function ProgressBar({ status }: { status: string }) {
-  const currentStep = getStepIndex(status);
-  const isOverdue = status === "Telat";
-  const isKendala = status === "Ada Kendala";
-  const isRevisi = status === "Revisi";
+function StepProgress({
+  order,
+  overdue,
+  compact,
+}: {
+  order: Order;
+  overdue: boolean;
+  compact?: boolean;
+}) {
+  const progress = orderProgress(order);
+  const tahap = orderActiveStage(order);
+  const barColor =
+    overdue || order.status === "Ada Kendala"
+      ? "bg-red-500 dark:bg-red-500"
+      : order.status === "Revisi"
+        ? "bg-orange-400 dark:bg-orange-500"
+        : "bg-[#124540] dark:bg-[#49BFB4]";
 
   return (
-    <div className="mt-2 mb-1">
-      <div className="flex gap-1 mb-1">
-        {STATUS_FLOW.map((_, i) => {
-          let barClass = "h-1 flex-1 rounded-full ";
-          if (i < currentStep) {
-            barClass += "bg-emerald-400 dark:bg-emerald-600";
-          } else if (i === currentStep) {
-            if (isOverdue || isKendala)
-              barClass += "bg-red-400 dark:bg-red-600";
-            else if (isRevisi) barClass += "bg-orange-400 dark:bg-orange-500";
-            else barClass += "bg-[#2589ff]";
-          } else {
-            barClass += "bg-zinc-200 dark:bg-zinc-700";
-          }
-          return <div key={i} className={barClass} />;
-        })}
+    <div className={compact ? "mt-2 mb-2" : "mt-2 mb-1"}>
+      <div className="h-1 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+        <div
+          className={`h-full ${barColor}`}
+          style={{ width: `${progress}%` }}
+        />
       </div>
-      <div className="flex justify-between">
-        {STATUS_FLOW.map((_, i) => {
-          let labelClass = "text-[8px] flex-1 text-center ";
-          if (i < currentStep) {
-            labelClass += "text-emerald-600 dark:text-emerald-400 font-medium";
-          } else if (i === currentStep) {
-            if (isOverdue || isKendala)
-              labelClass += "text-red-600 dark:text-red-400 font-semibold";
-            else if (isRevisi)
-              labelClass +=
-                "text-orange-600 dark:text-orange-400 font-semibold";
-            else labelClass += "text-[#2589ff] font-semibold";
-          } else {
-            labelClass += "text-zinc-400 dark:text-zinc-600";
-          }
-          const shortNames = [
-            "Masuk",
-            "Proses",
-            "Finishing",
-            "Kirim",
-            "Selesai",
-          ];
-          return (
-            <span key={i} className={labelClass}>
-              {shortNames[i]}
-            </span>
-          );
-        })}
+      <div
+        className={`mt-1.5 flex items-center justify-between gap-2 text-zinc-500 dark:text-zinc-400 ${compact ? "text-[10px]" : "text-[11px]"}`}
+      >
+        <span className="truncate">Tahap: {tahap}</span>
+        <span className="font-mono tabular-nums shrink-0">{progress}%</span>
       </div>
     </div>
   );
@@ -220,7 +178,7 @@ function MobileCard({
         {order.nama_pemesan}
       </p>
 
-      <ProgressBar status={order.status} />
+      <StepProgress order={order} overdue={isOverdue} />
 
       {/* Detail ringkas */}
       <div className="flex items-center justify-between mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
@@ -398,6 +356,8 @@ function KanbanCard({
       <p className="font-semibold text-xs text-zinc-900 dark:text-white line-clamp-2 leading-tight mb-2">
         {order.nama_pemesan}
       </p>
+
+      <StepProgress order={order} overdue={isOverdue} compact />
 
       {/* Detail */}
       <div className="space-y-1 text-[10px] text-zinc-500 dark:text-zinc-400">
