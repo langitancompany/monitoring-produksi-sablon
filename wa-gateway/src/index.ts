@@ -19,9 +19,16 @@
 //   • circuit breaker: kirim gagal beruntun → seluruh antrian dijeda (tanda WhatsApp mulai membatasi)
 //   • cache metadata grup (tanpa ini tiap kirim ke grup menanyakan data grup ke server WhatsApp)
 //   • pesan tidak "habis jatah percobaan" hanya karena WhatsApp sedang terputus
+//   • hemat query database: saklar aktif di-cache 15 detik, antrian kosong = 1 query per putaran,
+//     pemulihan pesan nyangkut hanya tiap 1 menit (dulu 3 query tiap 5 detik, 24 jam sehari)
+//   • cache "nomor terdaftar" disimpan ke file (/data/wa-numbers.json), jadi tidak hilang saat restart
+//   • getMessage: pesan yang baru terkirim disimpan sebentar di memori supaya WhatsApp bisa mengirim
+//     ulang bila HP penerima gagal mendekripsi ("Menunggu pesan ini") tanpa pesan jadi kosong
+//   • status 'sent' ditulis dengan percobaan ulang; kalau tetap gagal, pesan TIDAK dikirim dua kali
 
 import http from 'node:http';
 import fs from 'node:fs';
+import path from 'node:path';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
@@ -32,9 +39,10 @@ import makeWASocket, {
   fetchLatestBaileysVersion,
   useMultiFileAuthState,
   type GroupMetadata,
+  type proto,
   type WASocket,
 } from '@whiskeysockets/baileys';
-import { CircuitBreaker, SendLimiter, TtlCache } from './safety.js';
+import { CircuitBreaker, NumberCache, SendLimiter, TtlCache, retry } from './safety.js';
 
 const env = (k: string, d?: string) => {
   const v = process.env[k] ?? d;
@@ -87,6 +95,13 @@ const breaker = new CircuitBreaker({
   maxMs: BREAKER_MAX_PAUSE_MIN * 60_000,
 });
 const groupCache = new TtlCache<GroupMetadata>(GROUP_CACHE_TTL_MIN * 60_000);
+// Pesan yang baru terkirim (1 jam, maks. 500) — dipakai Baileys lewat getMessage saat penerima minta kirim ulang
+const sentCache = new TtlCache<proto.IMessage>(60 * 60_000, Date.now, 500);
+// Saklar "WhatsApp Bot" dibaca dari database paling sering tiap 15 detik (bukan tiap putaran antrian)
+const ENABLED_TTL_MS = 15_000;
+const enabledCache = new TtlCache<boolean>(ENABLED_TTL_MS);
+// Pemulihan pesan yang nyangkut di 'sending' cukup tiap 1 menit
+const RECOVERY_EVERY_MS = 60_000;
 
 // Error yang tidak ada gunanya dicoba ulang (mis. nomor tidak terdaftar di WhatsApp)
 class PermanentError extends Error {}
@@ -142,6 +157,8 @@ async function startSocket() {
       syncFullHistory: false,
       // Tanpa ini, tiap kirim ke grup Baileys menanyakan data grup ke server WhatsApp.
       cachedGroupMetadata: (jid) => cachedGroupMetadata(jid),
+      // Penerima minta kirim ulang (gagal dekripsi) → berikan isi pesan yang tadi kita kirim
+      getMessage: async (key) => (key.id ? sentCache.get(key.id) : undefined),
     });
     sock = s;
 
@@ -224,20 +241,53 @@ function normalizeNumber(raw: string): string {
 }
 
 // Cache hasil cek "nomor terdaftar di WhatsApp" — query ini tidak perlu diulang tiap pesan,
-// dan terlalu sering memanggilnya terlihat seperti pemindai nomor.
+// dan terlalu sering memanggilnya terlihat seperti pemindai nomor. Disimpan ke file di samping
+// folder sesi (bukan di dalamnya, karena folder sesi dihapus saat logout) supaya tahan restart.
 const WA_CACHE_TTL = 7 * 24 * 3600_000;
-const waCache = new Map<string, { jid: string; exp: number }>();
+const numberCache = new NumberCache(WA_CACHE_TTL);
+const NUMBER_CACHE_FILE = path.join(path.dirname(AUTH_DIR), 'wa-numbers.json');
+let numberSaveTimer: NodeJS.Timeout | null = null;
+
+function loadNumberCache() {
+  try {
+    const n = numberCache.load(JSON.parse(fs.readFileSync(NUMBER_CACHE_FILE, 'utf8')));
+    log.info({ nomor: n }, 'cache nomor terdaftar dimuat dari file');
+  } catch (e: any) {
+    if (e?.code !== 'ENOENT') log.warn({ err: e?.message }, 'cache nomor terdaftar tidak terbaca — mulai dari kosong');
+  }
+}
+
+function saveNumberCache() {
+  if (!numberCache.needsSave) return;
+  try {
+    const tmp = `${NUMBER_CACHE_FILE}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(numberCache.dump()));
+    fs.renameSync(tmp, NUMBER_CACHE_FILE); // tulis-lalu-ganti: file tidak setengah jadi bila proses mati
+  } catch (e: any) {
+    log.warn({ err: e?.message }, 'gagal menyimpan cache nomor terdaftar (tidak mengganggu pengiriman)');
+  }
+}
+
+// Disimpan 5 detik setelah perubahan terakhir, supaya beberapa nomor baru cukup 1 kali tulis
+function scheduleNumberSave() {
+  if (numberSaveTimer) return;
+  numberSaveTimer = setTimeout(() => {
+    numberSaveTimer = null;
+    saveNumberCache();
+  }, 5_000);
+}
 
 async function resolveUserJid(target: string): Promise<string> {
   if (!sock || connState !== 'open') throw new NotConnectedError();
   const num = normalizeNumber(target);
-  const hit = waCache.get(num);
-  if (hit && hit.exp > Date.now()) return hit.jid;
+  const cached = numberCache.get(num);
+  if (cached) return cached;
 
   const res = await sock.onWhatsApp(`${num}@s.whatsapp.net`);
   const found = res?.[0];
   if (!found?.exists) throw new PermanentError(`Nomor ${target} tidak terdaftar di WhatsApp`);
-  waCache.set(num, { jid: found.jid, exp: Date.now() + WA_CACHE_TTL });
+  numberCache.set(num, found.jid);
+  scheduleNumberSave();
   return found.jid;
 }
 
@@ -309,8 +359,9 @@ async function sendOne(type: 'group' | 'user', target: string, message: string, 
   } catch { /* presence gagal tidak boleh membatalkan pengiriman */ }
 
   const mentionJids = mentions.map((m) => `${normalizeNumber(m)}@s.whatsapp.net`);
-  await sock.sendMessage(jid, mentionJids.length ? { text: message, mentions: mentionJids } : { text: message });
+  const sent = await sock.sendMessage(jid, mentionJids.length ? { text: message, mentions: mentionJids } : { text: message });
   limiter.record(targetKey(type, target));
+  if (sent?.key?.id && sent.message) sentCache.set(sent.key.id, sent.message);
 }
 
 // ───────────────────────── Worker antrian ─────────────────────────
@@ -321,13 +372,33 @@ let capWarned: string | null = null;
 // Saklar dari Pengaturan app (tabel wa_settings, baris id=1).
 // Gagal baca / tabel belum ada → dianggap NONAKTIF (aman: tidak mengirim apa pun).
 async function isEnabled(): Promise<boolean> {
+  const cached = enabledCache.get('enabled');
+  if (cached !== undefined) return cached;
   const { data, error } = await db.from('wa_settings').select('enabled').eq('id', 1).maybeSingle();
   if (error) {
     log.warn({ err: error.message }, 'gagal membaca wa_settings');
-    return false;
+    return false; // gagal baca TIDAK di-cache: dicoba lagi di putaran berikutnya
   }
-  return data?.enabled === true;
+  const on = data?.enabled === true;
+  enabledCache.set('enabled', on);
+  return on;
 }
+
+// Pesan yang SUDAH terkirim ke WhatsApp tetapi status 'sent' gagal ditulis ke database.
+// Tanpa catatan ini, pesan itu akan dipulihkan ke 'pending' lalu terkirim dua kali.
+const sentButUnsaved = new Set<string>();
+
+async function markSent(id: string): Promise<boolean> {
+  return retry(async () => {
+    const { error } = await db
+      .from('wa_outbox')
+      .update({ status: 'sent', sent_at: new Date().toISOString(), last_error: null })
+      .eq('id', id);
+    if (error) throw new Error(error.message);
+  });
+}
+
+let lastRecoveryAt = 0;
 
 async function processQueue() {
   if (working || shuttingDown || connState !== 'open') return;
@@ -337,13 +408,17 @@ async function processQueue() {
     if (!(await isEnabled())) return; // saklar mati → jangan kirim apa pun
     if (!limiterReady && !(await loadLimiter())) return; // riwayat kirim belum termuat → tahan
 
-    // Pesan yang nyangkut di 'sending' > 2 menit (mis. gateway restart) dikembalikan ke pending
-    await db
-      .from('wa_outbox')
-      .update({ status: 'pending' })
-      .eq('status', 'sending')
-      .lt('created_at', new Date(Date.now() - 2 * 60_000).toISOString())
-      .is('sent_at', null);
+    // Pesan yang nyangkut di 'sending' > 2 menit (mis. gateway restart) dikembalikan ke pending.
+    // Cukup dicek tiap 1 menit, bukan tiap putaran 5 detik.
+    if (Date.now() - lastRecoveryAt >= RECOVERY_EVERY_MS) {
+      lastRecoveryAt = Date.now();
+      await db
+        .from('wa_outbox')
+        .update({ status: 'pending' })
+        .eq('status', 'sending')
+        .lt('created_at', new Date(Date.now() - 2 * 60_000).toISOString())
+        .is('sent_at', null);
+    }
 
     const { data: rows, error } = await db
       .from('wa_outbox')
@@ -354,8 +429,18 @@ async function processQueue() {
       .limit(10);
 
     if (error) throw error;
+    if (!rows || rows.length === 0) return; // antrian kosong → selesai (kasus paling sering)
 
-    for (const row of rows ?? []) {
+    for (const row of rows) {
+      // Saklar dimatikan di tengah batch → berhenti (dibaca dari cache 15 detik, murah)
+      if (!(await isEnabled())) break;
+
+      // Sudah terkirim sebelumnya tapi statusnya belum sempat tertulis → tulis saja, JANGAN kirim lagi
+      if (sentButUnsaved.has(row.id)) {
+        if (await markSent(row.id)) sentButUnsaved.delete(row.id);
+        continue;
+      }
+
       // Terputus di tengah batch → hentikan, jangan "membakar" percobaan pesan berikutnya
       if (shuttingDown || connState !== 'open') break;
 
@@ -395,10 +480,10 @@ async function processQueue() {
       try {
         await sendOne(row.target_type, row.target, row.message, row.mentions ?? []);
         breaker.success();
-        await db
-          .from('wa_outbox')
-          .update({ status: 'sent', sent_at: new Date().toISOString(), last_error: null })
-          .eq('id', row.id);
+        if (!(await markSent(row.id))) {
+          sentButUnsaved.add(row.id);
+          log.error({ id: row.id, to: row.target }, 'pesan TERKIRIM tetapi status gagal ditulis ke database — akan ditulis ulang, tidak dikirim lagi');
+        }
         log.info({ id: row.id, to: row.target }, 'terkirim');
       } catch (e: any) {
         if (e instanceof NotConnectedError) {
@@ -567,6 +652,8 @@ const shutdown = (sig: string) => {
   shuttingDown = true;
   log.info({ sig }, 'gateway berhenti');
   if (reconnectTimer) clearTimeout(reconnectTimer);
+  if (numberSaveTimer) clearTimeout(numberSaveTimer);
+  saveNumberCache(); // simpan cache nomor sebelum proses berhenti
   try { sock?.end(undefined); } catch { /* abaikan */ }
   server.close();
   setTimeout(() => process.exit(0), 1500).unref();
@@ -574,6 +661,7 @@ const shutdown = (sig: string) => {
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
+loadNumberCache();
 startSocket().catch((e) => log.error(e));
 void loadLimiter(); // gagal pun tidak masalah: dicoba lagi otomatis oleh worker sebelum mengirim
 setInterval(processQueue, 5000);

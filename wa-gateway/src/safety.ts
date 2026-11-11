@@ -6,7 +6,9 @@
 //                       setelah restart (batas tidak lagi "reset" tiap gateway hidup ulang)
 //   • CircuitBreaker  — jeda seluruh antrian saat pengiriman gagal beruntun (tanda WhatsApp
 //                       mulai membatasi nomor), bukan terus mengetuk
-//   • TtlCache        — cache sederhana dengan masa berlaku (dipakai untuk metadata grup)
+//   • TtlCache        — cache sederhana dengan masa berlaku (metadata grup, saklar aktif, pesan terkirim)
+//   • NumberCache     — cache "nomor terdaftar di WhatsApp" yang bisa disimpan ke file (tahan restart)
+//   • retry           — ulang operasi singkat (mis. menulis status 'sent' ke database)
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -172,9 +174,11 @@ export class CircuitBreaker {
 export class TtlCache<V> {
   private map = new Map<string, { v: V; exp: number }>();
 
+  /** maxSize (opsional): bila penuh, entri paling lama dibuang, supaya memori tidak membengkak. */
   constructor(
     private ttlMs: number,
     private now: Clock = Date.now,
+    private maxSize = Infinity,
   ) {}
 
   get(key: string): V | undefined {
@@ -188,7 +192,13 @@ export class TtlCache<V> {
   }
 
   set(key: string, v: V) {
+    this.map.delete(key); // set ulang = jadi yang terbaru
     this.map.set(key, { v, exp: this.now() + this.ttlMs });
+    while (this.map.size > this.maxSize) {
+      const oldest = this.map.keys().next().value;
+      if (oldest === undefined) break;
+      this.map.delete(oldest);
+    }
   }
 
   delete(key: string) {
@@ -198,4 +208,111 @@ export class TtlCache<V> {
   clear() {
     this.map.clear();
   }
+
+  get size() {
+    return this.map.size;
+  }
+}
+
+// ───────────────────────── NumberCache ─────────────────────────
+
+export interface NumberEntry {
+  jid: string;
+  exp: number;
+}
+
+/**
+ * Hasil cek "nomor ini terdaftar di WhatsApp". Memeriksa nomor ke server WhatsApp berulang-ulang
+ * terlihat seperti pemindai nomor, jadi hasilnya disimpan lama dan bisa ditulis ke file
+ * supaya tidak hilang saat gateway restart / redeploy.
+ */
+export class NumberCache {
+  private map = new Map<string, NumberEntry>();
+  private dirty = false;
+
+  constructor(
+    private ttlMs: number,
+    private now: Clock = Date.now,
+  ) {}
+
+  get(num: string): string | undefined {
+    const hit = this.map.get(num);
+    if (!hit) return undefined;
+    if (hit.exp <= this.now()) {
+      this.map.delete(num);
+      this.dirty = true;
+      return undefined;
+    }
+    return hit.jid;
+  }
+
+  set(num: string, jid: string) {
+    this.map.set(num, { jid, exp: this.now() + this.ttlMs });
+    this.dirty = true;
+  }
+
+  get size() {
+    return this.map.size;
+  }
+
+  /** true bila ada perubahan sejak terakhir disimpan. */
+  get needsSave() {
+    return this.dirty;
+  }
+
+  /** Isi untuk disimpan ke file (entri kedaluwarsa tidak ikut). */
+  dump(): Record<string, NumberEntry> {
+    const t = this.now();
+    const out: Record<string, NumberEntry> = {};
+    for (const [k, v] of this.map) if (v.exp > t) out[k] = v;
+    this.dirty = false;
+    return out;
+  }
+
+  /** Muat dari file. Isi yang rusak / kedaluwarsa / tidak masuk akal dilewati, tidak melempar error. */
+  load(raw: unknown): number {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return 0;
+    const t = this.now();
+    let n = 0;
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      const e = v as Partial<NumberEntry> | null;
+      if (
+        /^\d{8,16}$/.test(k) &&
+        e && typeof e.jid === 'string' && e.jid.endsWith('@s.whatsapp.net') &&
+        typeof e.exp === 'number' && Number.isFinite(e.exp) &&
+        e.exp > t && e.exp <= t + this.ttlMs
+      ) {
+        this.map.set(k, { jid: e.jid, exp: e.exp });
+        n++;
+      }
+    }
+    this.dirty = false;
+    return n;
+  }
+}
+
+// ───────────────────────── retry ─────────────────────────
+
+/**
+ * Jalankan `fn` sampai berhasil, maksimal `tries` kali, dengan jeda yang menaik.
+ * Dipakai untuk langkah kecil yang SANGAT mahal kalau gagal: setelah pesan terkirim, status 'sent'
+ * harus tertulis; kalau tidak, pesan dikembalikan ke antrian dan terkirim dua kali.
+ * Mengembalikan true bila akhirnya berhasil.
+ */
+export async function retry(
+  fn: () => Promise<void>,
+  opts: { tries?: number; baseMs?: number; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<boolean> {
+  const tries = opts.tries ?? 4;
+  const baseMs = opts.baseMs ?? 500;
+  const wait = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  for (let i = 0; i < tries; i++) {
+    try {
+      await fn();
+      return true;
+    } catch {
+      if (i < tries - 1) await wait(baseMs * 2 ** i);
+    }
+  }
+  return false;
 }
