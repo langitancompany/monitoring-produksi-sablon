@@ -7,6 +7,7 @@ import {
   requireFinance, finFail, bad, isUuid, isDate, loadSettings, sniffProof, PROOF_BUCKET, MAX_PROOF_BYTES,
 } from '@/lib/finance/server';
 import { PAYMENT_SELECT, toPaymentRow } from '@/lib/finance/payments';
+import { notifyVerifikasi } from '@/lib/waNotifyVerifikasi';
 
 export const dynamic = 'force-dynamic';
 
@@ -112,6 +113,18 @@ export async function POST(req: NextRequest) {
     // Jangan tinggalkan file yatim bila pencatatan ditolak.
     if (proofPath) await admin.storage.from(PROOF_BUCKET).remove([proofPath]);
     return finFail(error);
+  }
+
+  // Masuk antrean verifikasi → beri tahu nomor penerima di Pengaturan > WhatsApp Bot.
+  // Yang langsung terverifikasi tidak perlu diberi tahu. Kegagalan di sini tidak menggagalkan pencatatan.
+  if (!autoVerify && typeof id === 'string') {
+    await notifyVerifikasi({
+      jenis: kind === 'refund' ? 'refund' : 'pembayaran',
+      id,
+      nominal: Number(str('amount')),
+      pencatat: actor.name,
+      orderId,
+    });
   }
   return NextResponse.json({ id, status: autoVerify ? 'verified' : 'pending' });
 }

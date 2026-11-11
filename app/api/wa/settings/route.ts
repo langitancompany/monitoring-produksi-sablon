@@ -7,10 +7,12 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { requireUser } from '@/lib/apiAuth';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { getWaSettings } from '@/lib/waSettings';
+import { normalizeWa } from '@/lib/waQueue';
 
 export const dynamic = 'force-dynamic';
 
 const ROLES = ['admin', 'manager', 'super_admin'];
+const MAKS_NOMOR = 10;
 
 const tampil = (s: Awaited<ReturnType<typeof getWaSettings>>) => ({
   enabled: s.enabled,
@@ -18,7 +20,28 @@ const tampil = (s: Awaited<ReturnType<typeof getWaSettings>>) => ({
   group_jid: s.groupJid,
   token_set: !!s.gatewayToken,
   token_hint: s.gatewayToken ? s.gatewayToken.slice(-4) : '',
+  notify_verifikasi_numbers: s.notifyVerifikasiNumbers,
+  notify_kendala_numbers: s.notifyKendalaNumbers,
 });
+
+// Validasi + normalisasi daftar nomor. Mengembalikan string error bila ada yang tidak valid.
+function bersihkanNomor(raw: unknown, label: string): { ok: true; nomor: string[] } | { ok: false; error: string } {
+  if (!Array.isArray(raw) || raw.some((n) => typeof n !== 'string')) {
+    return { ok: false, error: `Daftar nomor ${label} tidak valid` };
+  }
+  const hasil: string[] = [];
+  for (const mentah of raw as string[]) {
+    if (!mentah.trim()) continue;
+    const n = normalizeWa(mentah);
+    // Nomor Indonesia: 62 + 8–13 digit. Batas atas mencegah salah ketik tempel dua nomor.
+    if (!n || n.length < 10 || n.length > 15) {
+      return { ok: false, error: `Nomor "${mentah.trim()}" (${label}) tidak valid` };
+    }
+    if (!hasil.includes(n)) hasil.push(n);
+  }
+  if (hasil.length > MAKS_NOMOR) return { ok: false, error: `Maksimal ${MAKS_NOMOR} nomor untuk ${label}` };
+  return { ok: true, nomor: hasil };
+}
 
 export async function GET(request: NextRequest) {
   const guard = await requireUser(request, ROLES);
@@ -36,6 +59,8 @@ export async function PUT(request: NextRequest) {
       gateway_url?: string;
       gateway_token?: string;
       group_jid?: string;
+      notify_verifikasi_numbers?: string[];
+      notify_kendala_numbers?: string[];
     };
 
     const sekarang = await getWaSettings();
@@ -60,6 +85,16 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: 'ID grup harus berakhiran @g.us' }, { status: 400 });
       }
       patch.group_jid = jid;
+    }
+
+    for (const [kolom, label] of [
+      ['notify_verifikasi_numbers', 'verifikasi keuangan'],
+      ['notify_kendala_numbers', 'kendala pesanan'],
+    ] as const) {
+      if (body[kolom] === undefined) continue;
+      const r = bersihkanNomor(body[kolom], label);
+      if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
+      patch[kolom] = r.nomor;
     }
 
     if (typeof body.enabled === 'boolean') {

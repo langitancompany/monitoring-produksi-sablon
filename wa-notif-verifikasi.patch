@@ -1,0 +1,735 @@
+diff -ruN -x node_modules -x .next -x '*.tsbuildinfo' a/app/api/finance/expenses/route.ts monitoring-produksi-sablon-main/app/api/finance/expenses/route.ts
+--- a/app/api/finance/expenses/route.ts	2026-11-11 11:05:30.000000000 +0000
++++ b/app/api/finance/expenses/route.ts	2026-11-11 11:30:55.663021314 +0000
+@@ -7,6 +7,7 @@
+   requireFinance, finFail, bad, isUuid, isDate, loadSettings, sniffProof, PROOF_BUCKET, MAX_PROOF_BYTES,
+ } from '@/lib/finance/server';
+ import { EXPENSE_SELECT, toExpenseRow } from '@/lib/finance/expenses';
++import { notifyVerifikasi } from '@/lib/waNotifyVerifikasi';
+ 
+ export const dynamic = 'force-dynamic';
+ 
+@@ -115,5 +116,16 @@
+     if (proofPath) await admin.storage.from(PROOF_BUCKET).remove([proofPath]);
+     return finFail(error);
+   }
++
++  // Masuk antrean persetujuan → beri tahu nomor penerima (lihat catatan di payments/route.ts).
++  if (!autoApprove && typeof id === 'string') {
++    await notifyVerifikasi({
++      jenis: 'pengeluaran',
++      id,
++      nominal: Number(str('amount')),
++      pencatat: actor.name,
++      keterangan: description.slice(0, 200),
++    });
++  }
+   return NextResponse.json({ id, status: autoApprove ? 'approved' : 'pending' });
+ }
+diff -ruN -x node_modules -x .next -x '*.tsbuildinfo' a/app/api/finance/payments/route.ts monitoring-produksi-sablon-main/app/api/finance/payments/route.ts
+--- a/app/api/finance/payments/route.ts	2026-11-11 11:05:30.000000000 +0000
++++ b/app/api/finance/payments/route.ts	2026-11-11 11:30:55.662717799 +0000
+@@ -7,6 +7,7 @@
+   requireFinance, finFail, bad, isUuid, isDate, loadSettings, sniffProof, PROOF_BUCKET, MAX_PROOF_BYTES,
+ } from '@/lib/finance/server';
+ import { PAYMENT_SELECT, toPaymentRow } from '@/lib/finance/payments';
++import { notifyVerifikasi } from '@/lib/waNotifyVerifikasi';
+ 
+ export const dynamic = 'force-dynamic';
+ 
+@@ -113,5 +114,17 @@
+     if (proofPath) await admin.storage.from(PROOF_BUCKET).remove([proofPath]);
+     return finFail(error);
+   }
++
++  // Masuk antrean verifikasi → beri tahu nomor penerima di Pengaturan > WhatsApp Bot.
++  // Yang langsung terverifikasi tidak perlu diberi tahu. Kegagalan di sini tidak menggagalkan pencatatan.
++  if (!autoVerify && typeof id === 'string') {
++    await notifyVerifikasi({
++      jenis: kind === 'refund' ? 'refund' : 'pembayaran',
++      id,
++      nominal: Number(str('amount')),
++      pencatat: actor.name,
++      orderId,
++    });
++  }
+   return NextResponse.json({ id, status: autoVerify ? 'verified' : 'pending' });
+ }
+\ No newline at end of file
+diff -ruN -x node_modules -x .next -x '*.tsbuildinfo' a/app/api/wa/notify/route.ts monitoring-produksi-sablon-main/app/api/wa/notify/route.ts
+--- a/app/api/wa/notify/route.ts	2026-11-11 11:05:30.000000000 +0000
++++ b/app/api/wa/notify/route.ts	2026-11-11 11:54:59.591158184 +0000
+@@ -9,8 +9,10 @@
+ import { getWaSettings } from '@/lib/waSettings';
+ import {
+   pesanOrderBaruGrup, pesanOrderBaruPersonal, pesanTahapPersonal, adaPesanTahap,
+-  pesanKendalaGrup, pesanRevisiGrup, pesanSelesaiGrup,
++  pesanKendalaGrup, pesanKendalaPengelola, pesanRevisiGrup, pesanSelesaiGrup,
+ } from '@/lib/waMessages';
++import { linkPesanan } from '@/lib/waAppUrl';
++import { isMerchandiseOrder } from '@/lib/utils';
+ 
+ export const dynamic = 'force-dynamic';
+ 
+@@ -66,14 +68,26 @@
+     if (event === 'status_changed') {
+       const status = o.status as string;
+ 
+-      if (status === 'Ada Kendala' && grup) {
++      if (status === 'Ada Kendala') {
+         const list = Array.isArray(o.kendala) ? o.kendala : [];
+         const aktif = [...list].reverse().find((k: any) => !k.isResolved);
+-        items.push({
++        const kunci = aktif?.id ?? bucket;
++        if (grup) items.push({
+           ...base, target_type: 'group', target: grup, event_type: 'kendala',
+           message: pesanKendalaGrup(o, aktif?.notes ?? '', aktif?.reportedBy, mention), mentions: mention,
+-          dedupe_key: `kendala:${o.id}:${aktif?.id ?? bucket}`,
++          dedupe_key: `kendala:${o.id}:${kunci}`,
+         });
++        // Laporan lengkap (isi kendala + link pesanan) ke nomor penerima kendala di Pengaturan.
++        if (cfg.notifyKendalaNumbers.length > 0) {
++          const link = linkPesanan(o.id as string, isMerchandiseOrder(o));
++          const teks = pesanKendalaPengelola(
++            o, aktif?.notes ?? '', aktif?.reportedBy, pj?.nama, helper?.nama, link,
++          );
++          for (const nomor of cfg.notifyKendalaNumbers) items.push({
++            ...base, target_type: 'user', target: nomor, event_type: 'kendala',
++            message: teks, dedupe_key: `kendala:${o.id}:${kunci}:${nomor}`,
++          });
++        }
+       } else if (status === 'Revisi' && grup) {
+         items.push({
+           ...base, target_type: 'group', target: grup, event_type: 'revisi',
+diff -ruN -x node_modules -x .next -x '*.tsbuildinfo' a/app/api/wa/settings/route.ts monitoring-produksi-sablon-main/app/api/wa/settings/route.ts
+--- a/app/api/wa/settings/route.ts	2026-11-11 11:05:30.000000000 +0000
++++ b/app/api/wa/settings/route.ts	2026-11-11 11:54:59.591396788 +0000
+@@ -7,10 +7,12 @@
+ import { requireUser } from '@/lib/apiAuth';
+ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+ import { getWaSettings } from '@/lib/waSettings';
++import { normalizeWa } from '@/lib/waQueue';
+ 
+ export const dynamic = 'force-dynamic';
+ 
+ const ROLES = ['admin', 'manager', 'super_admin'];
++const MAKS_NOMOR = 10;
+ 
+ const tampil = (s: Awaited<ReturnType<typeof getWaSettings>>) => ({
+   enabled: s.enabled,
+@@ -18,8 +20,29 @@
+   group_jid: s.groupJid,
+   token_set: !!s.gatewayToken,
+   token_hint: s.gatewayToken ? s.gatewayToken.slice(-4) : '',
++  notify_verifikasi_numbers: s.notifyVerifikasiNumbers,
++  notify_kendala_numbers: s.notifyKendalaNumbers,
+ });
+ 
++// Validasi + normalisasi daftar nomor. Mengembalikan string error bila ada yang tidak valid.
++function bersihkanNomor(raw: unknown, label: string): { ok: true; nomor: string[] } | { ok: false; error: string } {
++  if (!Array.isArray(raw) || raw.some((n) => typeof n !== 'string')) {
++    return { ok: false, error: `Daftar nomor ${label} tidak valid` };
++  }
++  const hasil: string[] = [];
++  for (const mentah of raw as string[]) {
++    if (!mentah.trim()) continue;
++    const n = normalizeWa(mentah);
++    // Nomor Indonesia: 62 + 8–13 digit. Batas atas mencegah salah ketik tempel dua nomor.
++    if (!n || n.length < 10 || n.length > 15) {
++      return { ok: false, error: `Nomor "${mentah.trim()}" (${label}) tidak valid` };
++    }
++    if (!hasil.includes(n)) hasil.push(n);
++  }
++  if (hasil.length > MAKS_NOMOR) return { ok: false, error: `Maksimal ${MAKS_NOMOR} nomor untuk ${label}` };
++  return { ok: true, nomor: hasil };
++}
++
+ export async function GET(request: NextRequest) {
+   const guard = await requireUser(request, ROLES);
+   if (!guard.ok) return guard.response;
+@@ -36,6 +59,8 @@
+       gateway_url?: string;
+       gateway_token?: string;
+       group_jid?: string;
++      notify_verifikasi_numbers?: string[];
++      notify_kendala_numbers?: string[];
+     };
+ 
+     const sekarang = await getWaSettings();
+@@ -62,6 +87,16 @@
+       patch.group_jid = jid;
+     }
+ 
++    for (const [kolom, label] of [
++      ['notify_verifikasi_numbers', 'verifikasi keuangan'],
++      ['notify_kendala_numbers', 'kendala pesanan'],
++    ] as const) {
++      if (body[kolom] === undefined) continue;
++      const r = bersihkanNomor(body[kolom], label);
++      if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
++      patch[kolom] = r.nomor;
++    }
++
+     if (typeof body.enabled === 'boolean') {
+       if (body.enabled) {
+         const url = (patch.gateway_url as string | undefined) ?? sekarang.gatewayUrl;
+diff -ruN -x node_modules -x .next -x '*.tsbuildinfo' a/app/components/finance/FinanceModule.tsx monitoring-produksi-sablon-main/app/components/finance/FinanceModule.tsx
+--- a/app/components/finance/FinanceModule.tsx	2026-11-11 11:05:30.000000000 +0000
++++ b/app/components/finance/FinanceModule.tsx	2026-11-11 11:31:12.609409972 +0000
+@@ -3,7 +3,7 @@
+ // Menu Keuangan v2. Fase 1 = UANG MASUK (tagihan, pembayaran, verifikasi).
+ // Fase 2 = UANG KELUAR (tab Pengeluaran: catat, persetujuan, void, bukti).
+ 
+-import React, { useCallback, useMemo, useState } from "react";
++import React, { useCallback, useEffect, useMemo, useState } from "react";
+ import {
+   LayoutDashboard,
+   FileText,
+@@ -38,13 +38,24 @@
+   | "guide"
+   | "settings";
+ 
++const TAB_IDS: TabId[] = [
++  "overview", "invoices", "payments", "verify", "expenses", "report", "audit", "guide", "settings",
++];
++
++// Sub-tab awal dari URL (?ftab=verify). Hanya dibaca di browser; modul ini dirender setelah login.
++function tabAwalDariUrl(): TabId {
++  if (typeof window === "undefined") return "overview";
++  const f = new URLSearchParams(window.location.search).get("ftab");
++  return TAB_IDS.includes(f as TabId) ? (f as TabId) : "overview";
++}
++
+ export default function FinanceModule({
+   currentUser,
+ }: {
+   currentUser: UserData;
+ }) {
+   const caps = useMemo(() => getFinanceCaps(currentUser), [currentUser]);
+-  const [tab, setTab] = useState<TabId>("overview");
++  const [tab, setTab] = useState<TabId>(tabAwalDariUrl);
+   const [version, setVersion] = useState(0);
+   // Dari kartu Ringkasan: buka tab Pengeluaran langsung di antrean "menunggu persetujuan".
+   const [expensePreset, setExpensePreset] = useState<"" | "pending">("");
+@@ -56,6 +67,17 @@
+     void reload();
+   }, [reload]);
+ 
++  // Tulis sub-tab aktif ke URL (tanpa menambah riwayat browser) supaya link bisa disalin/dibagikan.
++  useEffect(() => {
++    const url = new URL(window.location.href);
++    if (tab === "overview") url.searchParams.delete("ftab");
++    else url.searchParams.set("ftab", tab);
++    const baru = `${url.pathname}${url.search}`;
++    if (baru !== `${window.location.pathname}${window.location.search}`) {
++      window.history.replaceState(window.history.state, "", baru);
++    }
++  }, [tab]);
++
+   if (!caps.view) {
+     return (
+       <p className="text-sm text-zinc-500 dark:text-zinc-400 p-6">
+@@ -133,6 +155,9 @@
+ 
+   const visibleTabs = tabs.filter((t) => t.show);
+ 
++  // Link ke tab yang tidak boleh dibuka user ini (mis. Verifikasi tanpa hak approver) → Ringkasan.
++  if (!visibleTabs.some((t) => t.id === tab)) setTab("overview");
++
+   // Panah kiri/kanan untuk pindah tab (aksesibilitas), melewati tab "segera".
+   const onKeyDown = (e: React.KeyboardEvent) => {
+     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+diff -ruN -x node_modules -x .next -x '*.tsbuildinfo' a/app/components/settings/WhatsAppSettings.tsx monitoring-produksi-sablon-main/app/components/settings/WhatsAppSettings.tsx
+--- a/app/components/settings/WhatsAppSettings.tsx	2026-11-11 11:05:30.000000000 +0000
++++ b/app/components/settings/WhatsAppSettings.tsx	2026-11-11 11:54:59.592181547 +0000
+@@ -3,10 +3,13 @@
+ // - Saklar aktif/nonaktif
+ // - URL + token gateway, ID grup produksi
+ // - Status koneksi, scan QR, cari grup, kirim pesan tes
++// - Penerima notifikasi: dua daftar nomor terpisah, satu untuk transaksi menunggu verifikasi
++//   dan satu untuk laporan kendala pesanan (lengkap dengan link ke halaman terkait)
+ // Semua panggilan lewat /api/wa/* (token gateway tidak pernah sampai ke browser).
+ "use client";
+ 
+ import React, { useCallback, useEffect, useState } from "react";
++import { Plus, X, ShieldCheck, TriangleAlert } from "lucide-react";
+ 
+ interface WaSettingsData {
+   enabled: boolean;
+@@ -14,6 +17,8 @@
+   group_jid: string;
+   token_set: boolean;
+   token_hint: string;
++  notify_verifikasi_numbers: string[];
++  notify_kendala_numbers: string[];
+ }
+ 
+ type GwState = "starting" | "qr" | "open" | "closed";
+@@ -37,6 +42,12 @@
+   return { ok: res.ok, data: data as any };
+ }
+ 
++// 6281234567890 -> 0812-3456-7890 (hanya untuk tampilan; yang disimpan tetap format 62...)
++const tampilNomor = (n: string) => {
++  const lokal = n.startsWith("62") ? `0${n.slice(2)}` : n;
++  return lokal.replace(/^(\d{4})(\d{4})(\d+)$/, "$1-$2-$3");
++};
++
+ const inputCls =
+   "w-full border border-zinc-200 dark:border-zinc-800 rounded-md px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-900 outline-none focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 transition-colors duration-150 placeholder-zinc-400 dark:placeholder-zinc-500";
+ const labelCls =
+@@ -48,6 +59,98 @@
+ const btnGhost =
+   "shrink-0 px-3 py-2 rounded-md text-sm font-semibold border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors duration-150 disabled:opacity-50";
+ 
++// Satu daftar nomor penerima (tambah / hapus). Perubahan baru tersimpan lewat tombol Simpan induk.
++function DaftarNomor({
++  icon, judul, deskripsi, kosong, nomor, onChange,
++}: {
++  icon: React.ReactNode;
++  judul: string;
++  deskripsi: string;
++  kosong: string;
++  nomor: string[];
++  onChange: (next: string[]) => void;
++}) {
++  const [baru, setBaru] = useState("");
++  const [err, setErr] = useState("");
++
++  const tambah = () => {
++    const digit = baru.replace(/\D/g, "");
++    if (digit.length < 9 || digit.length > 14) {
++      setErr("Nomor tidak valid. Contoh: 081234567890.");
++      return;
++    }
++    const norm = digit.startsWith("0") ? `62${digit.slice(1)}` : digit.startsWith("62") ? digit : `62${digit}`;
++    if (nomor.includes(norm)) {
++      setErr("Nomor itu sudah ada di daftar ini.");
++      return;
++    }
++    if (nomor.length >= 10) {
++      setErr("Maksimal 10 nomor.");
++      return;
++    }
++    onChange([...nomor, norm]);
++    setBaru("");
++    setErr("");
++  };
++
++  return (
++    <div className="p-4 space-y-3">
++      <div className="flex items-start gap-3">
++        <span className="mt-0.5 shrink-0 text-zinc-500 dark:text-zinc-400">{icon}</span>
++        <div className="min-w-0">
++          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{judul}</p>
++          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{deskripsi}</p>
++        </div>
++      </div>
++
++      <div className="flex gap-2">
++        <input
++          className={inputCls}
++          inputMode="tel"
++          aria-label={`Nomor penerima ${judul}`}
++          value={baru}
++          onChange={(e) => setBaru(e.target.value)}
++          onKeyDown={(e) => {
++            if (e.key === "Enter") {
++              e.preventDefault();
++              tambah();
++            }
++          }}
++          placeholder="08xxxxxxxxxx"
++          autoComplete="off"
++        />
++        <button type="button" className={btnGhost} onClick={tambah} disabled={!baru.trim()}>
++          <span className="flex items-center gap-1.5">
++            <Plus size={14} />
++            Tambah
++          </span>
++        </button>
++      </div>
++      {err && <p className="text-xs text-red-600 dark:text-red-400">{err}</p>}
++
++      {nomor.length === 0 ? (
++        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{kosong}</p>
++      ) : (
++        <ul className="border border-zinc-200 dark:border-zinc-800 rounded-md divide-y divide-zinc-200 dark:divide-zinc-800">
++          {nomor.map((n) => (
++            <li key={n} className="px-3 py-2 flex items-center justify-between gap-3">
++              <span className="text-sm font-mono text-zinc-800 dark:text-zinc-200">{tampilNomor(n)}</span>
++              <button
++                type="button"
++                aria-label={`Hapus ${tampilNomor(n)}`}
++                onClick={() => onChange(nomor.filter((x) => x !== n))}
++                className="p-1 rounded text-zinc-500 hover:text-red-600 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors duration-150"
++              >
++                <X size={14} />
++              </button>
++            </li>
++          ))}
++        </ul>
++      )}
++    </div>
++  );
++}
++
+ export default function WhatsAppSettings() {
+   const [settings, setSettings] = useState<WaSettingsData | null>(null);
+   const [loadError, setLoadError] = useState("");
+@@ -60,6 +163,12 @@
+   const [toggling, setToggling] = useState(false);
+   const [msg, setMsg] = useState<Msg>(null);
+ 
++  // Penerima notifikasi
++  const [verifList, setVerifList] = useState<string[]>([]);
++  const [kendalaList, setKendalaList] = useState<string[]>([]);
++  const [savingPenerima, setSavingPenerima] = useState(false);
++  const [msgPenerima, setMsgPenerima] = useState<Msg>(null);
++
+   // Status gateway
+   const [gw, setGw] = useState<GwStatus>({ state: null });
+   const [qr, setQr] = useState<string | null>(null);
+@@ -84,6 +193,8 @@
+       setSettings(data);
+       setUrl(data.gateway_url || "");
+       setGroupJid(data.group_jid || "");
++      setVerifList(data.notify_verifikasi_numbers ?? []);
++      setKendalaList(data.notify_kendala_numbers ?? []);
+     })();
+   }, []);
+ 
+@@ -177,6 +288,34 @@
+     setSettings(data);
+   };
+ 
++  // ─── Penerima notifikasi ──────────────────────────────────────────────────
++  const penerimaDirty =
++    !!settings &&
++    (verifList.join(",") !== (settings.notify_verifikasi_numbers ?? []).join(",") ||
++      kendalaList.join(",") !== (settings.notify_kendala_numbers ?? []).join(","));
++
++  const simpanPenerima = async () => {
++    setSavingPenerima(true);
++    setMsgPenerima(null);
++    const { ok, data } = await api("/api/wa/settings", {
++      method: "PUT",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify({
++        notify_verifikasi_numbers: verifList,
++        notify_kendala_numbers: kendalaList,
++      }),
++    });
++    setSavingPenerima(false);
++    if (!ok) {
++      setMsgPenerima({ type: "err", text: data?.error || "Gagal menyimpan." });
++      return;
++    }
++    setSettings(data);
++    setVerifList(data.notify_verifikasi_numbers ?? []);
++    setKendalaList(data.notify_kendala_numbers ?? []);
++    setMsgPenerima({ type: "ok", text: "Penerima notifikasi tersimpan." });
++  };
++
+   const cariGrup = async () => {
+     setGroupsLoading(true);
+     setGroupsError("");
+@@ -438,6 +577,63 @@
+             </p>
+           )}
+         </div>
++      </div>
++
++      {/* Penerima notifikasi: verifikasi keuangan & kendala (daftar nomor terpisah) */}
++      <div className={`${cardCls} p-5 md:p-6 space-y-4`}>
++        <div>
++          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
++            Penerima notifikasi
++          </p>
++          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
++            Isi nomor pribadi untuk tiap jenis notifikasi. Pesan memuat link
++            langsung ke halaman terkait. Daftar kosong berarti jenis itu tidak
++            dikirim. Nomor tidak harus terdaftar sebagai pengguna, tetapi hanya
++            akun dengan hak verifikasi keuangan yang bisa memproses transaksi.
++          </p>
++        </div>
++
++        <div className="divide-y divide-zinc-200 dark:divide-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-lg">
++          <DaftarNomor
++            icon={<ShieldCheck size={16} />}
++            judul="Verifikasi keuangan"
++            deskripsi="Pembayaran, refund, dan pengeluaran baru yang menunggu verifikasi. Gaji yang ditandai lunas sudah otomatis terverifikasi, jadi tidak dikirim."
++            kosong="Belum ada nomor. Notifikasi verifikasi keuangan tidak dikirim."
++            nomor={verifList}
++            onChange={setVerifList}
++          />
++          <DaftarNomor
++            icon={<TriangleAlert size={16} />}
++            judul="Kendala pesanan"
++            deskripsi="Laporan kendala beserta isi laporan, pelapor, PJ, dan helper."
++            kosong="Belum ada nomor. Laporan kendala pribadi tidak dikirim."
++            nomor={kendalaList}
++            onChange={setKendalaList}
++          />
++        </div>
++
++        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
++          Notifikasi ikut saklar WhatsApp Bot di atas. Kalau saklar mati, tidak
++          ada pesan yang dikirim.
++        </p>
++
++        <div className="flex items-center gap-3 flex-wrap">
++          <button
++            type="button"
++            className={btnPrimary}
++            onClick={simpanPenerima}
++            disabled={savingPenerima || !penerimaDirty}
++          >
++            {savingPenerima ? "Menyimpan…" : "Simpan penerima"}
++          </button>
++          {msgPenerima && (
++            <p
++              className={`text-xs ${msgPenerima.type === "ok" ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
++            >
++              {msgPenerima.text}
++            </p>
++          )}
++        </div>
+       </div>
+ 
+       {/* Status + QR + tes */}
+diff -ruN -x node_modules -x .next -x '*.tsbuildinfo' a/app/page.tsx monitoring-produksi-sablon-main/app/page.tsx
+--- a/app/page.tsx	2026-11-11 11:05:30.000000000 +0000
++++ b/app/page.tsx	2026-11-11 11:31:12.609209046 +0000
+@@ -454,6 +454,12 @@
+     if (activeTab === "po_management" && selectedPoId) {
+       params.set("poId", selectedPoId);
+     }
++    // Sub-tab Keuangan (mis. ?ftab=verify dari link WhatsApp) harus ikut terbawa; kalau tidak,
++    // URL ditulis ulang tanpa parameter itu dan FinanceModule tidak pernah membacanya.
++    if (activeTab === "finance") {
++      const ftab = new URLSearchParams(window.location.search).get("ftab");
++      if (ftab) params.set("ftab", ftab);
++    }
+ 
+     const query = params.toString();
+     const newUrl = query ? `?${query}` : window.location.pathname;
+diff -ruN -x node_modules -x .next -x '*.tsbuildinfo' a/lib/waAppUrl.ts monitoring-produksi-sablon-main/lib/waAppUrl.ts
+--- a/lib/waAppUrl.ts	1970-01-01 00:00:00.000000000 +0000
++++ b/lib/waAppUrl.ts	2026-11-11 11:30:55.651469412 +0000
+@@ -0,0 +1,11 @@
++// lib/waAppUrl.ts — URL publik aplikasi + pembuat link untuk isi pesan WhatsApp (SERVER ONLY).
++// Atur NEXT_PUBLIC_APP_URL di Coolify; bila kosong dipakai https://sablon.langitan.co.
++
++const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://sablon.langitan.co').replace(/\/+$/, '');
++
++/** Membuka menu Keuangan langsung di sub-tab Verifikasi. */
++export const linkVerifikasi = () => `${APP_URL}/?tab=finance&ftab=verify`;
++
++/** Membuka detail pesanan (Merchandise punya tab sendiri). */
++export const linkPesanan = (orderId: string, merchandise: boolean) =>
++  `${APP_URL}/?tab=${merchandise ? 'merchandise' : 'orders'}&view=detail&orderId=${encodeURIComponent(orderId)}`;
+diff -ruN -x node_modules -x .next -x '*.tsbuildinfo' a/lib/waMessages.ts monitoring-produksi-sablon-main/lib/waMessages.ts
+--- a/lib/waMessages.ts	2026-11-11 11:05:30.000000000 +0000
++++ b/lib/waMessages.ts	2026-11-11 11:33:51.240637568 +0000
+@@ -101,4 +101,56 @@
+     '📋 *PENGINGAT DEADLINE*',
+     '',
+     ...items.map((i) => `• ${baris(i.order)} — ${labelSisa(i.sisaHari)}`),
+-  ].join('\n');
+\ No newline at end of file
++  ].join('\n');
++
++// 7) Verifikasi keuangan → nomor penerima (pembayaran / refund / pengeluaran menunggu verifikasi)
++export interface PesanVerifikasi {
++  jenis: 'pembayaran' | 'refund' | 'pengeluaran';
++  nominal: number;
++  pencatat: string;
++  /** Pembayaran/refund: "KODE — Nama pemesan". Pengeluaran: keterangan. */
++  rincian: string;
++  menunggu: { pembayaran: number; pengeluaran: number };
++  link: string;
++}
++
++const rupiah = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
++
++export const pesanVerifikasi = (v: PesanVerifikasi) => {
++  const judul = {
++    pembayaran: 'PEMBAYARAN MENUNGGU VERIFIKASI',
++    refund: 'REFUND MENUNGGU VERIFIKASI',
++    pengeluaran: 'PENGELUARAN MENUNGGU PERSETUJUAN',
++  }[v.jenis];
++  const antre = [
++    v.menunggu.pembayaran ? `${v.menunggu.pembayaran} pembayaran/refund` : '',
++    v.menunggu.pengeluaran ? `${v.menunggu.pengeluaran} pengeluaran` : '',
++  ].filter(Boolean).join(' dan ');
++  return [
++    `🧾 *${judul}*`,
++    '',
++    v.rincian,
++    `Nominal: *${rupiah(v.nominal)}*`,
++    `Dicatat oleh: ${v.pencatat}`,
++    antre ? `\nTotal antrean saat ini: ${antre}.` : null,
++    `\nBuka verifikasi:\n${v.link}`,
++  ].filter((x): x is string => x !== null).join('\n');
++};
++
++// 8) Laporan kendala lengkap → nomor penerima (pribadi, bukan grup)
++export const pesanKendalaPengelola = (
++  o: WaOrder, catatan: string, pelapor: string | undefined, pj: string | undefined,
++  helper: string | undefined, link: string,
++) =>
++  [
++    '⚠️ *LAPORAN KENDALA PESANAN*',
++    '',
++    baris(o),
++    `Deadline: ${fmtTanggal(o.deadline)}`,
++    `PJ: ${pj ?? '-'}${helper ? ` • Helper: ${helper}` : ''}`,
++    '',
++    'Isi laporan:',
++    catatan || '-',
++    pelapor ? `\nDilaporkan oleh: ${pelapor}` : null,
++    `\nBuka pesanan:\n${link}`,
++  ].filter((x): x is string => x !== null).join('\n');
+diff -ruN -x node_modules -x .next -x '*.tsbuildinfo' a/lib/waNotifyVerifikasi.ts monitoring-produksi-sablon-main/lib/waNotifyVerifikasi.ts
+--- a/lib/waNotifyVerifikasi.ts	1970-01-01 00:00:00.000000000 +0000
++++ b/lib/waNotifyVerifikasi.ts	2026-11-11 11:54:59.590185029 +0000
+@@ -0,0 +1,64 @@
++// lib/waNotifyVerifikasi.ts — SERVER ONLY.
++// Mengantrekan pesan WhatsApp ke nomor penerima (Pengaturan > WhatsApp Bot) setiap kali ada
++// pembayaran / refund / pengeluaran yang masuk antrean verifikasi.
++//
++// Aturan:
++//  - Hanya dipanggil untuk transaksi berstatus PENDING. Transaksi yang langsung terverifikasi
++//    (auto-verify) dan gaji yang ditandai lunas (sudah otomatis disetujui di fin_post_salary)
++//    tidak pernah sampai ke sini.
++//  - Tidak pernah melempar error: gagal mengantre tidak boleh menggagalkan pencatatan transaksi.
++//  - dedupe_key per transaksi + nomor, jadi satu transaksi tidak mengirim pesan dobel.
++
++import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
++import { enqueueWa, type WaItem } from '@/lib/waQueue';
++import { getWaSettings } from '@/lib/waSettings';
++import { pesanVerifikasi } from '@/lib/waMessages';
++import { linkVerifikasi } from '@/lib/waAppUrl';
++
++type Input =
++  | { jenis: 'pembayaran' | 'refund'; id: string; nominal: number; pencatat: string; orderId: string }
++  | { jenis: 'pengeluaran'; id: string; nominal: number; pencatat: string; keterangan: string };
++
++export async function notifyVerifikasi(input: Input): Promise<void> {
++  try {
++    const cfg = await getWaSettings();
++    if (!cfg.enabled || cfg.notifyVerifikasiNumbers.length === 0) return;
++
++    const admin = getSupabaseAdmin();
++
++    let rincian = '';
++    if (input.jenis === 'pengeluaran') {
++      rincian = input.keterangan;
++    } else {
++      const { data: o } = await admin
++        .from('orders').select('kode_produksi, nama_pemesan').eq('id', input.orderId).maybeSingle();
++      rincian = o ? `*${o.kode_produksi}* — ${o.nama_pemesan}` : 'Pesanan tidak diketahui';
++    }
++
++    // Jumlah antrean saat ini (termasuk transaksi ini, karena sudah tercatat).
++    const [pay, exp] = await Promise.all([
++      admin.from('order_payments').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
++      admin.from('finance_expenses').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
++    ]);
++
++    const message = pesanVerifikasi({
++      jenis: input.jenis,
++      nominal: input.nominal,
++      pencatat: input.pencatat,
++      rincian,
++      menunggu: { pembayaran: pay.count ?? 0, pengeluaran: exp.count ?? 0 },
++      link: linkVerifikasi(),
++    });
++
++    const items: WaItem[] = cfg.notifyVerifikasiNumbers.map((nomor) => ({
++      target_type: 'user',
++      target: nomor,
++      message,
++      event_type: 'verifikasi',
++      dedupe_key: `verif:${input.jenis}:${input.id}:${nomor}`,
++    }));
++    await enqueueWa(items, cfg);
++  } catch (e) {
++    console.error('notifyVerifikasi gagal (transaksi tetap tercatat):', e);
++  }
++}
+diff -ruN -x node_modules -x .next -x '*.tsbuildinfo' a/lib/waSettings.ts monitoring-produksi-sablon-main/lib/waSettings.ts
+--- a/lib/waSettings.ts	2026-11-11 11:05:30.000000000 +0000
++++ b/lib/waSettings.ts	2026-11-11 11:54:59.589844411 +0000
+@@ -9,16 +9,27 @@
+   gatewayUrl: string;   // tanpa garis miring di akhir
+   gatewayToken: string;
+   groupJid: string;
++  // Nomor pribadi penerima (sudah 62xxx). Dua daftar terpisah; kosong = jenis itu tidak dikirim.
++  notifyVerifikasiNumbers: string[];
++  notifyKendalaNumbers: string[];
+ }
+ 
+-const KOSONG: WaSettings = { enabled: false, gatewayUrl: '', gatewayToken: '', groupJid: '' };
++const KOSONG: WaSettings = {
++  enabled: false, gatewayUrl: '', gatewayToken: '', groupJid: '',
++  notifyVerifikasiNumbers: [], notifyKendalaNumbers: [],
++};
++
++const daftarNomor = (v: unknown): string[] =>
++  Array.isArray(v) ? v.map((n) => String(n).trim()).filter(Boolean) : [];
+ 
+ // Gagal baca (mis. migration belum dijalankan) → dianggap NONAKTIF supaya aman.
+ export async function getWaSettings(): Promise<WaSettings> {
+   try {
+     const { data, error } = await getSupabaseAdmin()
+       .from('wa_settings')
+-      .select('enabled, gateway_url, gateway_token, group_jid')
++      // select('*') sengaja: kolom notify_* baru ada setelah migration 017. Kalau memilih kolom
++      // satu per satu dan migration belum jalan, query gagal dan Bot ikut dianggap nonaktif.
++      .select('*')
+       .eq('id', 1)
+       .maybeSingle();
+     if (error || !data) {
+@@ -30,6 +41,8 @@
+       gatewayUrl: String(data.gateway_url ?? '').trim().replace(/\/+$/, ''),
+       gatewayToken: String(data.gateway_token ?? '').trim(),
+       groupJid: String(data.group_jid ?? '').trim(),
++      notifyVerifikasiNumbers: daftarNomor(data.notify_verifikasi_numbers),
++      notifyKendalaNumbers: daftarNomor(data.notify_kendala_numbers),
+     };
+   } catch (e) {
+     console.error('getWaSettings exception:', e);
+diff -ruN -x node_modules -x .next -x '*.tsbuildinfo' a/supabase/migrations/017_wa_notify_numbers.sql monitoring-produksi-sablon-main/supabase/migrations/017_wa_notify_numbers.sql
+--- a/supabase/migrations/017_wa_notify_numbers.sql	1970-01-01 00:00:00.000000000 +0000
++++ b/supabase/migrations/017_wa_notify_numbers.sql	2026-11-11 11:54:59.541640573 +0000
+@@ -0,0 +1,28 @@
++-- 017 — Nomor penerima notifikasi WhatsApp: Verifikasi Keuangan dan Kendala pesanan
++-- (database SABLON, schema monitoring_sablon).
++--
++-- Aman dijalankan ulang. Hanya MENAMBAH kolom ke wa_settings; data lama tidak diubah.
++-- Kode aplikasi membaca kolom ini dengan aman: kalau SQL ini belum dijalankan, WhatsApp Bot
++-- tetap bekerja seperti biasa, hanya fitur nomor penerima yang belum aktif.
++--
++--   notify_verifikasi_numbers  nomor yang dikabari saat ada pembayaran/refund/pengeluaran
++--                              menunggu verifikasi (format 62812..., dinormalisasi oleh aplikasi)
++--   notify_kendala_numbers     nomor yang dikabari saat ada pesanan melaporkan kendala
++--
++-- Daftar kosong = notifikasi jenis itu tidak dikirim.
++-- (Bila versi 017 sebelumnya sempat dijalankan, kolom notify_numbers / notify_verifikasi /
++--  notify_kendala dari versi itu tidak dipakai lagi dan boleh dibiarkan.)
++
++begin;
++
++alter table monitoring_sablon.wa_settings
++  add column if not exists notify_verifikasi_numbers text[] not null default '{}',
++  add column if not exists notify_kendala_numbers    text[] not null default '{}';
++
++commit;
++
++notify pgrst, 'reload schema';
++
++-- ─── Cek hasil ───────────────────────────────────────────────────────────────
++--   select id, enabled, notify_verifikasi_numbers, notify_kendala_numbers
++--   from monitoring_sablon.wa_settings;

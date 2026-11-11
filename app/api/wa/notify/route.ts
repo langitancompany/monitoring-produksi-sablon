@@ -9,8 +9,10 @@ import { enqueueWa, orang, ORDER_WITH_PEOPLE, type WaItem } from '@/lib/waQueue'
 import { getWaSettings } from '@/lib/waSettings';
 import {
   pesanOrderBaruGrup, pesanOrderBaruPersonal, pesanTahapPersonal, adaPesanTahap,
-  pesanKendalaGrup, pesanRevisiGrup, pesanSelesaiGrup,
+  pesanKendalaGrup, pesanKendalaPengelola, pesanRevisiGrup, pesanSelesaiGrup,
 } from '@/lib/waMessages';
+import { linkPesanan } from '@/lib/waAppUrl';
+import { isMerchandiseOrder } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,14 +68,26 @@ export async function POST(request: NextRequest) {
     if (event === 'status_changed') {
       const status = o.status as string;
 
-      if (status === 'Ada Kendala' && grup) {
+      if (status === 'Ada Kendala') {
         const list = Array.isArray(o.kendala) ? o.kendala : [];
         const aktif = [...list].reverse().find((k: any) => !k.isResolved);
-        items.push({
+        const kunci = aktif?.id ?? bucket;
+        if (grup) items.push({
           ...base, target_type: 'group', target: grup, event_type: 'kendala',
           message: pesanKendalaGrup(o, aktif?.notes ?? '', aktif?.reportedBy, mention), mentions: mention,
-          dedupe_key: `kendala:${o.id}:${aktif?.id ?? bucket}`,
+          dedupe_key: `kendala:${o.id}:${kunci}`,
         });
+        // Laporan lengkap (isi kendala + link pesanan) ke nomor penerima kendala di Pengaturan.
+        if (cfg.notifyKendalaNumbers.length > 0) {
+          const link = linkPesanan(o.id as string, isMerchandiseOrder(o));
+          const teks = pesanKendalaPengelola(
+            o, aktif?.notes ?? '', aktif?.reportedBy, pj?.nama, helper?.nama, link,
+          );
+          for (const nomor of cfg.notifyKendalaNumbers) items.push({
+            ...base, target_type: 'user', target: nomor, event_type: 'kendala',
+            message: teks, dedupe_key: `kendala:${o.id}:${kunci}:${nomor}`,
+          });
+        }
       } else if (status === 'Revisi' && grup) {
         items.push({
           ...base, target_type: 'group', target: grup, event_type: 'revisi',

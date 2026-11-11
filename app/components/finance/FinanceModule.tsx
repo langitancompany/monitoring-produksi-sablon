@@ -3,7 +3,7 @@
 // Menu Keuangan v2. Fase 1 = UANG MASUK (tagihan, pembayaran, verifikasi).
 // Fase 2 = UANG KELUAR (tab Pengeluaran: catat, persetujuan, void, bukti).
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   LayoutDashboard,
   FileText,
@@ -38,13 +38,24 @@ type TabId =
   | "guide"
   | "settings";
 
+const TAB_IDS: TabId[] = [
+  "overview", "invoices", "payments", "verify", "expenses", "report", "audit", "guide", "settings",
+];
+
+// Sub-tab awal dari URL (?ftab=verify). Hanya dibaca di browser; modul ini dirender setelah login.
+function tabAwalDariUrl(): TabId {
+  if (typeof window === "undefined") return "overview";
+  const f = new URLSearchParams(window.location.search).get("ftab");
+  return TAB_IDS.includes(f as TabId) ? (f as TabId) : "overview";
+}
+
 export default function FinanceModule({
   currentUser,
 }: {
   currentUser: UserData;
 }) {
   const caps = useMemo(() => getFinanceCaps(currentUser), [currentUser]);
-  const [tab, setTab] = useState<TabId>("overview");
+  const [tab, setTab] = useState<TabId>(tabAwalDariUrl);
   const [version, setVersion] = useState(0);
   // Dari kartu Ringkasan: buka tab Pengeluaran langsung di antrean "menunggu persetujuan".
   const [expensePreset, setExpensePreset] = useState<"" | "pending">("");
@@ -55,6 +66,17 @@ export default function FinanceModule({
     setVersion((v) => v + 1);
     void reload();
   }, [reload]);
+
+  // Tulis sub-tab aktif ke URL (tanpa menambah riwayat browser) supaya link bisa disalin/dibagikan.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (tab === "overview") url.searchParams.delete("ftab");
+    else url.searchParams.set("ftab", tab);
+    const baru = `${url.pathname}${url.search}`;
+    if (baru !== `${window.location.pathname}${window.location.search}`) {
+      window.history.replaceState(window.history.state, "", baru);
+    }
+  }, [tab]);
 
   if (!caps.view) {
     return (
@@ -132,6 +154,9 @@ export default function FinanceModule({
   ];
 
   const visibleTabs = tabs.filter((t) => t.show);
+
+  // Link ke tab yang tidak boleh dibuka user ini (mis. Verifikasi tanpa hak approver) → Ringkasan.
+  if (!visibleTabs.some((t) => t.id === tab)) setTab("overview");
 
   // Panah kiri/kanan untuk pindah tab (aksesibilitas), melewati tab "segera".
   const onKeyDown = (e: React.KeyboardEvent) => {

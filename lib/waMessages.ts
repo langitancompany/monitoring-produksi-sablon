@@ -102,3 +102,55 @@ export const pesanDeadlineGrup = (items: ItemDeadline[]) =>
     '',
     ...items.map((i) => `• ${baris(i.order)} — ${labelSisa(i.sisaHari)}`),
   ].join('\n');
+
+// 7) Verifikasi keuangan → nomor penerima (pembayaran / refund / pengeluaran menunggu verifikasi)
+export interface PesanVerifikasi {
+  jenis: 'pembayaran' | 'refund' | 'pengeluaran';
+  nominal: number;
+  pencatat: string;
+  /** Pembayaran/refund: "KODE — Nama pemesan". Pengeluaran: keterangan. */
+  rincian: string;
+  menunggu: { pembayaran: number; pengeluaran: number };
+  link: string;
+}
+
+const rupiah = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
+
+export const pesanVerifikasi = (v: PesanVerifikasi) => {
+  const judul = {
+    pembayaran: 'PEMBAYARAN MENUNGGU VERIFIKASI',
+    refund: 'REFUND MENUNGGU VERIFIKASI',
+    pengeluaran: 'PENGELUARAN MENUNGGU PERSETUJUAN',
+  }[v.jenis];
+  const antre = [
+    v.menunggu.pembayaran ? `${v.menunggu.pembayaran} pembayaran/refund` : '',
+    v.menunggu.pengeluaran ? `${v.menunggu.pengeluaran} pengeluaran` : '',
+  ].filter(Boolean).join(' dan ');
+  return [
+    `🧾 *${judul}*`,
+    '',
+    v.rincian,
+    `Nominal: *${rupiah(v.nominal)}*`,
+    `Dicatat oleh: ${v.pencatat}`,
+    antre ? `\nTotal antrean saat ini: ${antre}.` : null,
+    `\nBuka verifikasi:\n${v.link}`,
+  ].filter((x): x is string => x !== null).join('\n');
+};
+
+// 8) Laporan kendala lengkap → nomor penerima (pribadi, bukan grup)
+export const pesanKendalaPengelola = (
+  o: WaOrder, catatan: string, pelapor: string | undefined, pj: string | undefined,
+  helper: string | undefined, link: string,
+) =>
+  [
+    '⚠️ *LAPORAN KENDALA PESANAN*',
+    '',
+    baris(o),
+    `Deadline: ${fmtTanggal(o.deadline)}`,
+    `PJ: ${pj ?? '-'}${helper ? ` • Helper: ${helper}` : ''}`,
+    '',
+    'Isi laporan:',
+    catatan || '-',
+    pelapor ? `\nDilaporkan oleh: ${pelapor}` : null,
+    `\nBuka pesanan:\n${link}`,
+  ].filter((x): x is string => x !== null).join('\n');

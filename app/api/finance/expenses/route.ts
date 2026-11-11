@@ -7,6 +7,7 @@ import {
   requireFinance, finFail, bad, isUuid, isDate, loadSettings, sniffProof, PROOF_BUCKET, MAX_PROOF_BYTES,
 } from '@/lib/finance/server';
 import { EXPENSE_SELECT, toExpenseRow } from '@/lib/finance/expenses';
+import { notifyVerifikasi } from '@/lib/waNotifyVerifikasi';
 
 export const dynamic = 'force-dynamic';
 
@@ -114,6 +115,17 @@ export async function POST(req: NextRequest) {
   if (error) {
     if (proofPath) await admin.storage.from(PROOF_BUCKET).remove([proofPath]);
     return finFail(error);
+  }
+
+  // Masuk antrean persetujuan → beri tahu nomor penerima (lihat catatan di payments/route.ts).
+  if (!autoApprove && typeof id === 'string') {
+    await notifyVerifikasi({
+      jenis: 'pengeluaran',
+      id,
+      nominal: Number(str('amount')),
+      pencatat: actor.name,
+      keterangan: description.slice(0, 200),
+    });
   }
   return NextResponse.json({ id, status: autoApprove ? 'approved' : 'pending' });
 }

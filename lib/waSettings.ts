@@ -9,16 +9,27 @@ export interface WaSettings {
   gatewayUrl: string;   // tanpa garis miring di akhir
   gatewayToken: string;
   groupJid: string;
+  // Nomor pribadi penerima (sudah 62xxx). Dua daftar terpisah; kosong = jenis itu tidak dikirim.
+  notifyVerifikasiNumbers: string[];
+  notifyKendalaNumbers: string[];
 }
 
-const KOSONG: WaSettings = { enabled: false, gatewayUrl: '', gatewayToken: '', groupJid: '' };
+const KOSONG: WaSettings = {
+  enabled: false, gatewayUrl: '', gatewayToken: '', groupJid: '',
+  notifyVerifikasiNumbers: [], notifyKendalaNumbers: [],
+};
+
+const daftarNomor = (v: unknown): string[] =>
+  Array.isArray(v) ? v.map((n) => String(n).trim()).filter(Boolean) : [];
 
 // Gagal baca (mis. migration belum dijalankan) → dianggap NONAKTIF supaya aman.
 export async function getWaSettings(): Promise<WaSettings> {
   try {
     const { data, error } = await getSupabaseAdmin()
       .from('wa_settings')
-      .select('enabled, gateway_url, gateway_token, group_jid')
+      // select('*') sengaja: kolom notify_* baru ada setelah migration 017. Kalau memilih kolom
+      // satu per satu dan migration belum jalan, query gagal dan Bot ikut dianggap nonaktif.
+      .select('*')
       .eq('id', 1)
       .maybeSingle();
     if (error || !data) {
@@ -30,6 +41,8 @@ export async function getWaSettings(): Promise<WaSettings> {
       gatewayUrl: String(data.gateway_url ?? '').trim().replace(/\/+$/, ''),
       gatewayToken: String(data.gateway_token ?? '').trim(),
       groupJid: String(data.group_jid ?? '').trim(),
+      notifyVerifikasiNumbers: daftarNomor(data.notify_verifikasi_numbers),
+      notifyKendalaNumbers: daftarNomor(data.notify_kendala_numbers),
     };
   } catch (e) {
     console.error('getWaSettings exception:', e);

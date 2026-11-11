@@ -454,6 +454,12 @@ export default function ProductionApp() {
     if (activeTab === "po_management" && selectedPoId) {
       params.set("poId", selectedPoId);
     }
+    // Sub-tab Keuangan (mis. ?ftab=verify dari link WhatsApp) harus ikut terbawa; kalau tidak,
+    // URL ditulis ulang tanpa parameter itu dan FinanceModule tidak pernah membacanya.
+    if (activeTab === "finance") {
+      const ftab = new URLSearchParams(window.location.search).get("ftab");
+      if (ftab) params.set("ftab", ftab);
+    }
 
     const query = params.toString();
     const newUrl = query ? `?${query}` : window.location.pathname;

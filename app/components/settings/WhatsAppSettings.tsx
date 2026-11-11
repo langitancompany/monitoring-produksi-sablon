@@ -3,10 +3,13 @@
 // - Saklar aktif/nonaktif
 // - URL + token gateway, ID grup produksi
 // - Status koneksi, scan QR, cari grup, kirim pesan tes
+// - Penerima notifikasi: dua daftar nomor terpisah, satu untuk transaksi menunggu verifikasi
+//   dan satu untuk laporan kendala pesanan (lengkap dengan link ke halaman terkait)
 // Semua panggilan lewat /api/wa/* (token gateway tidak pernah sampai ke browser).
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
+import { Plus, X, ShieldCheck, TriangleAlert } from "lucide-react";
 
 interface WaSettingsData {
   enabled: boolean;
@@ -14,6 +17,8 @@ interface WaSettingsData {
   group_jid: string;
   token_set: boolean;
   token_hint: string;
+  notify_verifikasi_numbers: string[];
+  notify_kendala_numbers: string[];
 }
 
 type GwState = "starting" | "qr" | "open" | "closed";
@@ -37,6 +42,12 @@ async function api(path: string, init?: RequestInit) {
   return { ok: res.ok, data: data as any };
 }
 
+// 6281234567890 -> 0812-3456-7890 (hanya untuk tampilan; yang disimpan tetap format 62...)
+const tampilNomor = (n: string) => {
+  const lokal = n.startsWith("62") ? `0${n.slice(2)}` : n;
+  return lokal.replace(/^(\d{4})(\d{4})(\d+)$/, "$1-$2-$3");
+};
+
 const inputCls =
   "w-full border border-zinc-200 dark:border-zinc-800 rounded-md px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-900 outline-none focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-600 transition-colors duration-150 placeholder-zinc-400 dark:placeholder-zinc-500";
 const labelCls =
@@ -47,6 +58,98 @@ const btnPrimary =
   "shrink-0 flex items-center justify-center gap-2 bg-[#124540] hover:bg-[#0d332f] text-white px-4 py-2 rounded-md text-sm font-semibold transition-colors duration-150 disabled:opacity-50";
 const btnGhost =
   "shrink-0 px-3 py-2 rounded-md text-sm font-semibold border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors duration-150 disabled:opacity-50";
+
+// Satu daftar nomor penerima (tambah / hapus). Perubahan baru tersimpan lewat tombol Simpan induk.
+function DaftarNomor({
+  icon, judul, deskripsi, kosong, nomor, onChange,
+}: {
+  icon: React.ReactNode;
+  judul: string;
+  deskripsi: string;
+  kosong: string;
+  nomor: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [baru, setBaru] = useState("");
+  const [err, setErr] = useState("");
+
+  const tambah = () => {
+    const digit = baru.replace(/\D/g, "");
+    if (digit.length < 9 || digit.length > 14) {
+      setErr("Nomor tidak valid. Contoh: 081234567890.");
+      return;
+    }
+    const norm = digit.startsWith("0") ? `62${digit.slice(1)}` : digit.startsWith("62") ? digit : `62${digit}`;
+    if (nomor.includes(norm)) {
+      setErr("Nomor itu sudah ada di daftar ini.");
+      return;
+    }
+    if (nomor.length >= 10) {
+      setErr("Maksimal 10 nomor.");
+      return;
+    }
+    onChange([...nomor, norm]);
+    setBaru("");
+    setErr("");
+  };
+
+  return (
+    <div className="p-4 space-y-3">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 shrink-0 text-zinc-500 dark:text-zinc-400">{icon}</span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{judul}</p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{deskripsi}</p>
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          className={inputCls}
+          inputMode="tel"
+          aria-label={`Nomor penerima ${judul}`}
+          value={baru}
+          onChange={(e) => setBaru(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              tambah();
+            }
+          }}
+          placeholder="08xxxxxxxxxx"
+          autoComplete="off"
+        />
+        <button type="button" className={btnGhost} onClick={tambah} disabled={!baru.trim()}>
+          <span className="flex items-center gap-1.5">
+            <Plus size={14} />
+            Tambah
+          </span>
+        </button>
+      </div>
+      {err && <p className="text-xs text-red-600 dark:text-red-400">{err}</p>}
+
+      {nomor.length === 0 ? (
+        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{kosong}</p>
+      ) : (
+        <ul className="border border-zinc-200 dark:border-zinc-800 rounded-md divide-y divide-zinc-200 dark:divide-zinc-800">
+          {nomor.map((n) => (
+            <li key={n} className="px-3 py-2 flex items-center justify-between gap-3">
+              <span className="text-sm font-mono text-zinc-800 dark:text-zinc-200">{tampilNomor(n)}</span>
+              <button
+                type="button"
+                aria-label={`Hapus ${tampilNomor(n)}`}
+                onClick={() => onChange(nomor.filter((x) => x !== n))}
+                className="p-1 rounded text-zinc-500 hover:text-red-600 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors duration-150"
+              >
+                <X size={14} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export default function WhatsAppSettings() {
   const [settings, setSettings] = useState<WaSettingsData | null>(null);
@@ -59,6 +162,12 @@ export default function WhatsAppSettings() {
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
+
+  // Penerima notifikasi
+  const [verifList, setVerifList] = useState<string[]>([]);
+  const [kendalaList, setKendalaList] = useState<string[]>([]);
+  const [savingPenerima, setSavingPenerima] = useState(false);
+  const [msgPenerima, setMsgPenerima] = useState<Msg>(null);
 
   // Status gateway
   const [gw, setGw] = useState<GwStatus>({ state: null });
@@ -84,6 +193,8 @@ export default function WhatsAppSettings() {
       setSettings(data);
       setUrl(data.gateway_url || "");
       setGroupJid(data.group_jid || "");
+      setVerifList(data.notify_verifikasi_numbers ?? []);
+      setKendalaList(data.notify_kendala_numbers ?? []);
     })();
   }, []);
 
@@ -175,6 +286,34 @@ export default function WhatsAppSettings() {
       return;
     }
     setSettings(data);
+  };
+
+  // ─── Penerima notifikasi ──────────────────────────────────────────────────
+  const penerimaDirty =
+    !!settings &&
+    (verifList.join(",") !== (settings.notify_verifikasi_numbers ?? []).join(",") ||
+      kendalaList.join(",") !== (settings.notify_kendala_numbers ?? []).join(","));
+
+  const simpanPenerima = async () => {
+    setSavingPenerima(true);
+    setMsgPenerima(null);
+    const { ok, data } = await api("/api/wa/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        notify_verifikasi_numbers: verifList,
+        notify_kendala_numbers: kendalaList,
+      }),
+    });
+    setSavingPenerima(false);
+    if (!ok) {
+      setMsgPenerima({ type: "err", text: data?.error || "Gagal menyimpan." });
+      return;
+    }
+    setSettings(data);
+    setVerifList(data.notify_verifikasi_numbers ?? []);
+    setKendalaList(data.notify_kendala_numbers ?? []);
+    setMsgPenerima({ type: "ok", text: "Penerima notifikasi tersimpan." });
   };
 
   const cariGrup = async () => {
@@ -435,6 +574,63 @@ export default function WhatsAppSettings() {
               className={`text-xs ${msg.type === "ok" ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
             >
               {msg.text}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Penerima notifikasi: verifikasi keuangan & kendala (daftar nomor terpisah) */}
+      <div className={`${cardCls} p-5 md:p-6 space-y-4`}>
+        <div>
+          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+            Penerima notifikasi
+          </p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+            Isi nomor pribadi untuk tiap jenis notifikasi. Pesan memuat link
+            langsung ke halaman terkait. Daftar kosong berarti jenis itu tidak
+            dikirim. Nomor tidak harus terdaftar sebagai pengguna, tetapi hanya
+            akun dengan hak verifikasi keuangan yang bisa memproses transaksi.
+          </p>
+        </div>
+
+        <div className="divide-y divide-zinc-200 dark:divide-zinc-800 border border-zinc-200 dark:border-zinc-800 rounded-lg">
+          <DaftarNomor
+            icon={<ShieldCheck size={16} />}
+            judul="Verifikasi keuangan"
+            deskripsi="Pembayaran, refund, dan pengeluaran baru yang menunggu verifikasi. Gaji yang ditandai lunas sudah otomatis terverifikasi, jadi tidak dikirim."
+            kosong="Belum ada nomor. Notifikasi verifikasi keuangan tidak dikirim."
+            nomor={verifList}
+            onChange={setVerifList}
+          />
+          <DaftarNomor
+            icon={<TriangleAlert size={16} />}
+            judul="Kendala pesanan"
+            deskripsi="Laporan kendala beserta isi laporan, pelapor, PJ, dan helper."
+            kosong="Belum ada nomor. Laporan kendala pribadi tidak dikirim."
+            nomor={kendalaList}
+            onChange={setKendalaList}
+          />
+        </div>
+
+        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+          Notifikasi ikut saklar WhatsApp Bot di atas. Kalau saklar mati, tidak
+          ada pesan yang dikirim.
+        </p>
+
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            type="button"
+            className={btnPrimary}
+            onClick={simpanPenerima}
+            disabled={savingPenerima || !penerimaDirty}
+          >
+            {savingPenerima ? "Menyimpan…" : "Simpan penerima"}
+          </button>
+          {msgPenerima && (
+            <p
+              className={`text-xs ${msgPenerima.type === "ok" ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
+            >
+              {msgPenerima.text}
             </p>
           )}
         </div>
