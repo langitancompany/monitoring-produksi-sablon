@@ -238,6 +238,8 @@ export default function WhatsAppSettings() {
                 perHour: Number(d.limits.per_hour) || 0,
                 perDay: Number(d.limits.per_day) || 0,
               },
+              hourFreesAt: d.hour_frees_at ?? null,
+              dayFreesAt: d.day_frees_at ?? null,
               pausedUntil: d.paused_until ?? null,
               pausedReason: d.paused_reason ?? null,
               enabled: d.enabled === true,

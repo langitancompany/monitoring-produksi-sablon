@@ -12,6 +12,8 @@ export interface WaUsage {
   sentHour: number;
   sentDay: number;
   limits: { perHour: number; perDay: number };
+  hourFreesAt: string | null; // perkiraan jatah per jam terbuka lagi (null = belum penuh)
+  dayFreesAt: string | null; // perkiraan jatah per 24 jam terbuka lagi
   pausedUntil: string | null;
   pausedReason: string | null;
   enabled: boolean;
@@ -40,7 +42,17 @@ function warna(pct: number) {
   return { bar: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-400" };
 }
 
-function Bar({ label, used, max }: { label: string; used: number; max: number }) {
+function Bar({
+  label,
+  used,
+  max,
+  freesAt,
+}: {
+  label: string;
+  used: number;
+  max: number;
+  freesAt?: string | null;
+}) {
   const pct = max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 0;
   const penuh = max > 0 && used >= max;
   const c = warna(pct);
@@ -70,6 +82,11 @@ function Bar({ label, used, max }: { label: string; used: number; max: number })
           style={{ width: `${pct}%` }}
         />
       </div>
+      {penuh && freesAt && (
+        <p className="mt-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+          Tersedia lagi sekitar <span className="font-medium text-zinc-700 dark:text-zinc-300">{kapan(freesAt)}</span>
+        </p>
+      )}
     </div>
   );
 }
@@ -83,6 +100,16 @@ const lamaMenunggu = (iso: string) => {
   if (menit < 60) return `${menit} menit`;
   const j = Math.floor(menit / 60);
   return j < 24 ? `${j} jam` : `${Math.floor(j / 24)} hari`;
+};
+
+// "pukul 14.05 (±12 menit lagi)" · beda hari → "besok pukul 03.20 (±9 jam lagi)"
+const kapan = (iso: string) => {
+  const t = Date.parse(iso);
+  const selisih = Math.max(0, t - Date.now());
+  const menit = Math.ceil(selisih / 60_000);
+  const sisa = menit < 1 ? "sebentar lagi" : menit < 60 ? `±${menit} menit lagi` : `±${Math.round(menit / 60)} jam lagi`;
+  const hariIni = new Date(t).toDateString() === new Date().toDateString();
+  return `${hariIni ? "" : "besok "}pukul ${jam(iso)} (${sisa})`;
 };
 
 const namaEvent = (e: string) => (e ? e.replace(/[_-]+/g, " ") : "pesan");
@@ -104,9 +131,9 @@ export default function WaUsageCard({
     if (dijeda)
       return `Pengiriman sedang dijeda sampai ${jam(usage.pausedUntil as string)}${usage.pausedReason ? ` (${usage.pausedReason})` : ""}. Pesan menunggu di antrian dan terkirim otomatis setelah jeda selesai.`;
     if (hariPenuh)
-      return "Batas harian penuh. Pesan baru ditahan di antrian dan terkirim otomatis saat jatah 24 jam kembali tersedia.";
+      return `Batas harian penuh. Pesan baru ditahan di antrian dan terkirim otomatis saat jatah kembali${usage.dayFreesAt ? `, sekitar ${kapan(usage.dayFreesAt)}` : ""}.`;
     if (jamPenuh)
-      return "Batas per jam penuh. Pesan baru ditahan di antrian dan terkirim otomatis saat jatah jam berikutnya tersedia.";
+      return `Batas per jam penuh. Pesan baru ditahan di antrian dan terkirim otomatis saat jatah kembali${usage.hourFreesAt ? `, sekitar ${kapan(usage.hourFreesAt)}` : ""}.`;
     if (!usage.enabled && pending > 0)
       return "Saklar WhatsApp Bot nonaktif, jadi pesan yang sudah antri tidak diproses.";
     return null;
@@ -130,8 +157,8 @@ export default function WaUsageCard({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Bar label="Per jam" used={usage.sentHour} max={usage.limits.perHour} />
-        <Bar label="Per 24 jam" used={usage.sentDay} max={usage.limits.perDay} />
+        <Bar label="Per jam" used={usage.sentHour} max={usage.limits.perHour} freesAt={usage.hourFreesAt} />
+        <Bar label="Per 24 jam" used={usage.sentDay} max={usage.limits.perDay} freesAt={usage.dayFreesAt} />
       </div>
 
       {penjelasan && (

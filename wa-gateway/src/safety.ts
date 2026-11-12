@@ -75,6 +75,19 @@ export class SendLimiter {
   }
 
   /**
+   * Kapan jatah terbuka lagi (epoch ms) untuk batas per jam / per hari. null = belum penuh.
+   * Rumusnya sama dengan check(): saat pesan terlama yang masih menghitung keluar dari jendela.
+   */
+  nextFree(): { hour: number | null; day: number | null } {
+    const hour = this.within(HOUR);
+    const day = this.within(DAY);
+    return {
+      hour: hour.length >= this.cfg.perHour ? hour[hour.length - this.cfg.perHour].t + HOUR : null,
+      day: day.length >= this.cfg.perDay ? day[day.length - this.cfg.perDay].t + DAY : null,
+    };
+  }
+
+  /**
    * Boleh kirim ke penerima ini sekarang? null = boleh.
    * Urutan cek: batas per jam (semua) → batas per hari (semua) → batas per penerima.
    */

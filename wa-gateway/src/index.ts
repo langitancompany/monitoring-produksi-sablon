@@ -570,12 +570,16 @@ const server = http.createServer(async (req, res) => {
     if (!safeEqual(bearer, TOKEN)) return json(res, 401, { error: 'Unauthorized' });
 
     if (url.pathname === '/status') {
+      // Perkiraan kapan jatah per jam / per hari terbuka lagi (null = belum penuh)
+      const free = limiter.nextFree();
       return json(res, 200, {
         wa: connState,
         reason: closeReason,
         enabled: await isEnabled(),
         sent_last_hour: limiter.lastHour(),
         sent_last_day: limiter.lastDay(),
+        hour_frees_at: free.hour ? new Date(free.hour).toISOString() : null,
+        day_frees_at: free.day ? new Date(free.day).toISOString() : null,
         // Terisi bila circuit breaker sedang menjeda antrian
         paused_until: breaker.pausedUntil() ? new Date(breaker.pausedUntil() as number).toISOString() : null,
         paused_reason: breaker.pausedUntil() ? breaker.reason : null,

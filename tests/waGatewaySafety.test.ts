@@ -107,6 +107,20 @@ test("SendLimiter: batas per jam menahan, lalu bebas setelah jam berlalu", () =>
   assert.equal(l.check("user", "c"), null);
 });
 
+test("SendLimiter.nextFree: null saat belum penuh, lalu waktu pesan terlama keluar dari jendela", () => {
+  let t = 1000;
+  const l = new SendLimiter({ perHour: 2, perDay: 3, perUserPerHour: 10, perGroupPerHour: 10 }, () => t);
+  assert.deepEqual(l.nextFree(), { hour: null, day: null });
+  l.record("a"); // t=1000
+  t += 10;
+  l.record("b"); // t=1010 → jam penuh (2)
+  assert.deepEqual(l.nextFree(), { hour: 1000 + HOUR, day: null });
+  t += HOUR + 20; // pesan "a" & "b" sudah keluar dari jendela jam
+  l.record("c");
+  assert.equal(l.nextFree().hour, null);
+  assert.equal(l.nextFree().day, 1000 + 24 * HOUR); // 3 pesan dalam 24 jam → harian penuh
+});
+
 test("CircuitBreaker: jeda setelah gagal beruntun, durasi berlipat bila gagal lagi", () => {
   let t = 0;
   const b = new CircuitBreaker({ threshold: 2, baseMs: 1000, maxMs: 10_000 }, () => t);

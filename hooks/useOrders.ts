@@ -1,5 +1,5 @@
 // app/hooks/useOrders.ts
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Order, OrderStatus, UserData } from '@/types';
 import { triggerOrderNotifications } from '@/lib/orderLogic';
@@ -34,6 +34,9 @@ export function useOrders({
   setView,
 }: UseOrdersProps) {
   const [orders, setOrders] = useState<Order[]>([]);
+  // Salinan terbaru daftar order untuk dibaca di dalam callback tanpa membuat callback-nya berubah-ubah.
+  const ordersRef = useRef<Order[]>([]);
+  ordersRef.current = orders;
   // true sampai pemuatan pertama selesai (berhasil ATAU gagal). Dipakai UI supaya tidak
   // menampilkan angka 0 / daftar kosong padahal data belum datang.
   const [ordersLoading, setOrdersLoading] = useState(true);
@@ -133,7 +136,14 @@ export function useOrders({
   // ─── Check Auto Status ────────────────────────────────────────────────────
 
   const checkAutoStatus = useCallback(async (orderData: Order) => {
-    const oldStatus = orderData.status as OrderStatus;
+    // PENTING: status SEBELUM perubahan harus diambil dari data tersimpan. Objek `orderData` dari
+    // pemanggil sering sudah diubah lebih dulu (mis. lapor kendala langsung mengisi status
+    // 'Ada Kendala'), sehingga membandingkannya dengan dirinya sendiri membuat perubahan status
+    // tidak terdeteksi dan notifikasi (WhatsApp + push) tidak pernah dikirim.
+    const tersimpan = ordersRef.current.find((o) => o.id === orderData.id);
+    const oldStatus = (tersimpan?.status ?? orderData.status) as OrderStatus;
+    const kendalaBelumSelesai = (o?: Order) =>
+      (Array.isArray(o?.kendala) ? o!.kendala : []).filter((k: any) => !k.isResolved).length;
     const hasUnresolvedKendala = orderData.kendala?.some((k: any) => !k.isResolved);
 
     // ── UBAH ── langkah produksi dipilih lewat helper (manual / dtf / merchandise).
@@ -191,6 +201,18 @@ export function useOrders({
       }
       fetchOrders();
       await triggerOrderNotifications({ ...orderData, status: finalStatus }, oldStatus);
+      // Kendala ke-2 dst. pada order yang sudah 'Ada Kendala': status tidak berubah sehingga
+      // tidak memicu notifikasi di atas. Antrikan WhatsApp-nya (dedupe per ID kendala di server).
+      if (
+        tersimpan && oldStatus === 'Ada Kendala' && finalStatus === 'Ada Kendala' &&
+        kendalaBelumSelesai(orderData) > kendalaBelumSelesai(tersimpan)
+      ) {
+        fetch('/api/wa/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: orderData.id, event: 'status_changed' }),
+        }).catch(() => {});
+      }
       await fetchNotifications();
     } else {
       console.error('DB Error Details:', JSON.stringify(error, null, 2));
