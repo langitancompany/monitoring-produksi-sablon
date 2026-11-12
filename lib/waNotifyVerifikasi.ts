@@ -12,7 +12,7 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { enqueueWa, type WaItem } from '@/lib/waQueue';
 import { getWaSettings } from '@/lib/waSettings';
-import { pesanVerifikasi } from '@/lib/waMessages';
+import { pesanVerifikasi, detailPesanan } from '@/lib/waMessages';
 import { linkVerifikasi } from '@/lib/waAppUrl';
 
 type Input =
@@ -31,8 +31,10 @@ export async function notifyVerifikasi(input: Input): Promise<void> {
       rincian = input.keterangan;
     } else {
       const { data: o } = await admin
-        .from('orders').select('kode_produksi, nama_pemesan').eq('id', input.orderId).maybeSingle();
-      rincian = o ? `*${o.kode_produksi}* — ${o.nama_pemesan}` : 'Pesanan tidak diketahui';
+        .from('orders')
+        .select('kode_produksi, nama_pemesan, jumlah, jenis_produksi, jenis_pakaian, jenis_merchandise, varian_merchandise')
+        .eq('id', input.orderId).maybeSingle();
+      rincian = o ? detailPesanan(o) : 'Pesanan tidak diketahui';
     }
 
     // Jumlah antrean saat ini (termasuk transaksi ini, karena sudah tercatat).

@@ -1,11 +1,17 @@
 // lib/waMessages.ts — template pesan WhatsApp (teks saja, tanpa akses database)
 
+import { MERCHANDISE_PRODUCTS } from '../types';
+
 export interface WaOrder {
   kode_produksi: string;
   nama_pemesan: string;
   jumlah?: number | null;
   jenis_produksi?: string | null;
   deadline?: string | null;
+  // Rincian produk (opsional; bila tidak ada, jenis_produksi saja yang ditampilkan)
+  jenis_pakaian?: string | null;      // 'kaos' | 'sweater_hoodie' (kosong = kaos)
+  jenis_merchandise?: string | null;  // mis. 'lanyard', 'totebag'
+  varian_merchandise?: string | null; // mis. 'stopper', 'tanpa_stopper'
 }
 
 export const fmtTanggal = (iso?: string | null) =>
@@ -15,10 +21,56 @@ export const fmtTanggal = (iso?: string | null) =>
       })
     : '-';
 
-const baris = (o: WaOrder) =>
-  `*${o.kode_produksi}* — ${o.nama_pemesan}` +
-  (o.jumlah ? ` (${o.jumlah} pcs)` : '') +
-  (o.jenis_produksi ? ` • ${o.jenis_produksi}` : '');
+const rapikan = (v: string) => v.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+/**
+ * Jenis produksi yang mudah dibaca:
+ *  - Kaos            → "Kaos – DTF" / "Kaos – Manual" (sweater/hoodie → "Sweater / Hoodie – DTF")
+ *  - Merchandise     → "Lanyard – Dengan Stopper", "Totebag", "Gantungan Kunci"
+ * Label produk & varian merchandise diambil dari MERCHANDISE_PRODUCTS (types/index.ts), jadi
+ * produk/varian baru otomatis ikut tampil dengan namanya.
+ */
+export function labelProduk(o: WaOrder): string {
+  const jp = (o.jenis_produksi ?? '').trim();
+  const kecil = jp.toLowerCase();
+
+  if (kecil === 'merchandise' || kecil === 'lanyard') {
+    const kode = o.jenis_merchandise || (kecil === 'lanyard' ? 'lanyard' : '');
+    const produk = MERCHANDISE_PRODUCTS.find((p) => p.value === kode);
+    const nama = produk?.label ?? (kode ? rapikan(kode) : 'Merchandise');
+    const varian =
+      produk?.variants.find((v) => v.value === o.varian_merchandise)?.label ??
+      (o.varian_merchandise ? rapikan(o.varian_merchandise) : '');
+    return varian ? `${nama} – ${varian}` : nama;
+  }
+
+  if (kecil === 'dtf' || kecil === 'manual') {
+    const pakaian = o.jenis_pakaian === 'sweater_hoodie' ? 'Sweater / Hoodie' : 'Kaos';
+    return `${pakaian} – ${kecil === 'dtf' ? 'DTF' : 'Manual'}`;
+  }
+  return jp;
+}
+
+// Satu baris ringkas (dipakai di daftar banyak pesanan): *KODE* — Pemesan • Produk (n pcs)
+export const baris = (o: WaOrder) => {
+  const produk = labelProduk(o);
+  return (
+    `*${o.kode_produksi}* — ${o.nama_pemesan}` +
+    (produk ? ` • ${produk}` : '') +
+    (o.jumlah ? ` (${o.jumlah} pcs)` : '')
+  );
+};
+
+// Blok rincian untuk pesan satu pesanan: kode, pemesan, jenis produksi, jumlah.
+export const detailPesanan = (o: WaOrder) => {
+  const produk = labelProduk(o);
+  return [
+    `*Kode:* ${o.kode_produksi}`,
+    `*Pemesan:* ${o.nama_pemesan || '-'}`,
+    produk ? `*Produksi:* ${produk}` : null,
+    o.jumlah ? `*Jumlah:* ${o.jumlah} pcs` : null,
+  ].filter((x): x is string => x !== null).join('\n');
+};
 
 const sebut = (nomor: string[]) => nomor.map((n) => `@${n}`).join(' ');
 
@@ -27,7 +79,7 @@ export const pesanOrderBaruGrup = (o: WaOrder, pj?: string, helper?: string, men
   [
     '📦 *PESANAN BARU MASUK*',
     '',
-    baris(o),
+    detailPesanan(o),
     `Deadline: ${fmtTanggal(o.deadline)}`,
     `PJ: ${pj ?? '-'}${helper ? ` • Helper: ${helper}` : ''}`,
     mention.length ? `\n${sebut(mention)}` : '',
@@ -39,7 +91,7 @@ export const pesanOrderBaruPersonal = (nama: string, peran: 'PJ' | 'Helper', o: 
     `Halo ${nama} 👋`,
     `Ada pesanan baru untuk kamu sebagai *${peran}*:`,
     '',
-    baris(o),
+    detailPesanan(o),
     `Deadline: ${fmtTanggal(o.deadline)}`,
   ].join('\n');
 
@@ -51,25 +103,25 @@ const TEKS_TAHAP: Record<string, string> = {
 };
 export const adaPesanTahap = (status: string) => status in TEKS_TAHAP;
 export const pesanTahapPersonal = (nama: string, status: string, o: WaOrder) =>
-  [`Halo ${nama} 👋`, `Pesanan ${baris(o)}`, TEKS_TAHAP[status] ?? `berubah ke tahap *${status}*.`,
-   `Deadline: ${fmtTanggal(o.deadline)}`].join('\n');
+  [`Halo ${nama} 👋`, `Pesanan berikut ${TEKS_TAHAP[status] ?? `berubah ke tahap *${status}*.`}`, '',
+   detailPesanan(o), `Deadline: ${fmtTanggal(o.deadline)}`].join('\n');
 
 // 4) Kendala / Revisi → grup (mention yang bertugas)
 export const pesanKendalaGrup = (o: WaOrder, catatan: string, pelapor: string | undefined, mention: string[]) =>
   [
     '⚠️ *ADA KENDALA*',
     '',
-    baris(o),
+    detailPesanan(o),
     `Kendala: ${catatan || '-'}`,
-    pelapor ? `Dilaporkan oleh: ${pelapor}` : '',
-    mention.length ? `\nMohon ditindak: ${sebut(mention)}` : '',
-  ].filter(Boolean).join('\n');
+    pelapor ? `Dilaporkan oleh: ${pelapor}` : null,
+    mention.length ? `\nMohon ditindak: ${sebut(mention)}` : null,
+  ].filter((x): x is string => x !== null).join('\n');
 
 export const pesanRevisiGrup = (o: WaOrder, catatanQC: string, mention: string[]) =>
   [
     '🔁 *REVISI QC*',
     '',
-    baris(o),
+    detailPesanan(o),
     `Catatan QC: ${catatanQC || '-'}`,
     mention.length ? `\nMohon diperbaiki: ${sebut(mention)}` : '',
   ].join('\n');
@@ -79,7 +131,7 @@ export const pesanSelesaiGrup = (o: WaOrder, pj?: string, helper?: string) =>
   [
     '✅ *PESANAN SELESAI*',
     '',
-    baris(o),
+    detailPesanan(o),
     `PJ: ${pj ?? '-'}${helper ? ` • Helper: ${helper}` : ''}`,
   ].join('\n');
 
@@ -145,7 +197,7 @@ export const pesanKendalaPengelola = (
   [
     '⚠️ *LAPORAN KENDALA PESANAN*',
     '',
-    baris(o),
+    detailPesanan(o),
     `Deadline: ${fmtTanggal(o.deadline)}`,
     `PJ: ${pj ?? '-'}${helper ? ` • Helper: ${helper}` : ''}`,
     '',

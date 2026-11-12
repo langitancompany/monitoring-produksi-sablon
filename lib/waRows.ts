@@ -12,3 +12,11 @@ export function seragamkanBaris<T extends { mentions?: string[] }>(
 ): (T & { mentions: string[] })[] {
   return items.map((i) => ({ ...i, mentions: i.mentions ?? [] }));
 }
+
+// Tagar penanda di bagian bawah SEMUA pesan bot (memudahkan mencari/memfilter pesan notifikasi di WhatsApp).
+export const WA_TAGAR = '#pesannotif';
+
+export function tambahTagar(message: string): string {
+  const isi = message.trimEnd();
+  return isi.endsWith(WA_TAGAR) ? isi : `${isi}\n\n${WA_TAGAR}`;
+}

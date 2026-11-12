@@ -9,6 +9,7 @@
 //
 // Bisa dipakai walau saklar belum aktif, supaya QR bisa discan lebih dulu.
 
+import { tambahTagar } from '@/lib/waRows';
 import { NextResponse, type NextRequest } from 'next/server';
 import { requireUser } from '@/lib/apiAuth';
 import { getWaSettings, gatewayTerisi } from '@/lib/waSettings';
@@ -79,5 +80,5 @@ export async function POST(request: NextRequest) {
   if (!to) return NextResponse.json({ error: 'Nomor WhatsApp tidak valid.' }, { status: 400 });
 
   const message = (b.message ?? '').trim() || '✅ Tes WhatsApp Bot dari aplikasi monitoring produksi.';
-  return panggilGateway('/send', { method: 'POST', body: { type: 'user', to, message: message.slice(0, 500) } });
+  return panggilGateway('/send', { method: 'POST', body: { type: 'user', to, message: tambahTagar(message.slice(0, 500)) } });
 }

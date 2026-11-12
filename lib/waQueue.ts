@@ -3,7 +3,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import type { WaSettings } from '@/lib/waSettings';
-import { seragamkanBaris } from '@/lib/waRows';
+import { seragamkanBaris, tambahTagar } from '@/lib/waRows';
 
 export interface WaItem {
   target_type: 'group' | 'user';
@@ -44,7 +44,7 @@ export async function enqueueWa(items: WaItem[], cfg: WaSettings) {
       .select('id');
 
   // Semua baris wajib punya kolom yang sama (lihat lib/waRows.ts)
-  items = seragamkanBaris(items);
+  items = seragamkanBaris(items).map((i) => ({ ...i, message: tambahTagar(i.message) }));
 
   const batch = await masuk(items as unknown as Record<string, unknown>[]);
   if (!batch.error) return { queued: batch.data?.length ?? 0 };
