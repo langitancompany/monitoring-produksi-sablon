@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   labelProduk, detailPesanan, pesanOrderBaruPersonal, pesanTahapPersonal,
-  pesanKendalaPengelola, pesanDeadlineGrup,
+  pesanKendalaPengelola, pesanDeadlineGrup, pesanVerifikasi,
 } from "../lib/waMessages";
 import { tambahTagar, WA_TAGAR } from "../lib/waRows";
 
@@ -42,4 +42,15 @@ test("tambahTagar: di bagian bawah, tidak ganda", () => {
   const a = tambahTagar("Halo\n");
   assert.equal(a, `Halo\n\n${WA_TAGAR}`);
   assert.equal(tambahTagar(a), a);
+});
+
+test("pesanVerifikasi: memuat metode bayar; pengeluaran tanpa baris metode", () => {
+  const dasar = { nominal: 150000, pencatat: "Sari", menunggu: { pembayaran: 1, pengeluaran: 0 }, link: "https://x" };
+  for (const m of ["Transfer", "Tunai", "QRIS"]) {
+    const t = pesanVerifikasi({ ...dasar, jenis: "pembayaran", rincian: detailPesanan(kaos), metode: m });
+    assert.match(t, new RegExp(`Metode: \\*${m}\\*`));
+    assert.match(t, /\*Pemesan:\* Budi/);
+  }
+  assert.match(pesanVerifikasi({ ...dasar, jenis: "refund", rincian: "x", metode: "Tunai" }), /Metode: \*Tunai\*/);
+  assert.doesNotMatch(pesanVerifikasi({ ...dasar, jenis: "pengeluaran", rincian: "Beli tinta" }), /Metode/);
 });

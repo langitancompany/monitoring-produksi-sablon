@@ -160,8 +160,10 @@ export interface PesanVerifikasi {
   jenis: 'pembayaran' | 'refund' | 'pengeluaran';
   nominal: number;
   pencatat: string;
-  /** Pembayaran/refund: "KODE — Nama pemesan". Pengeluaran: keterangan. */
+  /** Pembayaran/refund: rincian pesanan (kode, pemesan, produksi). Pengeluaran: keterangan. */
   rincian: string;
+  /** Pembayaran/refund: cara bayar yang sudah berupa label (Transfer / Tunai / QRIS / Lainnya). */
+  metode?: string;
   menunggu: { pembayaran: number; pengeluaran: number };
   link: string;
 }
@@ -183,6 +185,7 @@ export const pesanVerifikasi = (v: PesanVerifikasi) => {
     '',
     v.rincian,
     `Nominal: *${rupiah(v.nominal)}*`,
+    v.metode ? `Metode: *${v.metode}*` : null,
     `Dicatat oleh: ${v.pencatat}`,
     antre ? `\nTotal antrean saat ini: ${antre}.` : null,
     `\nBuka verifikasi:\n${v.link}`,

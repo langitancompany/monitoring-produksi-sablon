@@ -124,6 +124,7 @@ export async function POST(req: NextRequest) {
       nominal: Number(str('amount')),
       pencatat: actor.name,
       orderId,
+      metode: method,
     });
   }
   return NextResponse.json({ id, status: autoVerify ? 'verified' : 'pending' });
