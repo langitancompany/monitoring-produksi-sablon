@@ -111,7 +111,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Tidak ada penerima sama sekali → jelaskan kenapa (terlihat di Console browser & log server),
+    // supaya "pesan tidak terkirim" tidak lagi berupa misteri.
+    if (items.length === 0) {
+      let alasan = `Status "${o.status}" tidak memicu pesan WhatsApp.`;
+      if (event === 'created') {
+        alasan = `Tidak ada penerima: grup ${grup ? 'ada' : 'BELUM diatur'}, nomor WA PJ ${pj?.wa ? 'ada' : 'KOSONG/tidak ada PJ'}, nomor WA helper ${helper?.wa ? 'ada' : 'KOSONG/tidak ada helper'}.`;
+      } else if (o.status === 'Ada Kendala') {
+        alasan = `Tidak ada penerima kendala: grup ${grup ? 'ada' : 'BELUM diatur'}, nomor penerima kendala di Pengaturan ${cfg.notifyKendalaNumbers.length} nomor.`;
+      } else if (adaPesanTahap(o.status as string)) {
+        alasan = `Tidak ada penerima: nomor WA PJ ${pj?.wa ? 'ada' : 'KOSONG/tidak ada PJ'}, nomor WA helper ${helper?.wa ? 'ada' : 'KOSONG/tidak ada helper'}.`;
+      }
+      console.warn(`[wa/notify] ${o.kode_produksi} event=${event} status=${o.status}: ${alasan}`);
+      return NextResponse.json({ success: true, queued: 0, skipped: 'tidak_ada_penerima', alasan });
+    }
+
     const res = await enqueueWa(items, cfg);
+    console.log(`[wa/notify] ${o.kode_produksi} event=${event} status=${o.status} item=${items.length} masuk=${res.queued}`);
     return NextResponse.json({ success: true, ...res });
   } catch (e: any) {
     console.error('wa/notify error:', e);

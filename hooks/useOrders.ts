@@ -211,7 +211,11 @@ export function useOrders({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ orderId: orderData.id, event: 'status_changed' }),
-        }).catch(() => {});
+        })
+          .then(async (r) => {
+            if (!r.ok) console.error('[wa/notify] gagal', r.status, await r.text().catch(() => ''));
+          })
+          .catch((e) => console.error('[wa/notify] gagal terhubung', e));
       }
       await fetchNotifications();
     } else {

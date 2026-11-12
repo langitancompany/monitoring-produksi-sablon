@@ -14,7 +14,17 @@ const notifyWa = (orderId: string, event: 'created' | 'status_changed') => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ orderId, event }),
-  }).catch(() => {});
+  })
+    .then(async (r) => {
+      // Tidak mengganggu alur order, tapi kegagalan terlihat di Console browser untuk penelusuran
+      const teks = await r.text().catch(() => '');
+      if (!r.ok) return console.error('[wa/notify] gagal', r.status, teks);
+      try {
+        const j = JSON.parse(teks);
+        if (!j.queued) console.warn('[wa/notify] tidak ada pesan yang masuk antrian:', j);
+      } catch { /* abaikan */ }
+    })
+    .catch((e) => console.error('[wa/notify] gagal terhubung', e));
 };
 
 export const triggerOrderNotifications = async (orderData: Order, oldStatus?: string) => {
