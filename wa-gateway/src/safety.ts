@@ -329,3 +329,45 @@ export async function retry(
   }
   return false;
 }
+
+// ───────────────────────── Kartu pratinjau link ─────────────────────────
+
+export interface LinkPreview {
+  url: string;
+  title: string;
+  description: string;
+}
+
+const potong = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t);
+
+/**
+ * Membuat judul + keterangan kartu pratinjau link dari ISI PESAN itu sendiri.
+ * Halaman aplikasi ada di balik login sehingga tidak bisa diambil WhatsApp/gateway; data yang
+ * tampil di kartu hanyalah yang memang sudah ada di pesan untuk penerima yang sama.
+ *   judul      = baris pertama pesan (mis. "⚠️ LAPORAN KENDALA PESANAN")
+ *   keterangan = "KP-001 • Budi • Kaos – DTF" (dari blok Kode/Pemesan/Produksi), ditambah
+ *                "Rp 150.000 • QRIS" bila ada nominal/metode (verifikasi keuangan). Tanpa blok
+ *                kode (mis. pengeluaran) dipakai baris rincian pertamanya: "Beli tinta • Rp 150.000".
+ * Tanpa link di pesan → null (tidak ada kartu).
+ */
+export function buatLinkPreview(message: string): LinkPreview | null {
+  const m = message.match(/https?:\/\/[^\s]+/);
+  if (!m) return null;
+  const url = m[0].replace(/[)\].,;!?]+$/, '');
+
+  const baris = message.split('\n').map((l) => l.replace(/\*/g, '').trim()).filter(Boolean);
+  const nilai = (label: string) => message.match(new RegExp(`\\*${label}:\\*\\s*(.+)`))?.[1]?.trim();
+
+  const title = potong(baris[0] ?? 'LCO Production Control', 100);
+
+  const rinci = [nilai('Kode'), nilai('Pemesan'), nilai('Produksi')].filter(Boolean) as string[];
+  const nominal = message.match(/^Nominal:\s*\*?(.+?)\*?\s*$/m)?.[1];
+  const metode = message.match(/^Metode:\s*\*?(.+?)\*?\s*$/m)?.[1];
+  let ket: string | undefined;
+  if (rinci.length === 0) {
+    const b = baris[1];
+    if (b && !/^https?:/.test(b) && !/^[^:]{1,25}:/.test(b)) ket = b;
+  }
+  const description = [...rinci, ket, nominal, metode].filter(Boolean).join(' • ');
+  return { url, title, description: potong(description, 160) };
+}

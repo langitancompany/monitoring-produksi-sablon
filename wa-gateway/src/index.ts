@@ -42,7 +42,7 @@ import makeWASocket, {
   type proto,
   type WASocket,
 } from '@whiskeysockets/baileys';
-import { CircuitBreaker, NumberCache, SendLimiter, TtlCache, retry } from './safety.js';
+import { CircuitBreaker, NumberCache, SendLimiter, TtlCache, buatLinkPreview, retry } from './safety.js';
 
 const env = (k: string, d?: string) => {
   const v = process.env[k] ?? d;
@@ -347,6 +347,11 @@ function isRateLimit(e: any): boolean {
   );
 }
 
+// Kartu pratinjau link (judul + keterangan pesanan di atas pesan). Matikan lewat env LINK_PREVIEW=off.
+// Bila Baileys menolak pratinjau, pesan dikirim ulang tanpa pratinjau dan fitur dimatikan sampai
+// gateway di-restart — notifikasi tidak boleh gagal hanya karena kartunya.
+let pratinjauRusak = process.env.LINK_PREVIEW === 'off';
+
 async function sendOne(type: 'group' | 'user', target: string, message: string, mentions: string[] = []) {
   if (!sock || connState !== 'open') throw new NotConnectedError();
   const jid = type === 'group' ? target : await resolveUserJid(target);
@@ -359,7 +364,30 @@ async function sendOne(type: 'group' | 'user', target: string, message: string, 
   } catch { /* presence gagal tidak boleh membatalkan pengiriman */ }
 
   const mentionJids = mentions.map((m) => `${normalizeNumber(m)}@s.whatsapp.net`);
-  const sent = await sock.sendMessage(jid, mentionJids.length ? { text: message, mentions: mentionJids } : { text: message });
+  const isi: any = mentionJids.length ? { text: message, mentions: mentionJids } : { text: message };
+  const pratinjau = pratinjauRusak ? null : buatLinkPreview(message);
+  let sent;
+  if (pratinjau) {
+    const denganKartu = {
+      ...isi,
+      linkPreview: {
+        'canonical-url': pratinjau.url,
+        'matched-text': pratinjau.url,
+        title: pratinjau.title,
+        description: pratinjau.description,
+      },
+    };
+    try {
+      sent = await sock.sendMessage(jid, denganKartu);
+    } catch (e: any) {
+      if (e instanceof NotConnectedError || isRateLimit(e)) throw e;
+      sent = await sock.sendMessage(jid, isi); // gagal lagi → error asli yang dilempar ke worker
+      pratinjauRusak = true;
+      log.warn({ err: e?.message }, 'kartu pratinjau link ditolak — dimatikan sampai gateway restart, pesan dikirim tanpa kartu');
+    }
+  } else {
+    sent = await sock.sendMessage(jid, isi);
+  }
   limiter.record(targetKey(type, target));
   if (sent?.key?.id && sent.message) sentCache.set(sent.key.id, sent.message);
 }

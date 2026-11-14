@@ -1,3 +1,5 @@
+// app/components/dashboard/ShareTicket.tsx
+
 import { AlertCircle } from "lucide-react";
 import { ActionItem } from "@/hooks/useDashboard";
 import { formatDate, orderTypeLabel } from "@/lib/utils";

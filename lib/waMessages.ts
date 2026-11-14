@@ -162,11 +162,25 @@ export interface PesanVerifikasi {
   pencatat: string;
   /** Pembayaran/refund: rincian pesanan (kode, pemesan, produksi). Pengeluaran: keterangan. */
   rincian: string;
-  /** Pembayaran/refund: cara bayar yang sudah berupa label (Transfer / Tunai / QRIS / Lainnya). */
+  /** Pembayaran/refund: cara bayar yang sudah berupa label (Transfer Bank / Tunai / QRIS / Lainnya). */
   metode?: string;
+  /** Pembayaran/refund: akun kas/bank tujuan beserta jenisnya, mis. "BCA (Bank)". */
+  akun?: string;
   menunggu: { pembayaran: number; pengeluaran: number };
   link: string;
 }
+
+// Label cara bayar untuk pesan WhatsApp ("Transfer" di layar keuangan ditulis "Transfer Bank" agar
+// jelas bedanya dengan QRIS).
+const METODE_WA: Record<string, string> = {
+  transfer: 'Transfer Bank', tunai: 'Tunai', qris: 'QRIS', lainnya: 'Lainnya',
+};
+export const labelMetodeWa = (m?: string | null) => (m ? METODE_WA[m] ?? m : '');
+
+const TIPE_AKUN: Record<string, string> = { bank: 'Bank', cash: 'Kas', ewallet: 'E-Wallet' };
+/** "BCA" + 'bank' → "BCA (Bank)"; tanpa nama → ''. */
+export const labelAkun = (nama?: string | null, tipe?: string | null) =>
+  nama ? (tipe && TIPE_AKUN[tipe] ? `${nama} (${TIPE_AKUN[tipe]})` : nama) : '';
 
 const rupiah = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
 
@@ -186,9 +200,10 @@ export const pesanVerifikasi = (v: PesanVerifikasi) => {
     v.rincian,
     `Nominal: *${rupiah(v.nominal)}*`,
     v.metode ? `Metode: *${v.metode}*` : null,
+    v.akun ? `Akun tujuan: *${v.akun}*` : null,
     `Dicatat oleh: ${v.pencatat}`,
     antre ? `\nTotal antrean saat ini: ${antre}.` : null,
-    `\nBuka verifikasi:\n${v.link}`,
+    `\n👉 *Buka verifikasi di aplikasi:*\n${v.link}`,
   ].filter((x): x is string => x !== null).join('\n');
 };
 
@@ -207,5 +222,5 @@ export const pesanKendalaPengelola = (
     'Isi laporan:',
     catatan || '-',
     pelapor ? `\nDilaporkan oleh: ${pelapor}` : null,
-    `\nBuka pesanan:\n${link}`,
+    `\n👉 *Buka pesanan di aplikasi:*\n${link}`,
   ].filter((x): x is string => x !== null).join('\n');

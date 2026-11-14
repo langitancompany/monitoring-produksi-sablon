@@ -12,12 +12,11 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { enqueueWa, type WaItem } from '@/lib/waQueue';
 import { getWaSettings } from '@/lib/waSettings';
-import { pesanVerifikasi, detailPesanan } from '@/lib/waMessages';
+import { pesanVerifikasi, detailPesanan, labelMetodeWa, labelAkun } from '@/lib/waMessages';
 import { linkVerifikasi } from '@/lib/waAppUrl';
-import { PAYMENT_METHOD_LABEL, type PaymentMethod } from '@/lib/finance/types';
 
 type Input =
-  | { jenis: 'pembayaran' | 'refund'; id: string; nominal: number; pencatat: string; orderId: string; metode?: string }
+  | { jenis: 'pembayaran' | 'refund'; id: string; nominal: number; pencatat: string; orderId: string; metode?: string; akunId?: string }
   | { jenis: 'pengeluaran'; id: string; nominal: number; pencatat: string; keterangan: string };
 
 export async function notifyVerifikasi(input: Input): Promise<void> {
@@ -29,6 +28,7 @@ export async function notifyVerifikasi(input: Input): Promise<void> {
 
     let rincian = '';
     let metode: string | undefined;
+    let akun: string | undefined;
     if (input.jenis === 'pengeluaran') {
       rincian = input.keterangan;
     } else {
@@ -37,8 +37,13 @@ export async function notifyVerifikasi(input: Input): Promise<void> {
         .select('kode_produksi, nama_pemesan, jumlah, jenis_produksi, jenis_pakaian, jenis_merchandise, varian_merchandise')
         .eq('id', input.orderId).maybeSingle();
       rincian = o ? detailPesanan(o) : 'Pesanan tidak diketahui';
-      // Cara bayar: transfer / tunai / qris / lainnya → label yang sama dengan di layar keuangan
-      if (input.metode) metode = PAYMENT_METHOD_LABEL[input.metode as PaymentMethod] ?? input.metode;
+      // Jenis pembayaran: metode (Transfer Bank / Tunai / QRIS / Lainnya) + akun tujuan (mis. "BCA (Bank)")
+      if (input.metode) metode = labelMetodeWa(input.metode);
+      if (input.akunId) {
+        const { data: a } = await admin
+          .from('finance_accounts').select('name, type').eq('id', input.akunId).maybeSingle();
+        akun = labelAkun(a?.name, a?.type) || undefined;
+      }
     }
 
     // Jumlah antrean saat ini (termasuk transaksi ini, karena sudah tercatat).
@@ -53,6 +58,7 @@ export async function notifyVerifikasi(input: Input): Promise<void> {
       pencatat: input.pencatat,
       rincian,
       metode,
+      akun,
       menunggu: { pembayaran: pay.count ?? 0, pengeluaran: exp.count ?? 0 },
       link: linkVerifikasi(),
     });
