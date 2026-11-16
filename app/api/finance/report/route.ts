@@ -1,5 +1,6 @@
 // GET /api/finance/report?from=YYYY-MM-DD&to=YYYY-MM-DD
-// Laporan laba rugi (basis tagihan) dan arus kas (basis uang), per bulan, per kategori, dan per order.
+// Laporan laba rugi bertingkat (basis tagihan: Pendapatan − HPP = Laba Kotor − Biaya Operasional = Laba Bersih)
+// dan arus kas (basis uang), per bulan, per kategori, dan per order.
 // Data sensitif manajemen -> hanya yang berhak menyetujui (izin Approver keuangan) atau Super Admin.
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -43,7 +44,25 @@ export async function GET(req: NextRequest) {
   if (monthKeys.length > MAX_MONTHS) return bad(`Rentang maksimal ${MAX_MONTHS} bulan`);
 
   const admin = getSupabaseAdmin();
-  const [inv, pay, exp, linked] = await Promise.all([
+  const expQuery = (withType: boolean) =>
+    admin
+      .from('finance_expenses')
+      .select(`amount, spent_at, order_id, category_id, finance_categories(${withType ? 'name, cost_type' : 'name'})`)
+      .eq('status', 'approved')
+      .gte('spent_at', from)
+      .lte('spent_at', to)
+      .limit(ROW_LIMIT);
+
+  // Kolom cost_type baru ada setelah migration 019. Bila belum dijalankan, laporan tetap jalan
+  // (HPP hanya dihitung dari pengeluaran yang dikaitkan ke order).
+  let costTypeSupported = true;
+  let exp = await expQuery(true);
+  if (exp.error && /cost_type/i.test(exp.error.message ?? '')) {
+    costTypeSupported = false;
+    exp = await expQuery(false);
+  }
+
+  const [inv, pay, linked] = await Promise.all([
     admin
       .from('v_order_finance')
       .select('order_id, kode_produksi, nama_pemesan, tanggal_masuk, total, paid_verified')
@@ -60,13 +79,6 @@ export async function GET(req: NextRequest) {
       .limit(ROW_LIMIT),
     admin
       .from('finance_expenses')
-      .select('amount, spent_at, order_id, finance_categories(name)')
-      .eq('status', 'approved')
-      .gte('spent_at', from)
-      .lte('spent_at', to)
-      .limit(ROW_LIMIT),
-    admin
-      .from('finance_expenses')
       .select('amount, order_id')
       .eq('status', 'approved')
       .not('order_id', 'is', null)
@@ -80,7 +92,10 @@ export async function GET(req: NextRequest) {
     tanggal_masuk: string | null; total: number; paid_verified: number;
   };
   type PayRow = { amount: number; kind: string; paid_at: string };
-  type ExpRow = { amount: number; spent_at: string; order_id: string | null; finance_categories: { name: string } | null };
+  type ExpRow = {
+    amount: number; spent_at: string; order_id: string | null; category_id: string | null;
+    finance_categories: { name: string; cost_type?: 'hpp' | 'operasional' } | null;
+  };
   const invRows = (inv.data ?? []) as InvRow[];
   const payRows = (pay.data ?? []) as PayRow[];
   const expRows = (exp.data ?? []) as unknown as ExpRow[];
@@ -90,7 +105,7 @@ export async function GET(req: NextRequest) {
 
   const idx = new Map(monthKeys.map((k, i) => [k, i]));
   const months: ReportMonth[] = monthKeys.map((month) => ({
-    month, revenue: 0, expenses: 0, profit: 0, cash_in: 0, cash_out: 0, cash_net: 0,
+    month, revenue: 0, expenses: 0, hpp: 0, opex: 0, gross_profit: 0, profit: 0, cash_in: 0, cash_out: 0, cash_net: 0,
   }));
   const at = (d: string | null) => (d ? idx.get(d.slice(0, 7)) : undefined);
 
@@ -102,19 +117,33 @@ export async function GET(req: NextRequest) {
     const i = at(r.paid_at);
     if (i !== undefined) months[i].cash_in += r.kind === 'refund' ? -r.amount : r.amount;
   }
-  const byCat = new Map<string, number>();
+  // Klasifikasi: HPP bila dikaitkan ke order ATAU kategorinya bertipe 'hpp'; selain itu operasional.
+  const isHpp = (r: ExpRow) => r.order_id != null || r.finance_categories?.cost_type === 'hpp';
+
+  const byCat = new Map<string, { id: string | null; name: string; cost_type: 'hpp' | 'operasional' | null; amount: number }>();
   let expensesLinked = 0;
   for (const r of expRows) {
     const i = at(r.spent_at);
     if (i !== undefined) {
+      if (isHpp(r)) months[i].hpp += r.amount;
+      else months[i].opex += r.amount;
       months[i].expenses += r.amount;
       months[i].cash_out += r.amount;
     }
     const name = r.finance_categories?.name ?? 'Tanpa kategori';
-    byCat.set(name, (byCat.get(name) ?? 0) + r.amount);
+    const key = r.category_id ?? name;
+    const cur = byCat.get(key) ?? {
+      id: r.category_id,
+      name,
+      cost_type: costTypeSupported ? (r.finance_categories?.cost_type ?? 'operasional') : null,
+      amount: 0,
+    };
+    cur.amount += r.amount;
+    byCat.set(key, cur);
     if (r.order_id) expensesLinked += r.amount;
   }
   for (const m of months) {
+    m.gross_profit = m.revenue - m.hpp;
     m.profit = m.revenue - m.expenses;
     m.cash_net = m.cash_in - m.cash_out;
   }
@@ -147,7 +176,11 @@ export async function GET(req: NextRequest) {
     totals: {
       revenue: sum('revenue'),
       expenses: totalExpenses,
+      hpp: sum('hpp'),
+      opex: sum('opex'),
+      gross_profit: sum('gross_profit'),
       profit: sum('revenue') - totalExpenses,
+      orders_without_hpp: orders.filter((o) => o.direct_cost === 0).length,
       cash_in: sum('cash_in'),
       cash_out: sum('cash_out'),
       cash_net: sum('cash_net'),
@@ -156,7 +189,8 @@ export async function GET(req: NextRequest) {
       expenses_unlinked: totalExpenses - expensesLinked,
     },
     months,
-    by_category: [...byCat.entries()].map(([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount),
+    by_category: [...byCat.values()].sort((a, b) => b.amount - a.amount),
+    cost_type_supported: costTypeSupported,
     orders: orders.slice(0, 300),
     orders_total: orders.length,
   };

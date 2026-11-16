@@ -151,10 +151,19 @@ export const PAYMENT_KIND_LABEL: Record<PaymentKind, string> = {
 
 export type ExpenseStatus = 'pending' | 'approved' | 'rejected' | 'void';
 
+export type CostType = 'hpp' | 'operasional';
+
+export const COST_TYPE_LABEL: Record<CostType, string> = {
+  hpp: 'HPP',
+  operasional: 'Operasional',
+};
+
 export interface FinanceCategory {
   id: string;
   code: string;
   name: string;
+  /** Tipe biaya (migration 019). Kosong bila migration belum dijalankan. */
+  cost_type?: CostType;
 }
 
 export interface FinanceVendor {
@@ -226,9 +235,15 @@ export interface ReportMonth {
   month: string;
   /** Pendapatan = nilai tagihan order yang masuk pada bulan itu (basis tanggal masuk order). */
   revenue: number;
-  /** Pengeluaran berstatus approved pada bulan itu. */
+  /** Seluruh pengeluaran approved pada bulan itu (HPP + operasional). */
   expenses: number;
-  /** revenue − expenses */
+  /** HPP: pengeluaran yang dikaitkan ke order atau berkategori HPP. */
+  hpp: number;
+  /** Biaya operasional: pengeluaran umum (bukan HPP). */
+  opex: number;
+  /** revenue − hpp */
+  gross_profit: number;
+  /** Laba bersih = revenue − expenses (= gross_profit − opex) */
   profit: number;
   /** Pembayaran terverifikasi pada bulan itu (sudah dikurangi refund). */
   cash_in: number;
@@ -256,7 +271,12 @@ export interface ReportData {
   totals: {
     revenue: number;
     expenses: number;
+    hpp: number;
+    opex: number;
+    gross_profit: number;
     profit: number;
+    /** Order bertagihan pada periode yang belum punya biaya langsung sama sekali. */
+    orders_without_hpp: number;
     cash_in: number;
     cash_out: number;
     cash_net: number;
@@ -266,7 +286,15 @@ export interface ReportData {
     expenses_unlinked: number;
   };
   months: ReportMonth[];
-  by_category: { name: string; amount: number }[];
+  by_category: {
+    id: string | null;
+    name: string;
+    /** null bila migration 019 belum dijalankan */
+    cost_type: CostType | null;
+    amount: number;
+  }[];
+  /** false bila kolom cost_type belum ada (migration 019 belum dijalankan). */
+  cost_type_supported: boolean;
   orders: ReportOrder[];
   orders_total: number;
 }
@@ -292,6 +320,7 @@ export const AUDIT_ENTITY_LABEL: Record<string, string> = {
   invoice: 'Tagihan',
   expense: 'Pengeluaran',
   vendor: 'Vendor',
+  category: 'Kategori biaya',
   period: 'Periode',
   export: 'Ekspor',
   migration: 'Migrasi',

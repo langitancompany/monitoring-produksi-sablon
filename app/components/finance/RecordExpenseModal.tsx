@@ -209,6 +209,7 @@ export default function RecordExpenseModal({
               {meta?.categories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
+                  {c.cost_type === "hpp" ? " (HPP)" : ""}
                 </option>
               ))}
             </select>

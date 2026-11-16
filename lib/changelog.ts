@@ -2,11 +2,11 @@
 
 export const APP_INFO = {
   name: "Langitan.co SuperApp",
-  version: "V.18.7",
+  version: "V.18.8",
   purpose: "Aplikasi produksi Sablon, Langitan.co.",
   creator: "abdllahmajid",
   creationDate: "13 Desember 2025",
-  notes: 'Kalender Produksi: beban kerja petugas produksi',
+  notes: 'Laporan Keuangan: laba rugi bertingkat (HPP, Laba Kotor, Laba Bersih)',
 };
 
 export interface ChangelogEntry {
@@ -16,6 +16,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "18.8",
+    date: "2026-11-16",
+    changes: [
+      "Keuangan → Laporan: laba rugi kini bertingkat. Pendapatan − HPP = Laba Kotor, lalu − Biaya Operasional = Laba Bersih. Kartu ringkasan dan tabel per bulan menampilkan HPP, laba kotor, biaya operasional, dan laba bersih beserta persentase marginnya.",
+      "Biaya dihitung sebagai HPP bila dikaitkan ke order atau kategorinya bertipe HPP; selain itu menjadi biaya operasional. Gaji produksi per order otomatis HPP, sedangkan gaji tetap dan biaya umum menjadi biaya operasional.",
+      "Kategori biaya kini punya tipe HPP / Operasional. Tipe bisa diubah dengan klik penanda di kartu \"Biaya per kategori\" (khusus Approver/Super Admin), dan perubahannya tercatat di log audit. Di form pengeluaran, kategori HPP diberi tanda \"(HPP)\". Perlu menjalankan migration 019.",
+      "Peringatan HPP belum diisi: laporan menghitung order bertagihan yang belum punya biaya langsung, menandainya \"Belum diisi\" di tabel laba kotor per order, dan menyediakan urutan \"HPP belum diisi\" untuk melihat daftarnya.",
+      "Ekspor Excel laporan memuat kolom HPP, laba kotor, biaya operasional, laba bersih, dan tipe kategori.",
+    ],
+  },
   {
     version: "18.7",
     date: "2026-11-16",

@@ -40,6 +40,13 @@ export const MENU_BADGE_GRACE_MINUTES = 60;
 
 export const MENU_UPDATES: MenuUpdate[] = [
   {
+    menuId: "finance",
+    id: "finance-18.8",
+    type: "update",
+    date: "2026-11-16",
+    note: "Laporan: laba rugi bertingkat (HPP, Laba Kotor, Laba Bersih)",
+  },
+  {
     menuId: "calendar",
     id: "calendar-18.7",
     type: "update",

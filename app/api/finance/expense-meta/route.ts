@@ -10,8 +10,14 @@ export async function GET(req: NextRequest) {
   if (!guard.ok) return guard.response;
 
   const admin = getSupabaseAdmin();
+  const catQuery = (cols: string) =>
+    admin.from('finance_categories').select(cols).eq('kind', 'expense').eq('is_active', true).order('sort_order');
+  // cost_type baru ada setelah migration 019; bila belum, form tetap jalan tanpa penanda tipe.
+  let catRes = await catQuery('id, code, name, cost_type');
+  if (catRes.error && /cost_type/i.test(catRes.error.message ?? '')) catRes = await catQuery('id, code, name');
+
   const [cat, ven, acc, s] = await Promise.all([
-    admin.from('finance_categories').select('id, code, name').eq('kind', 'expense').eq('is_active', true).order('sort_order'),
+    Promise.resolve(catRes),
     admin.from('finance_vendors').select('id, name, phone').eq('is_active', true).order('name'),
     admin.from('finance_accounts').select('id, code, name, type').eq('is_active', true).order('sort_order'),
     loadSettings(),
