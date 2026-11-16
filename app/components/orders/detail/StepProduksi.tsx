@@ -211,6 +211,11 @@ export default function StepProduksi({
                           Catatan Revisi:
                         </span>
                         {step.proofing_note}
+                        {step.revisi_via === "whatsapp" && (
+                          <span className="block mt-1 text-[10px] opacity-70">
+                            Diminta via WhatsApp
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}
@@ -218,6 +223,7 @@ export default function StepProduksi({
                   {step.isCompleted && (
                     <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono tabular-nums">
                       Oleh: {step.uploadedBy} | {step.timestamp}
+                      {step.approved_via === "whatsapp" && " | ✅ Disetujui via WhatsApp"}
                     </div>
                   )}
 

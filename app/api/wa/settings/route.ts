@@ -22,6 +22,7 @@ const tampil = (s: Awaited<ReturnType<typeof getWaSettings>>) => ({
   token_hint: s.gatewayToken ? s.gatewayToken.slice(-4) : '',
   notify_verifikasi_numbers: s.notifyVerifikasiNumbers,
   notify_kendala_numbers: s.notifyKendalaNumbers,
+  notify_proofing_numbers: s.notifyProofingNumbers,
 });
 
 // Validasi + normalisasi daftar nomor. Mengembalikan string error bila ada yang tidak valid.
@@ -61,6 +62,7 @@ export async function PUT(request: NextRequest) {
       group_jid?: string;
       notify_verifikasi_numbers?: string[];
       notify_kendala_numbers?: string[];
+      notify_proofing_numbers?: string[];
     };
 
     const sekarang = await getWaSettings();
@@ -90,6 +92,7 @@ export async function PUT(request: NextRequest) {
     for (const [kolom, label] of [
       ['notify_verifikasi_numbers', 'verifikasi keuangan'],
       ['notify_kendala_numbers', 'kendala pesanan'],
+      ['notify_proofing_numbers', 'persetujuan proofing'],
     ] as const) {
       if (body[kolom] === undefined) continue;
       const r = bersihkanNomor(body[kolom], label);

@@ -142,6 +142,8 @@ export function useUpload({
   });
 
     const updatedOrder = JSON.parse(JSON.stringify(order));
+    // Diisi bila yang diupload adalah step Proofing → setelah tersimpan, kirim WA persetujuan
+    let proofingStepId: string | null = null;
     const common = {
       fileUrl: urlData.publicUrl,
       timestamp: new Date().toLocaleString(),
@@ -160,6 +162,7 @@ export function useUpload({
 
       if (idx >= 0) {
         const isProofing = steps[idx].name.toLowerCase().includes('proofing');
+        if (isProofing) proofingStepId = steps[idx].id;
         steps[idx] = {
           ...steps[idx],
           fileUrl: urlData.publicUrl,
@@ -192,6 +195,20 @@ export function useUpload({
     }
 
     await checkAutoStatus(updatedOrder);
+
+    // Proofing baru diupload → kirim link gambar ke nomor persetujuan proofing (WhatsApp).
+    // Tidak di-await & gagal diam-diam: WA bermasalah tidak boleh mengganggu upload.
+    if (proofingStepId) {
+      fetch('/api/wa/proofing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: order.id, stepId: proofingStepId }),
+      })
+        .then(async (r) => {
+          if (!r.ok) console.error('[wa/proofing] gagal', r.status, await r.text().catch(() => ''));
+        })
+        .catch((e) => console.error('[wa/proofing] gagal terhubung', e));
+    }
 
     setIsUploading(false);
     setUploadContext(null);

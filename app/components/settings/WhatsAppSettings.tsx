@@ -9,7 +9,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { Plus, X, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Plus, X, ShieldCheck, TriangleAlert, Image as ImageIcon } from "lucide-react";
 import WaUsageCard, {
   type WaQueueInfo,
   type WaUsage,
@@ -23,6 +23,7 @@ interface WaSettingsData {
   token_hint: string;
   notify_verifikasi_numbers: string[];
   notify_kendala_numbers: string[];
+  notify_proofing_numbers: string[];
 }
 
 type GwState = "starting" | "qr" | "open" | "closed";
@@ -171,6 +172,7 @@ export default function WhatsAppSettings() {
   // Penerima notifikasi
   const [verifList, setVerifList] = useState<string[]>([]);
   const [kendalaList, setKendalaList] = useState<string[]>([]);
+  const [proofingList, setProofingList] = useState<string[]>([]);
   const [savingPenerima, setSavingPenerima] = useState(false);
   const [msgPenerima, setMsgPenerima] = useState<Msg>(null);
 
@@ -201,6 +203,7 @@ export default function WhatsAppSettings() {
       setGroupJid(data.group_jid || "");
       setVerifList(data.notify_verifikasi_numbers ?? []);
       setKendalaList(data.notify_kendala_numbers ?? []);
+      setProofingList(data.notify_proofing_numbers ?? []);
     })();
   }, []);
 
@@ -336,7 +339,8 @@ export default function WhatsAppSettings() {
   const penerimaDirty =
     !!settings &&
     (verifList.join(",") !== (settings.notify_verifikasi_numbers ?? []).join(",") ||
-      kendalaList.join(",") !== (settings.notify_kendala_numbers ?? []).join(","));
+      kendalaList.join(",") !== (settings.notify_kendala_numbers ?? []).join(",") ||
+      proofingList.join(",") !== (settings.notify_proofing_numbers ?? []).join(","));
 
   const simpanPenerima = async () => {
     setSavingPenerima(true);
@@ -347,6 +351,7 @@ export default function WhatsAppSettings() {
       body: JSON.stringify({
         notify_verifikasi_numbers: verifList,
         notify_kendala_numbers: kendalaList,
+        notify_proofing_numbers: proofingList,
       }),
     });
     setSavingPenerima(false);
@@ -357,6 +362,7 @@ export default function WhatsAppSettings() {
     setSettings(data);
     setVerifList(data.notify_verifikasi_numbers ?? []);
     setKendalaList(data.notify_kendala_numbers ?? []);
+    setProofingList(data.notify_proofing_numbers ?? []);
     setMsgPenerima({ type: "ok", text: "Penerima notifikasi tersimpan." });
   };
 
@@ -656,6 +662,14 @@ export default function WhatsAppSettings() {
             kosong="Belum ada nomor. Laporan kendala pribadi tidak dikirim."
             nomor={kendalaList}
             onChange={setKendalaList}
+          />
+          <DaftarNomor
+            icon={<ImageIcon size={16} />}
+            judul="Persetujuan proofing"
+            deskripsi="Saat proofing diupload, nomor ini menerima link gambar. Balas “siap produksi” untuk ACC, atau “Revisi: alasan” untuk meminta revisi."
+            kosong="Belum ada nomor. Proofing harus dikonfirmasi manual di aplikasi."
+            nomor={proofingList}
+            onChange={setProofingList}
           />
         </div>
 

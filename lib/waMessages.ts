@@ -224,3 +224,48 @@ export const pesanKendalaPengelola = (
     pelapor ? `\nDilaporkan oleh: ${pelapor}` : null,
     `\n👉 *Buka pesanan di aplikasi:*\n${link}`,
   ].filter((x): x is string => x !== null).join('\n');
+
+
+// 8) Proofing menunggu persetujuan → nomor penerima persetujuan proofing.
+// Dibalas "siap produksi" (ACC) atau "Revisi: alasan". Baris "Lihat gambar" memuat link gambar.
+export const pesanProofing = (o: WaOrder, namaStep: string, pengupload: string | undefined, link: string) =>
+  [
+    '🖼️ *PROOFING MENUNGGU PERSETUJUAN*',
+    '',
+    detailPesanan(o),
+    `*Tahap:* ${namaStep}`,
+    pengupload ? `*Diupload oleh:* ${pengupload}` : null,
+    '',
+    `Lihat gambar:\n${link}`,
+    '',
+    'Balas pesan ini dengan:',
+    '✅ *siap produksi* → untuk menyetujui',
+    '✏️ *Revisi: (alasan revisi)* → untuk meminta revisi',
+  ].filter((x): x is string => x !== null).join('\n');
+
+export const pesanProofingAcc = (kode: string) =>
+  `✅ Proofing *${kode}* disetujui. Tahap produksi sudah bisa dilanjutkan.`;
+
+export const pesanProofingRevisi = (kode: string, alasan: string) =>
+  `✏️ Revisi proofing *${kode}* dicatat:\n"${alasan}"\n\nTim produksi akan menerima catatan ini dan mengupload ulang proofing.`;
+
+export const pesanProofingMintaAlasan = () =>
+  'Alasan revisi belum ada. Tulis dengan format:\n*Revisi: (alasan revisi)*\ncontoh: Revisi: warna merah terlalu gelap';
+
+export const pesanProofingTidakAda = () =>
+  'Tidak ada proofing yang sedang menunggu persetujuan dari kamu.';
+
+export const pesanProofingBanyak = (daftar: string[]) =>
+  [
+    `Ada ${daftar.length} proofing yang menunggu persetujuan:`,
+    ...daftar.map((k) => `• ${k}`),
+    '',
+    'Supaya tidak salah pesanan, *balas langsung (swipe/reply)* pada pesan proofing yang dimaksud, lalu tulis *siap produksi* atau *Revisi: (alasan)*.',
+  ].join('\n');
+
+export const pesanProofingSudah = (kode: string, keadaan: 'acc' | 'revisi' | 'diganti') =>
+  keadaan === 'acc'
+    ? `Proofing *${kode}* sudah disetujui sebelumnya, tidak ada yang diubah.`
+    : keadaan === 'revisi'
+      ? `Proofing *${kode}* sudah berstatus revisi dan menunggu upload ulang, tidak ada yang diubah.`
+      : `Proofing *${kode}* sudah diganti dengan upload yang lebih baru. Balas pesan proofing yang terbaru.`;

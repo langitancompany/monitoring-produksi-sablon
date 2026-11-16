@@ -12,11 +12,13 @@ export interface WaSettings {
   // Nomor pribadi penerima (sudah 62xxx). Dua daftar terpisah; kosong = jenis itu tidak dikirim.
   notifyVerifikasiNumbers: string[];
   notifyKendalaNumbers: string[];
+  // Nomor yang dikirimi proofing dan boleh membalas "siap produksi" / "Revisi: ..."
+  notifyProofingNumbers: string[];
 }
 
 const KOSONG: WaSettings = {
   enabled: false, gatewayUrl: '', gatewayToken: '', groupJid: '',
-  notifyVerifikasiNumbers: [], notifyKendalaNumbers: [],
+  notifyVerifikasiNumbers: [], notifyKendalaNumbers: [], notifyProofingNumbers: [],
 };
 
 const daftarNomor = (v: unknown): string[] =>
@@ -43,6 +45,7 @@ export async function getWaSettings(): Promise<WaSettings> {
       groupJid: String(data.group_jid ?? '').trim(),
       notifyVerifikasiNumbers: daftarNomor(data.notify_verifikasi_numbers),
       notifyKendalaNumbers: daftarNomor(data.notify_kendala_numbers),
+      notifyProofingNumbers: daftarNomor(data.notify_proofing_numbers),
     };
   } catch (e) {
     console.error('getWaSettings exception:', e);

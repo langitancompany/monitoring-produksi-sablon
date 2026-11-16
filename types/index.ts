@@ -299,6 +299,10 @@ export interface ProductionStep {
   timestamp?: string;
   // ISO 8601 — waktu step diselesaikan, dipakai menentukan bulan gaji (SalaryView).
   completedAt?: string | null;
+  // Diisi saat proofing diputuskan lewat balasan WhatsApp (lihat /api/wa/proofing-reply)
+  approved_via?: 'whatsapp';
+  approved_by?: string;
+  revisi_via?: 'whatsapp';
 }
 
 export interface KendalaNote {

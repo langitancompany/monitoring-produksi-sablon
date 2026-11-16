@@ -56,6 +56,9 @@ const SCHEMA = env('SUPABASE_SCHEMA', 'monitoring_sablon');
 const TOKEN = env('GATEWAY_TOKEN');
 const AUTH_DIR = env('AUTH_DIR', '/data/auth');
 const PORT = Number(env('PORT', '3100'));
+// URL aplikasi (mis. https://sablon.langitan.co). Dipakai meneruskan balasan proofing ("siap produksi" /
+// "Revisi: ...") ke aplikasi. Kosong = fitur balasan nonaktif, pengiriman pesan tetap berjalan.
+const APP_URL = (process.env.APP_URL ?? '').trim().replace(/\/+$/, '');
 const DELAY_MIN = Number(env('SEND_DELAY_MIN', '3'));
 const DELAY_MAX = Number(env('SEND_DELAY_MAX', '8'));
 const MAX_ATTEMPTS = Number(env('MAX_ATTEMPTS', '5'));
@@ -164,6 +167,12 @@ async function startSocket() {
 
     s.ev.on('creds.update', saveCreds);
 
+    // Pesan masuk: hanya "notify" (pesan baru), bukan sinkron riwayat
+    s.ev.on('messages.upsert', ({ messages, type }) => {
+      if (type !== 'notify') return;
+      for (const m of messages) void terusPesanMasuk(m).catch((e) => log.error(e));
+    });
+
     // Anggota/pengaturan grup berubah → buang cache-nya (diambil ulang saat kirim berikutnya)
     s.ev.on('groups.update', (updates) => {
       for (const u of updates) if (u.id) groupCache.delete(u.id);
@@ -229,6 +238,72 @@ async function startSocket() {
   } finally {
     starting = false;
   }
+}
+
+// ───────────────────────── Pesan masuk (balasan proofing) ─────────────────────────
+
+const teksPesan = (m: any): string =>
+  String(
+    m?.conversation ??
+      m?.extendedTextMessage?.text ??
+      m?.imageMessage?.caption ??
+      m?.ephemeralMessage?.message?.extendedTextMessage?.text ??
+      m?.ephemeralMessage?.message?.conversation ??
+      '',
+  );
+
+// Cepat & murah: hanya pesan yang tampak seperti balasan proofing yang diteruskan ke aplikasi.
+// Penilaian akhir (nomor terdaftar, pesanan yang dimaksud) dilakukan aplikasi.
+const mirip = (t: string) => /^\s*(siap\s+produksi|revisi\s*:)/i.test(t);
+
+// Pengirim bisa berupa JID nomor (62xxx@s.whatsapp.net) atau LID (xxxx@lid). LID dipetakan ke nomor
+// lewat remoteJidAlt / pemetaan Baileys. Gagal dipetakan → null (aplikasi masih bisa mencocokkan lewat swipe-reply).
+async function nomorPengirim(key: any): Promise<string | null> {
+  const ambil = (jid?: string | null) =>
+    jid && jid.endsWith('@s.whatsapp.net') ? jid.split('@')[0].split(':')[0] : null;
+  const langsung = ambil(key?.remoteJid) ?? ambil(key?.remoteJidAlt);
+  if (langsung) return langsung;
+  const lid: string | undefined = key?.remoteJid?.endsWith('@lid') ? key.remoteJid : undefined;
+  if (lid) {
+    try {
+      const pn = await (sock as any)?.signalRepository?.lidMapping?.getPNForLID?.(lid);
+      return ambil(pn);
+    } catch { /* tidak terpetakan */ }
+  }
+  return null;
+}
+
+async function terusPesanMasuk(m: any) {
+  if (!APP_URL) return;
+  const key = m?.key;
+  if (!key || key.fromMe || !m.message) return;
+  const jid: string = key.remoteJid ?? '';
+  if (!jid || jid.endsWith('@g.us') || jid === 'status@broadcast') return; // hanya chat pribadi
+
+  const teks = teksPesan(m.message).replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, '');
+  if (!mirip(teks)) return;
+
+  const ctx = m.message?.extendedTextMessage?.contextInfo ?? m.message?.imageMessage?.contextInfo;
+  const body = {
+    from: await nomorPengirim(key),
+    chatJid: jid,
+    messageId: key.id ?? null,
+    quotedId: ctx?.stanzaId ?? null,
+    text: teks,
+  };
+  let hasil: any = null;
+  const ok = await retry(async () => {
+    const r = await fetch(`${APP_URL}/api/wa/proofing-reply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!r.ok) throw new Error(`aplikasi menjawab ${r.status}`);
+    hasil = await r.json();
+  });
+  if (ok) log.info({ dari: body.from, hasil: hasil?.hasil, handled: hasil?.handled }, 'balasan proofing diteruskan');
+  else log.error('gagal meneruskan balasan proofing ke aplikasi (cek APP_URL & token gateway)');
 }
 
 // ───────────────────────── Util kirim ─────────────────────────
@@ -352,7 +427,7 @@ function isRateLimit(e: any): boolean {
 // gateway di-restart — notifikasi tidak boleh gagal hanya karena kartunya.
 let pratinjauRusak = process.env.LINK_PREVIEW === 'off';
 
-async function sendOne(type: 'group' | 'user', target: string, message: string, mentions: string[] = []) {
+async function sendOne(type: 'group' | 'user', target: string, message: string, mentions: string[] = []): Promise<string | null> {
   if (!sock || connState !== 'open') throw new NotConnectedError();
   const jid = type === 'group' ? target : await resolveUserJid(target);
 
@@ -390,6 +465,7 @@ async function sendOne(type: 'group' | 'user', target: string, message: string, 
   }
   limiter.record(targetKey(type, target));
   if (sent?.key?.id && sent.message) sentCache.set(sent.key.id, sent.message);
+  return sent?.key?.id ?? null;
 }
 
 // ───────────────────────── Worker antrian ─────────────────────────
@@ -416,12 +492,16 @@ async function isEnabled(): Promise<boolean> {
 // Tanpa catatan ini, pesan itu akan dipulihkan ke 'pending' lalu terkirim dua kali.
 const sentButUnsaved = new Set<string>();
 
-async function markSent(id: string): Promise<boolean> {
+async function markSent(id: string, waMessageId?: string | null): Promise<boolean> {
   return retry(async () => {
-    const { error } = await db
-      .from('wa_outbox')
-      .update({ status: 'sent', sent_at: new Date().toISOString(), last_error: null })
-      .eq('id', id);
+    const dasar = { status: 'sent', sent_at: new Date().toISOString(), last_error: null };
+    // wa_message_id dipakai mencocokkan balasan (swipe) ke pesan proofing. Kolom ada setelah migration 021;
+    // kalau belum dijalankan, status 'sent' tetap harus tertulis (kalau tidak, pesan terkirim dua kali).
+    let { error } = await db.from('wa_outbox')
+      .update(waMessageId ? { ...dasar, wa_message_id: waMessageId } : dasar).eq('id', id);
+    if (error && waMessageId && /wa_message_id/i.test(error.message)) {
+      ({ error } = await db.from('wa_outbox').update(dasar).eq('id', id));
+    }
     if (error) throw new Error(error.message);
   });
 }
@@ -506,9 +586,9 @@ async function processQueue() {
       if (!claimed) continue;
 
       try {
-        await sendOne(row.target_type, row.target, row.message, row.mentions ?? []);
+        const waId = await sendOne(row.target_type, row.target, row.message, row.mentions ?? []);
         breaker.success();
-        if (!(await markSent(row.id))) {
+        if (!(await markSent(row.id, waId))) {
           sentButUnsaved.add(row.id);
           log.error({ id: row.id, to: row.target }, 'pesan TERKIRIM tetapi status gagal ditulis ke database — akan ditulis ulang, tidak dikirim lagi');
         }
