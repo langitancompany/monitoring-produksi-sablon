@@ -31,9 +31,17 @@ import {
   Loader2,
   MapPin,
   AlignLeft,
+  Users,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
-import { Order } from "@/types";
-import { getStatusColor, orderTypeLabel } from "@/lib/utils";
+import { Order, UserData } from "@/types";
+import {
+  getStatusColor,
+  orderTypeLabel,
+  isMerchandiseOrder,
+} from "@/lib/utils";
+import { hasRole } from "@/lib/roles";
 
 // 🟢 UPDATE TIPE DATA
 interface CalendarEvent {
@@ -48,7 +56,30 @@ interface CalendarEvent {
 interface CalendarViewProps {
   orders: Order[];
   onSelectOrder: (orderId: string) => void;
+  /** Daftar user — dipakai untuk panel "Beban Kerja Petugas Produksi". */
+  users?: UserData[];
 }
+
+// Statistik beban kerja satu PJ dalam satu bulan.
+interface PJStat {
+  user: UserData;
+  manualOrders: number;
+  manualPcs: number;
+  dtfOrders: number;
+  dtfPcs: number;
+  otherOrders: number;
+  otherPcs: number;
+  totalOrders: number;
+  totalPcs: number;
+  belumSelesai: number;
+  asPJ: number;
+  asHelper: number;
+}
+
+const isManualJenis = (j?: string | null) => {
+  const t = (j ?? "").toLowerCase();
+  return t.includes("manual") || t.includes("sablon");
+};
 
 // Warna label agenda: pilihan bebas oleh user (bukan token semantik status),
 // jadi tetap memakai palet solid -500 standar Tailwind sebagai color picker.
@@ -66,6 +97,7 @@ const EVENT_COLORS = [
 export default function CalendarView({
   orders,
   onSelectOrder,
+  users = [],
 }: CalendarViewProps) {
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -75,6 +107,13 @@ export default function CalendarView({
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+
+  // ── Beban kerja PJ produksi ──
+  const [showPJ, setShowPJ] = useState(true);
+  // 'deadline' = order yang jatuh tempo di bulan ini (sesuai tampilan kalender)
+  // 'masuk'    = order yang masuk/ditugaskan di bulan ini
+  const [pjBasis, setPjBasis] = useState<"deadline" | "masuk">("deadline");
+  const [selectedPJ, setSelectedPJ] = useState<string | null>(null);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -125,6 +164,80 @@ export default function CalendarView({
     const endDate = endOfWeek(monthEnd, { weekStartsOn: 1 });
     return eachDayOfInterval({ start: startDate, end: endDate });
   }, [currentDate]);
+
+  // User yang punya role Produksi (termasuk yang ber-role ganda).
+  const produksiUsers = useMemo(
+    () => users.filter((u) => hasRole(u, "produksi")),
+    [users],
+  );
+
+  const pjStats = useMemo<PJStat[]>(() => {
+    const dateOf = (o: Order) =>
+      pjBasis === "deadline" ? o.deadline : o.tanggal_masuk;
+
+    const monthOrders = orders.filter((o) => {
+      const raw = dateOf(o);
+      if (!raw) return false;
+      const d = parseISO(raw);
+      return !isNaN(d.getTime()) && isSameMonth(d, currentDate);
+    });
+
+    const stats: PJStat[] = produksiUsers.map((user) => {
+      const st: PJStat = {
+        user,
+        manualOrders: 0,
+        manualPcs: 0,
+        dtfOrders: 0,
+        dtfPcs: 0,
+        otherOrders: 0,
+        otherPcs: 0,
+        totalOrders: 0,
+        totalPcs: 0,
+        belumSelesai: 0,
+        asPJ: 0,
+        asHelper: 0,
+      };
+      for (const o of monthOrders) {
+        const pcs = Number(o.jumlah) || 0;
+        // Petugas produksi = PJ ATAU helper. Order yang sama dihitung sekali per orang.
+        const isPJ = o.assigned_to === user.id;
+        const isHelper = o.helper_id === user.id && !isPJ;
+        if (!isPJ && !isHelper) continue;
+        if (isPJ) st.asPJ += 1;
+        else st.asHelper += 1;
+        if (isMerchandiseOrder(o)) {
+          st.otherOrders += 1;
+          st.otherPcs += pcs;
+        } else if (isManualJenis(o.jenis_produksi)) {
+          st.manualOrders += 1;
+          st.manualPcs += pcs;
+        } else {
+          st.dtfOrders += 1;
+          st.dtfPcs += pcs;
+        }
+        st.totalOrders += 1;
+        st.totalPcs += pcs;
+        if (o.status !== "Selesai") st.belumSelesai += 1;
+      }
+      return st;
+    });
+
+    // Urut dari beban paling ringan → paling berat (memudahkan memilih PJ).
+    return stats.sort(
+      (a, b) =>
+        a.totalPcs - b.totalPcs || a.user.name.localeCompare(b.user.name),
+    );
+  }, [orders, produksiUsers, currentDate, pjBasis]);
+
+  const maxPcs = useMemo(
+    () => Math.max(1, ...pjStats.map((s) => s.totalPcs)),
+    [pjStats],
+  );
+
+  const getPJName = (o: Order) =>
+    o.assigned_user?.name ||
+    users.find((u) => u.id === o.assigned_to)?.name ||
+    null;
 
   const handleDateClick = (day: Date, dayOrders: Order[]) => {
     // Filter dan urutkan agenda berdasarkan jam
@@ -234,8 +347,8 @@ export default function CalendarView({
   };
 
   return (
-    <div className="flex flex-col w-full p-4 md:p-0 mb-20 md:mb-0 h-auto md:h-[calc(100vh-120px)]">
-      <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col h-auto md:h-full">
+    <div className="flex flex-col md:flex-row gap-3 w-full p-4 md:p-0 mb-20 md:mb-0 h-auto md:h-[calc(100vh-120px)]">
+      <div className="flex-1 min-w-0 bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col h-auto md:h-full">
         {/* HEADER */}
         <div className="flex-none flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 z-10">
           <div>
@@ -282,11 +395,17 @@ export default function CalendarView({
         </div>
 
         {/* GRID TANGGAL */}
-        <div className="flex-none md:flex-1 h-auto md:h-full md:overflow-y-auto custom-scrollbar bg-zinc-100 dark:bg-zinc-900">
-          <div className="grid grid-cols-7 gap-[1px] border-b border-zinc-200 dark:border-zinc-800">
+        <div className="flex-none md:flex-1 md:min-h-0 h-auto bg-zinc-100 dark:bg-zinc-900">
+          <div className="grid grid-cols-7 gap-[1px] border-b border-zinc-200 dark:border-zinc-800 md:h-full md:auto-rows-fr">
             {daysInMonth.map((day, idx) => {
               const dayOrders = orders.filter((o) => {
                 if (!o.deadline) return false;
+                if (
+                  selectedPJ &&
+                  o.assigned_to !== selectedPJ &&
+                  o.helper_id !== selectedPJ
+                )
+                  return false;
                 return isSameDay(parseISO(o.deadline), day);
               });
 
@@ -306,7 +425,7 @@ export default function CalendarView({
                   onClick={() => handleDateClick(day, dayOrders)}
                   className={`
                     relative p-1 md:p-2 flex flex-col gap-1 transition-colors duration-150 cursor-pointer group outline-none
-                    min-h-[5.5rem] md:min-h-[140px] items-center md:items-stretch
+                    min-h-[5.5rem] md:min-h-0 md:overflow-hidden items-center md:items-stretch
                     aspect-auto
                     ${
                       isCurrentMonth
@@ -337,13 +456,12 @@ export default function CalendarView({
                     )}
                   </div>
 
-                  {/* DESKTOP LIST */}
-                  <div className="hidden md:flex flex-col gap-1 mt-1 w-full">
-                    {/* Event List dengan Jam */}
-                    {dayEvents.map((event) => (
+                  {/* DESKTOP LIST — maksimal 3 baris agar sel tidak melebar */}
+                  <div className="hidden md:flex flex-col gap-0.5 mt-0.5 w-full min-h-0">
+                    {dayEvents.slice(0, 3).map((event) => (
                       <div
                         key={event.id}
-                        className={`px-2 py-1 rounded-md text-[10px] font-semibold truncate text-white ${event.color} flex items-center gap-1`}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-semibold truncate text-white ${event.color} flex items-center gap-1`}
                       >
                         {event.event_time && (
                           <span className="font-mono text-[9px] opacity-90">
@@ -354,18 +472,19 @@ export default function CalendarView({
                       </div>
                     ))}
 
-                    {/* Order List */}
-                    {dayOrders.slice(0, 3).map((order) => (
-                      <div
-                        key={order.id}
-                        className={`px-2 py-1 rounded-md border-l-[3px] text-[10px] font-semibold truncate opacity-90 text-left ${getStatusColor(order.status)}`}
-                      >
-                        {order.nama_pemesan}
-                      </div>
-                    ))}
-                    {dayOrders.length > 3 && (
-                      <div className="text-[9px] text-center text-zinc-400 font-medium pt-1">
-                        + {dayOrders.length - 3} order
+                    {dayOrders
+                      .slice(0, Math.max(0, 3 - Math.min(dayEvents.length, 3)))
+                      .map((order) => (
+                        <div
+                          key={order.id}
+                          className={`px-1.5 py-0.5 rounded border-l-[3px] text-[10px] font-semibold truncate opacity-90 text-left ${getStatusColor(order.status)}`}
+                        >
+                          {order.nama_pemesan}
+                        </div>
+                      ))}
+                    {dayOrders.length + dayEvents.length > 3 && (
+                      <div className="text-[9px] text-center text-zinc-400 font-medium">
+                        + {dayOrders.length + dayEvents.length - 3} lagi
                       </div>
                     )}
                   </div>
@@ -396,6 +515,151 @@ export default function CalendarView({
           </div>
         </div>
       </div>
+
+      {/* SIDEBAR: BEBAN KERJA PJ PRODUKSI (kanan di desktop, di bawah kalender di mobile) */}
+      {produksiUsers.length > 0 && (
+        <aside className="w-full md:w-[270px] xl:w-[300px] shrink-0 bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col h-auto md:h-full">
+          <div className="flex-none p-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900">
+            <button
+              onClick={() => setShowPJ((v) => !v)}
+              className="w-full flex items-center justify-between gap-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 md:cursor-default"
+            >
+              <span className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-[#124540] dark:text-[#42938b]" />
+                Beban Kerja Petugas Produksi
+              </span>
+              <span className="md:hidden">
+                {showPJ ? (
+                  <ChevronUp className="w-4 h-4 text-zinc-400" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-zinc-400" />
+                )}
+              </span>
+            </button>
+            <p className="mt-1 text-[10px] text-zinc-500 dark:text-zinc-400 capitalize">
+              {format(currentDate, "MMMM yyyy", { locale: id })}
+            </p>
+
+            <div
+              className={`${showPJ ? "flex" : "hidden md:flex"} mt-2 items-center gap-1 bg-white dark:bg-zinc-950 p-0.5 rounded-md border border-zinc-200 dark:border-zinc-800`}
+            >
+              {(
+                [
+                  { v: "deadline", l: "Deadline" },
+                  { v: "masuk", l: "Tgl Masuk" },
+                ] as const
+              ).map((o) => (
+                <button
+                  key={o.v}
+                  onClick={() => setPjBasis(o.v)}
+                  className={`flex-1 px-2 py-1 text-[10px] font-semibold rounded transition-colors duration-150 ${
+                    pjBasis === o.v
+                      ? "bg-[#124540] text-white"
+                      : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  }`}
+                >
+                  {o.l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div
+            className={`${showPJ ? "flex" : "hidden md:flex"} flex-col gap-2 p-3 md:flex-1 md:min-h-0 md:overflow-y-auto custom-scrollbar`}
+          >
+            {pjStats.map((s, i) => {
+              const isSelected = selectedPJ === s.user.id;
+              const isLightest =
+                i === 0 &&
+                pjStats.length > 1 &&
+                s.totalPcs < pjStats[pjStats.length - 1].totalPcs;
+              return (
+                <button
+                  key={s.user.id}
+                  onClick={() => setSelectedPJ(isSelected ? null : s.user.id)}
+                  title="Klik untuk menyorot order petugas ini di kalender"
+                  className={`w-full text-left p-2.5 rounded-lg border bg-white dark:bg-zinc-950 transition-colors duration-150 ${
+                    isSelected
+                      ? "border-[#124540] ring-1 ring-[#124540]"
+                      : "border-zinc-200 dark:border-zinc-800 hover:border-[#124540]/50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <span className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100 truncate">
+                      {s.user.name}
+                    </span>
+                    {isLightest && (
+                      <span className="shrink-0 text-[8px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400">
+                        Teringan
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-0.5 text-[11px] text-zinc-600 dark:text-zinc-400">
+                    <div className="flex justify-between">
+                      <span>Manual</span>
+                      <span className="font-mono tabular-nums">
+                        {s.manualOrders} order ·{" "}
+                        {s.manualPcs.toLocaleString("id-ID")} pcs
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>DTF</span>
+                      <span className="font-mono tabular-nums">
+                        {s.dtfOrders} order · {s.dtfPcs.toLocaleString("id-ID")}{" "}
+                        pcs
+                      </span>
+                    </div>
+                    {s.otherOrders > 0 && (
+                      <div className="flex justify-between">
+                        <span>Merchandise</span>
+                        <span className="font-mono tabular-nums">
+                          {s.otherOrders} order ·{" "}
+                          {s.otherPcs.toLocaleString("id-ID")} pcs
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-1.5 h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-[#124540]"
+                      style={{ width: `${(s.totalPcs / maxPcs) * 100}%` }}
+                    />
+                  </div>
+                  <div className="mt-1 flex justify-between text-[10px] font-semibold text-zinc-700 dark:text-zinc-300">
+                    <span className="font-mono tabular-nums">
+                      Total {s.totalPcs.toLocaleString("id-ID")} pcs
+                    </span>
+                    <span className="font-mono tabular-nums text-zinc-500 dark:text-zinc-400">
+                      {s.belumSelesai} berjalan
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                    {s.asPJ} sebagai PJ
+                    {s.asHelper > 0 && (
+                      <span className="text-orange-600 dark:text-orange-400">
+                        {" "}
+                        · {s.asHelper} sebagai helper
+                      </span>
+                    )}
+                  </p>
+                </button>
+              );
+            })}
+
+            <p className="text-[10px] text-zinc-400 leading-snug">
+              {pjBasis === "deadline"
+                ? "Dihitung dari order yang deadline-nya bulan ini."
+                : "Dihitung dari order yang masuk bulan ini."}{" "}
+              Termasuk order yang dikerjakan sebagai helper. Diurutkan dari
+              beban teringan.
+              {selectedPJ &&
+                " Kalender hanya menampilkan order petugas terpilih."}
+            </p>
+          </div>
+        </aside>
+      )}
 
       {/* 🟢 MODAL POPUP */}
       {isModalOpen && selectedDate && (
@@ -610,6 +874,14 @@ export default function CalendarView({
                             <span className="w-1 h-1 rounded-full bg-zinc-300"></span>
                             <span>{orderTypeLabel(order)}</span>
                           </div>
+                          {getPJName(order) && (
+                            <p className="mt-1.5 flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                              <User className="w-3 h-3" /> PJ:{" "}
+                              <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+                                {getPJName(order)}
+                              </span>
+                            </p>
+                          )}
                         </div>
                       ))}
                     </div>

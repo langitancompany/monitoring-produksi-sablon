@@ -847,6 +847,7 @@ export default function ProductionApp() {
             {activeTab === "calendar" && (
               <CalendarView
                 orders={activeOrders}
+                users={usersList}
                 onSelectOrder={(id) => openOrderDetail(id, activeTab)}
               />
             )}

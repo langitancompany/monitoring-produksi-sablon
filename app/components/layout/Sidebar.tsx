@@ -29,6 +29,8 @@ import { APP_INFO, CHANGELOG } from "@/lib/changelog";
 import ThemedLogo from "@/app/components/ui/ThemedLogo";
 
 import { roleLabel } from "@/lib/roles";
+import { useMenuUpdates } from "@/hooks/useMenuUpdates";
+import { MenuUpdate } from "@/lib/menuUpdates";
 interface SidebarProps {
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
@@ -49,6 +51,7 @@ export default function Sidebar({
   onOpenProfile,
 }: SidebarProps) {
   const p = currentUser.permissions;
+  const { getBadge } = useMenuUpdates(currentUser.id, activeTab);
 
   const menuGroups = [
     {
@@ -223,6 +226,7 @@ export default function Sidebar({
                         key={item.id}
                         item={item}
                         isActive={activeTab === item.id}
+                        badge={getBadge(item.id)}
                         onClick={() =>
                           item.id === "tv"
                             ? window.open("/tv", "_blank")
@@ -252,10 +256,12 @@ const MenuItemMemo = memo(
   ({
     item,
     isActive,
+    badge,
     onClick,
   }: {
     item: any;
     isActive: boolean;
+    badge?: MenuUpdate;
     onClick: () => void;
   }) => (
     <button
@@ -271,10 +277,24 @@ const MenuItemMemo = memo(
         className={`w-3.5 h-3.5 ${isActive ? "text-white" : "text-zinc-400 dark:text-zinc-500"}`}
       />
       {item.label}
+      {badge && (
+        <span
+          title={badge.note}
+          className={`ml-auto shrink-0 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${
+            isActive
+              ? "bg-white/20 text-white"
+              : "bg-[#49BFB4]/15 text-[#124540] dark:text-[#49BFB4]"
+          }`}
+        >
+          {badge.type === "new" ? "Baru" : "Update"}
+        </span>
+      )}
     </button>
   ),
   (prev, next) =>
-    prev.isActive === next.isActive && prev.item.id === next.item.id,
+    prev.isActive === next.isActive &&
+    prev.item.id === next.item.id &&
+    prev.badge?.id === next.badge?.id,
 );
 MenuItemMemo.displayName = "MenuItemMemo";
 

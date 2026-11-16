@@ -2,11 +2,11 @@
 
 export const APP_INFO = {
   name: "Langitan.co SuperApp",
-  version: "V.18.6",
+  version: "V.18.7",
   purpose: "Aplikasi produksi Sablon, Langitan.co.",
   creator: "abdllahmajid",
   creationDate: "13 Desember 2025",
-  notes: 'Perombakan total menu Keuangan (v2) + Perbaikan bug',
+  notes: 'Kalender Produksi: beban kerja petugas produksi',
 };
 
 export interface ChangelogEntry {
@@ -16,6 +16,19 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "18.7",
+    date: "2026-11-16",
+    changes: [
+      "Kalender Produksi: ditambahkan panel \"Beban Kerja Petugas Produksi\" di sisi kanan kalender untuk membantu admin menentukan siapa yang menggarap order. Semua user ber-role Produksi tampil dengan jumlah order dan PCS Manual serta DTF pada bulan yang dibuka.",
+      "Order yang dikerjakan sebagai helper ikut dihitung ke beban petugas (bukan hanya sebagai PJ). Order yang sama tidak dihitung dobel, dan rincian \"sebagai PJ\" dan \"sebagai helper\" ditampilkan di tiap kartu.",
+      "Petugas diurutkan dari beban teringan dan diberi penanda \"Teringan\", dilengkapi bar beban dan jumlah order yang masih berjalan. Dasar hitung bisa dipilih: berdasarkan Deadline atau Tanggal Masuk.",
+      "Klik kartu petugas untuk menyorot order miliknya di kalender, sehingga terlihat hari mana saja dia sudah padat. Klik lagi untuk menampilkan semua order.",
+      "Tampilan kalender dirombak menjadi kiri-kanan: kalender lebih besar di kiri dan tanpa scroll di desktop (baris minggu otomatis mengisi tinggi layar), panel petugas di kanan. Di HP, panel berada di bawah kalender dan bisa dilipat.",
+      "Setiap sel tanggal menampilkan maksimal 3 baris agenda/order, sisanya ditulis \"+N lagi\". Kartu order di popup tanggal kini menampilkan nama PJ.",
+      "Sidebar: menu yang baru atau fiturnya diperbarui kini diberi penanda \"Baru\" / \"Update\". Penanda tetap tampil selama 1 jam setelah menu pertama kali dibuka, lalu hilang otomatis. Waktu buka tersimpan per user di perangkat yang dipakai.",
+    ],
+  },
   {
     version: "18.6",
     date: "2026-10-31",
