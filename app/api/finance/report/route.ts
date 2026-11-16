@@ -1,6 +1,8 @@
 // GET /api/finance/report?from=YYYY-MM-DD&to=YYYY-MM-DD
 // Laporan laba rugi bertingkat (basis tagihan: Pendapatan − HPP = Laba Kotor − Biaya Operasional = Laba Bersih)
 // dan arus kas (basis uang), per bulan, per kategori, dan per order.
+// Biaya di laba rugi memakai accrual_date (tanggal beban; gaji = bulan periodenya), sedangkan
+// kas keluar memakai spent_at (tanggal uang keluar). Sebelum migration 020, keduanya spent_at.
 // Data sensitif manajemen -> hanya yang berhak menyetujui (izin Approver keuangan) atau Super Admin.
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -44,25 +46,34 @@ export async function GET(req: NextRequest) {
   if (monthKeys.length > MAX_MONTHS) return bad(`Rentang maksimal ${MAX_MONTHS} bulan`);
 
   const admin = getSupabaseAdmin();
-  const expQuery = (withType: boolean) =>
-    admin
-      .from('finance_expenses')
-      .select(`amount, spent_at, order_id, category_id, finance_categories(${withType ? 'name, cost_type' : 'name'})`)
-      .eq('status', 'approved')
-      .gte('spent_at', from)
-      .lte('spent_at', to)
-      .limit(ROW_LIMIT);
 
-  // Kolom cost_type baru ada setelah migration 019. Bila belum dijalankan, laporan tetap jalan
-  // (HPP hanya dihitung dari pengeluaran yang dikaitkan ke order).
+  // Kolom baru muncul setelah migration: accrual_date (020) dan cost_type (019). Bila belum dijalankan,
+  // laporan tetap jalan dengan perilaku lama (tanggal beban = tanggal uang keluar; HPP hanya dari biaya order).
   let costTypeSupported = true;
-  let exp = await expQuery(true);
-  if (exp.error && /cost_type/i.test(exp.error.message ?? '')) {
-    costTypeSupported = false;
-    exp = await expQuery(false);
+  let accrualSupported = true;
+  const expQuery = () => {
+    const dateCol = accrualSupported ? 'accrual_date' : 'spent_at';
+    const cols =
+      `amount, spent_at, ${accrualSupported ? 'accrual_date, ' : ''}order_id, category_id, ` +
+      `finance_categories(${costTypeSupported ? 'name, cost_type' : 'name'})`;
+    return admin
+      .from('finance_expenses')
+      .select(cols)
+      .eq('status', 'approved')
+      .gte(dateCol, from)
+      .lte(dateCol, to)
+      .limit(ROW_LIMIT);
+  };
+  let exp = await expQuery();
+  for (let attempt = 0; exp.error && attempt < 2; attempt++) {
+    const msg = exp.error.message ?? '';
+    if (accrualSupported && /accrual_date/i.test(msg)) accrualSupported = false;
+    else if (costTypeSupported && /cost_type/i.test(msg)) costTypeSupported = false;
+    else break;
+    exp = await expQuery();
   }
 
-  const [inv, pay, linked] = await Promise.all([
+  const [inv, pay, linked, cashOut] = await Promise.all([
     admin
       .from('v_order_finance')
       .select('order_id, kode_produksi, nama_pemesan, tanggal_masuk, total, paid_verified')
@@ -83,8 +94,16 @@ export async function GET(req: NextRequest) {
       .eq('status', 'approved')
       .not('order_id', 'is', null)
       .limit(ROW_LIMIT),
+    // Kas keluar mengikuti tanggal uang benar-benar keluar, terpisah dari tanggal beban di laba rugi.
+    admin
+      .from('finance_expenses')
+      .select('amount, spent_at')
+      .eq('status', 'approved')
+      .gte('spent_at', from)
+      .lte('spent_at', to)
+      .limit(ROW_LIMIT),
   ]);
-  const err = inv.error || pay.error || exp.error || linked.error;
+  const err = inv.error || pay.error || exp.error || linked.error || cashOut.error;
   if (err) return finFail(err);
 
   type InvRow = {
@@ -93,15 +112,16 @@ export async function GET(req: NextRequest) {
   };
   type PayRow = { amount: number; kind: string; paid_at: string };
   type ExpRow = {
-    amount: number; spent_at: string; order_id: string | null; category_id: string | null;
+    amount: number; spent_at: string; accrual_date?: string | null; order_id: string | null; category_id: string | null;
     finance_categories: { name: string; cost_type?: 'hpp' | 'operasional' } | null;
   };
   const invRows = (inv.data ?? []) as InvRow[];
   const payRows = (pay.data ?? []) as PayRow[];
   const expRows = (exp.data ?? []) as unknown as ExpRow[];
   const linkedRows = (linked.data ?? []) as { amount: number; order_id: string }[];
+  const cashOutRows = (cashOut.data ?? []) as { amount: number; spent_at: string }[];
 
-  const truncated = [invRows, payRows, expRows, linkedRows].some((r) => r.length >= ROW_LIMIT);
+  const truncated = [invRows, payRows, expRows, linkedRows, cashOutRows].some((r) => r.length >= ROW_LIMIT);
 
   const idx = new Map(monthKeys.map((k, i) => [k, i]));
   const months: ReportMonth[] = monthKeys.map((month) => ({
@@ -123,12 +143,12 @@ export async function GET(req: NextRequest) {
   const byCat = new Map<string, { id: string | null; name: string; cost_type: 'hpp' | 'operasional' | null; amount: number }>();
   let expensesLinked = 0;
   for (const r of expRows) {
-    const i = at(r.spent_at);
+    // Laba rugi: bulan beban (gaji Oktober yang dibayar 3 November tetap Oktober).
+    const i = at(r.accrual_date ?? r.spent_at);
     if (i !== undefined) {
       if (isHpp(r)) months[i].hpp += r.amount;
       else months[i].opex += r.amount;
       months[i].expenses += r.amount;
-      months[i].cash_out += r.amount;
     }
     const name = r.finance_categories?.name ?? 'Tanpa kategori';
     const key = r.category_id ?? name;
@@ -141,6 +161,11 @@ export async function GET(req: NextRequest) {
     cur.amount += r.amount;
     byCat.set(key, cur);
     if (r.order_id) expensesLinked += r.amount;
+  }
+  // Arus kas: bulan uang keluar.
+  for (const r of cashOutRows) {
+    const i = at(r.spent_at);
+    if (i !== undefined) months[i].cash_out += r.amount;
   }
   for (const m of months) {
     m.gross_profit = m.revenue - m.hpp;
@@ -191,6 +216,7 @@ export async function GET(req: NextRequest) {
     months,
     by_category: [...byCat.values()].sort((a, b) => b.amount - a.amount),
     cost_type_supported: costTypeSupported,
+    accrual_supported: accrualSupported,
     orders: orders.slice(0, 300),
     orders_total: orders.length,
   };

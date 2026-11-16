@@ -22,6 +22,15 @@ export const formatDateShort = (dateStr?: string | null): string => {
   return d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "2-digit" });
 };
 
+/** source_ref gaji ("gaji:jenis:2026-10:...") -> "Okt 2026". Selain gaji -> null. */
+export const salaryPeriodLabel = (sourceRef?: string | null): string | null => {
+  const m = /^gaji:[a-z]+:(\d{4})-(\d{2}):/.exec(sourceRef ?? "");
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, 1);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("id-ID", { month: "short", year: "numeric" });
+};
+
 export const formatDateTime = (iso?: string | null): string => {
   if (!iso) return "-";
   const d = new Date(iso);

@@ -246,6 +246,13 @@ export default function ReportTab({ version }: { version: number }) {
             </p>
           )}
 
+          {!data.accrual_supported && (
+            <p className="text-xs text-zinc-600 dark:text-zinc-300 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 px-4 py-3 leading-relaxed">
+              Gaji masih dihitung di bulan uang dicairkan. Jalankan <span className="font-mono">migration 020</span> agar gaji
+              masuk laba rugi di bulan periodenya.
+            </p>
+          )}
+
           {!data.cost_type_supported && (
             <p className="text-xs text-zinc-600 dark:text-zinc-300 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 px-4 py-3 leading-relaxed">
               Tipe kategori biaya (HPP / Operasional) belum aktif. Saat ini HPP hanya dihitung dari biaya yang dikaitkan ke order.
@@ -421,6 +428,7 @@ export default function ReportTab({ version }: { version: number }) {
           <div className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed space-y-1">
             <p><b>Cara membaca.</b> Pendapatan = nilai tagihan order yang masuk pada periode (berdasarkan tanggal masuk order), baik sudah dibayar maupun belum. HPP = pengeluaran Disetujui yang dikaitkan ke order atau berkategori HPP. Laba kotor = pendapatan − HPP. Biaya operasional = pengeluaran Disetujui lainnya. Laba bersih = laba kotor − biaya operasional.</p>
             <p>Arus kas hanya menghitung uang yang sudah diverifikasi masuk (dikurangi refund) dan pengeluaran yang disetujui, sehingga bisa berbeda dari laba ketika ada tagihan yang belum dibayar.</p>
+            <p>Gaji masuk laba rugi di bulan periodenya (gaji Oktober yang dibayar awal November tetap dihitung di Oktober), sedangkan arus kas mengikuti tanggal uang keluar (November).</p>
             <p>Pembayaran menunggu verifikasi, pengeluaran yang ditolak atau di-void tidak dihitung. Gaji baru ikut terhitung bila dicatat sebagai pengeluaran.</p>
           </div>
         </>

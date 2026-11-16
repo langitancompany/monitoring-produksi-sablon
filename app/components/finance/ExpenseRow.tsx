@@ -5,7 +5,7 @@ import { Paperclip, Check, X, Ban } from "lucide-react";
 import type { ExpenseRow as Row } from "@/lib/finance/types";
 import type { FinCaps } from "@/lib/finance/caps";
 import { ExpenseStatusBadge } from "./StatusBadge";
-import { formatDateShort, formatDateTime, formatRupiah } from "./utils";
+import { formatDateShort, formatDateTime, formatRupiah, salaryPeriodLabel } from "./utils";
 import type { useExpenseActions } from "./ExpenseActions";
 
 type Actions = ReturnType<typeof useExpenseActions>;
@@ -14,6 +14,7 @@ type Actions = ReturnType<typeof useExpenseActions>;
 export function ExpenseRow({ x, caps, actions }: { x: Row; caps: FinCaps; actions: Actions }) {
   const busy = actions.busyId === x.id;
   const dim = x.status === "void" || x.status === "rejected";
+  const salaryPeriod = salaryPeriodLabel(x.source_ref);
 
   return (
     <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3">
@@ -30,7 +31,8 @@ export function ExpenseRow({ x, caps, actions }: { x: Row; caps: FinCaps; action
           <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
             {x.category_name ?? "-"}
             {x.vendor_name ? ` · ${x.vendor_name}` : ""}
-            {x.account_name ? ` · ${x.account_name}` : ""} · {formatDateShort(x.spent_at)}
+            {x.account_name ? ` · ${x.account_name}` : ""} · Dibayar {formatDateShort(x.spent_at)}
+            {salaryPeriod ? ` · Gaji periode ${salaryPeriod}` : ""}
           </p>
         </div>
         <ExpenseStatusBadge status={x.status} />

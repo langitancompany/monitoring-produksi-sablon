@@ -295,6 +295,8 @@ export interface ReportData {
   }[];
   /** false bila kolom cost_type belum ada (migration 019 belum dijalankan). */
   cost_type_supported: boolean;
+  /** false bila migration 020 (tanggal beban gaji) belum dijalankan. */
+  accrual_supported: boolean;
   orders: ReportOrder[];
   orders_total: number;
 }
