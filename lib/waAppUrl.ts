@@ -9,3 +9,6 @@ export const linkVerifikasi = () => `${APP_URL}/?tab=finance&ftab=verify`;
 /** Membuka detail pesanan (Merchandise punya tab sendiri). */
 export const linkPesanan = (orderId: string, merchandise: boolean) =>
   `${APP_URL}/?tab=${merchandise ? 'merchandise' : 'orders'}&view=detail&orderId=${encodeURIComponent(orderId)}`;
+
+/** Link pendek ke gambar proofing (diarahkan oleh app/p/[kode]/route.ts). */
+export const linkProofing = (kode: string) => `${APP_URL}/p/${kode}`;

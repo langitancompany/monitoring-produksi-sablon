@@ -13,6 +13,13 @@ import { enqueueWa, type WaItem } from '@/lib/waQueue';
 import { getWaSettings } from '@/lib/waSettings';
 import { pesanProofing } from '@/lib/waMessages';
 import { getOrderSteps } from '@/lib/utils';
+import { linkProofing } from '@/lib/waAppUrl';
+import { randomBytes } from 'node:crypto';
+
+// Kode link pendek: 8 karakter acak huruf kecil + angka (tanpa 0/o/1/l yang mudah tertukar)
+const HURUF = 'abcdefghjkmnpqrstuvwxyz23456789';
+const buatKode = () =>
+  Array.from(randomBytes(8), (b) => HURUF[b % HURUF.length]).join('');
 
 export const dynamic = 'force-dynamic';
 
@@ -48,20 +55,26 @@ export async function POST(request: NextRequest) {
       .update({ status: 'diganti' })
       .eq('order_id', o.id).eq('step_id', stepId).eq('status', 'menunggu');
 
-    const { data: req, error: reqErr } = await db
-      .from('wa_proofing_requests')
-      .insert({
-        order_id: o.id,
-        step_id: stepId,
-        kode_produksi: o.kode_produksi,
-        file_url: step.fileUrl,
-        numbers: cfg.notifyProofingNumbers,
-      })
-      .select('id')
-      .single();
+    const dasar = {
+      order_id: o.id,
+      step_id: stepId,
+      kode_produksi: o.kode_produksi,
+      file_url: step.fileUrl,
+      numbers: cfg.notifyProofingNumbers,
+    };
+    // Link pendek: butuh kolom short_code (migration 022). Belum dijalankan → pakai link panjang apa adanya.
+    const kodePendek = buatKode();
+    let { data: req, error: reqErr } = await db
+      .from('wa_proofing_requests').insert({ ...dasar, short_code: kodePendek }).select('id').single();
+    let linkGambar: string = linkProofing(kodePendek);
+    if (reqErr && /short_code/i.test(reqErr.message)) {
+      console.warn('wa/proofing: kolom short_code belum ada (jalankan migration 022) → memakai link panjang');
+      ({ data: req, error: reqErr } = await db.from('wa_proofing_requests').insert(dasar).select('id').single());
+      linkGambar = step.fileUrl;
+    }
     if (reqErr || !req) throw new Error(reqErr?.message ?? 'Gagal membuat permintaan proofing');
 
-    const message = pesanProofing(o, step.name, step.uploadedBy, step.fileUrl);
+    const message = pesanProofing(o, step.name, step.uploadedBy, linkGambar);
     const items: WaItem[] = cfg.notifyProofingNumbers.map((nomor) => ({
       order_id: o.id as string,
       target_type: 'user',
