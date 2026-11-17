@@ -3,7 +3,7 @@
 //   Header: Authorization: Bearer <token gateway>  (sama dengan token di Pengaturan → WhatsApp Bot)
 //   Body  : { from, chatJid, messageId, quotedId, text }
 //
-//   "siap produksi"        → step Proofing ditandai selesai (ACC)
+//   "ACC"                  → step Proofing ditandai selesai (ACC)
 //   "Revisi: <alasan>"     → step Proofing masuk mode revisi, alasan = teks setelah titik dua
 //
 // Pesan lain / dari nomor yang tidak terdaftar diabaikan TANPA balasan (handled: false).
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       console.warn(`[proofing-reply] diabaikan: ${alasan} (from=${b.from ?? '-'}, quoted=${b.quotedId ?? '-'})`);
       return NextResponse.json({ handled: false, alasan });
     };
-    if (!balasan) return abaikan('teks bukan format siap produksi / Revisi:');
+    if (!balasan) return abaikan('teks bukan format ACC / Revisi:');
     if (!cfg.enabled) return abaikan('bot WhatsApp nonaktif di Pengaturan');
 
     const db = getSupabaseAdmin();
@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
       balasan.jenis === 'acc'
         ? {
             order_id: o.id, kode_produksi: kode, category: 'STATUS', event_name: 'Proofing Disetujui via WhatsApp',
-            description: `Step "${step.name}" disetujui (siap produksi)`,
+            description: `Step "${step.name}" disetujui (ACC)`,
             old_value: statusLama, new_value: statusPesanan, oleh, metadata: { via: 'whatsapp', from: nomorBalas },
           }
         : {
@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
       const { data: users } = await db.from('users').select('id').in('role', PENERIMA_NOTIF_APP);
       if (users?.length) {
         const judul = balasan.jenis === 'acc' ? `Proofing disetujui: ${kode}` : `Revisi proofing: ${kode}`;
-        const isi = balasan.jenis === 'acc' ? 'Siap produksi (disetujui via WhatsApp).' : balasan.alasan;
+        const isi = balasan.jenis === 'acc' ? 'Disetujui (ACC) via WhatsApp.' : balasan.alasan;
         await db.from('notifications').insert(
           users.map((u: any) => ({ user_id: u.id, title: judul, message: isi, order_id: o.id, is_read: false })),
         );

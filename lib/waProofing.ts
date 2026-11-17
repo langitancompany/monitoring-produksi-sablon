@@ -12,7 +12,7 @@ const bersih = (t: string) =>
 
 /**
  * Membaca isi balasan WhatsApp:
- *   "siap produksi"          → ACC (huruf besar/kecil bebas, tanda baca di ujung diabaikan)
+ *   "acc"                    → ACC (huruf besar/kecil bebas, tanda baca di ujung diabaikan)
  *   "Revisi: warna kurang"   → revisi, alasan = teks setelah titik dua pertama
  *   selain itu               → null (pesan biasa, TIDAK ditanggapi bot)
  */
@@ -20,7 +20,7 @@ export function bacaBalasanProofing(teks: string | null | undefined): BalasanPro
   const t = bersih(String(teks ?? ''));
   if (!t) return null;
 
-  if (/^siap\s+produksi[\s.!]*$/i.test(t)) return { jenis: 'acc' };
+  if (/^acc[\s.!]*$/i.test(t)) return { jenis: 'acc' };
 
   const m = t.match(/^revisi\s*:\s*([\s\S]*)$/i);
   if (m) {

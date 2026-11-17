@@ -1,7 +1,7 @@
 -- 021 — Persetujuan PROOFING lewat WhatsApp (database SABLON, schema monitoring_sablon).
 --
 -- Alur: proofing diupload → bot mengirim link gambar ke nomor penerima "Persetujuan proofing"
--- → penerima membalas "siap produksi" (ACC) atau "Revisi: alasan" (revisi).
+-- → penerima membalas "ACC" atau "Revisi: alasan" (revisi).
 --
 -- Aman dijalankan ulang. Hanya MENAMBAH kolom / tabel; data lama tidak diubah.
 --

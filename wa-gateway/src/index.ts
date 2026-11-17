@@ -56,7 +56,7 @@ const SCHEMA = env('SUPABASE_SCHEMA', 'monitoring_sablon');
 const TOKEN = env('GATEWAY_TOKEN');
 const AUTH_DIR = env('AUTH_DIR', '/data/auth');
 const PORT = Number(env('PORT', '3100'));
-// URL aplikasi (mis. https://sablon.langitan.co). Dipakai meneruskan balasan proofing ("siap produksi" /
+// URL aplikasi (mis. https://sablon.langitan.co). Dipakai meneruskan balasan proofing ("ACC" /
 // "Revisi: ...") ke aplikasi. Kosong = fitur balasan nonaktif, pengiriman pesan tetap berjalan.
 const APP_URL = (process.env.APP_URL ?? '').trim().replace(/\/+$/, '');
 const DELAY_MIN = Number(env('SEND_DELAY_MIN', '3'));
@@ -267,7 +267,7 @@ const teksPesan = (m: any): string =>
 
 // Cepat & murah: hanya pesan yang tampak seperti balasan proofing yang diteruskan ke aplikasi.
 // Penilaian akhir (nomor terdaftar, pesanan yang dimaksud) dilakukan aplikasi.
-const mirip = (t: string) => /^\s*(siap\s+produksi|revisi\s*:)/i.test(t);
+const mirip = (t: string) => /^\s*(acc[\s.!]*$|revisi\s*:)/i.test(t);
 
 // Pengirim bisa berupa JID nomor (62xxx@s.whatsapp.net) atau LID (xxxx@lid). LID dipetakan ke nomor
 // lewat remoteJidAlt / pemetaan Baileys. Gagal dipetakan → null (aplikasi masih bisa mencocokkan lewat swipe-reply).
@@ -772,7 +772,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => log.info(`HTTP gateway di port ${PORT}`));
 if (APP_URL) log.info({ appUrl: APP_URL }, 'balasan proofing akan diteruskan ke aplikasi');
-else log.warn('APP_URL belum diisi → balasan proofing (siap produksi / Revisi:) TIDAK diteruskan ke aplikasi');
+else log.warn('APP_URL belum diisi → balasan proofing (ACC / Revisi:) TIDAK diteruskan ke aplikasi');
 
 // ───────────────────────── Start & shutdown ─────────────────────────
 

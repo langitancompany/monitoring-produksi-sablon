@@ -12,7 +12,7 @@ export interface WaSettings {
   // Nomor pribadi penerima (sudah 62xxx). Dua daftar terpisah; kosong = jenis itu tidak dikirim.
   notifyVerifikasiNumbers: string[];
   notifyKendalaNumbers: string[];
-  // Nomor yang dikirimi proofing dan boleh membalas "siap produksi" / "Revisi: ..."
+  // Nomor yang dikirimi proofing dan boleh membalas "ACC" / "Revisi: ..."
   notifyProofingNumbers: string[];
 }
 

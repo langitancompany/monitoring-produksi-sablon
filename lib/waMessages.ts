@@ -227,7 +227,7 @@ export const pesanKendalaPengelola = (
 
 
 // 8) Proofing menunggu persetujuan → nomor penerima persetujuan proofing.
-// Dibalas "siap produksi" (ACC) atau "Revisi: alasan". Baris "Lihat gambar" memuat link gambar.
+// Dibalas "ACC" atau "Revisi: alasan". Baris "Lihat gambar" memuat link gambar.
 export const pesanProofing = (o: WaOrder, namaStep: string, pengupload: string | undefined, link: string) =>
   [
     '🖼️ *PROOFING MENUNGGU PERSETUJUAN*',
@@ -239,7 +239,7 @@ export const pesanProofing = (o: WaOrder, namaStep: string, pengupload: string |
     `Lihat gambar:\n${link}`,
     '',
     'Balas pesan ini dengan:',
-    '✅ *siap produksi* → untuk menyetujui',
+    '✅ *ACC* → untuk menyetujui',
     '✏️ *Revisi: (alasan revisi)* → untuk meminta revisi',
   ].filter((x): x is string => x !== null).join('\n');
 
@@ -260,7 +260,7 @@ export const pesanProofingBanyak = (daftar: string[]) =>
     `Ada ${daftar.length} proofing yang menunggu persetujuan:`,
     ...daftar.map((k) => `• ${k}`),
     '',
-    'Supaya tidak salah pesanan, *balas langsung (swipe/reply)* pada pesan proofing yang dimaksud, lalu tulis *siap produksi* atau *Revisi: (alasan)*.',
+    'Supaya tidak salah pesanan, *balas langsung (swipe/reply)* pada pesan proofing yang dimaksud, lalu tulis *ACC* atau *Revisi: (alasan)*.',
   ].join('\n');
 
 export const pesanProofingSudah = (kode: string, keadaan: 'acc' | 'revisi' | 'diganti') =>

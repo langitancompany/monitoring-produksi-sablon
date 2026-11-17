@@ -3,8 +3,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { bacaBalasanProofing, teksDariPesan } from "../lib/waProofing";
 
-test("siap produksi → ACC (huruf besar/kecil & tanda baca bebas)", () => {
-  for (const t of ["siap produksi", "Siap Produksi", "  SIAP   PRODUKSI! ", "siap produksi.", "\u200esiap produksi"]) {
+test("acc → ACC (huruf besar/kecil & tanda baca bebas)", () => {
+  for (const t of ["acc", "Acc", "ACC", "  ACC! ", "acc.", "\u200eAcc"]) {
     assert.deepEqual(bacaBalasanProofing(t), { jenis: "acc" }, t);
   }
 });
@@ -22,7 +22,7 @@ test("Revisi tanpa alasan → minta alasan", () => {
 });
 
 test("pesan biasa diabaikan", () => {
-  for (const t of ["", "ok", "siap", "siap produksi besok ya", "tolong revisi", "revisi warna", null, undefined]) {
+  for (const t of ["", "ok", "siap", "siap produksi", "acc dulu ya", "access", "tolong revisi", "revisi warna", null, undefined]) {
     assert.equal(bacaBalasanProofing(t as any), null, String(t));
   }
 });

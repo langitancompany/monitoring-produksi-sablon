@@ -666,7 +666,7 @@ export default function WhatsAppSettings() {
           <DaftarNomor
             icon={<ImageIcon size={16} />}
             judul="Persetujuan proofing"
-            deskripsi="Saat proofing diupload, nomor ini menerima link gambar. Balas “siap produksi” untuk ACC, atau “Revisi: alasan” untuk meminta revisi."
+            deskripsi="Saat proofing diupload, nomor ini menerima link gambar. Balas “ACC” untuk menyetujui, atau “Revisi: alasan” untuk meminta revisi."
             kosong="Belum ada nomor. Proofing harus dikonfirmasi manual di aplikasi."
             nomor={proofingList}
             onChange={setProofingList}
