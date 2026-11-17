@@ -296,13 +296,13 @@ async function terusPesanMasuk(m: any) {
   if (!mirip(teks)) return;
 
   // Mulai dari sini pesan dikenali sebagai balasan proofing: setiap kegagalan WAJIB terlihat di log
-  log.info({ jid, altJid: key.remoteJidAlt ?? null, teks: teks.slice(0, 60) }, 'balasan proofing masuk');
+  const ctx = m.message?.extendedTextMessage?.contextInfo ?? m.message?.imageMessage?.contextInfo;
+  log.info({ jid, altJid: key.remoteJidAlt ?? null, teks: teks.slice(0, 60), swipe: !!ctx?.stanzaId }, 'balasan proofing masuk');
   if (!APP_URL) {
     log.error('APP_URL belum diisi di environment wa-gateway → balasan TIDAK diteruskan ke aplikasi');
     return;
   }
 
-  const ctx = m.message?.extendedTextMessage?.contextInfo ?? m.message?.imageMessage?.contextInfo;
   const pengirim = await nomorPengirim(key);
   if (!pengirim) log.warn({ jid }, 'nomor pengirim tidak bisa dipetakan dari ID WhatsApp (LID); hanya balasan swipe yang bisa dicocokkan');
   const body = {

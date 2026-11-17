@@ -79,6 +79,8 @@ export async function POST(request: NextRequest) {
         const { data } = await db.from('wa_proofing_requests').select('*').eq('id', id).maybeSingle();
         req = data;
         nomorBalas = target;
+      } else {
+        console.warn(`[proofing-reply] swipe tidak cocok: pesan ${b.quotedId} ${out ? 'ditemukan di wa_outbox tapi bukan pesan proofing / nomor tidak terdaftar' : 'TIDAK ditemukan di wa_outbox (kolom wa_message_id kosong untuk pesan itu)'}`);
       }
     }
 
