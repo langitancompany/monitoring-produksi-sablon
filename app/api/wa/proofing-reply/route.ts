@@ -41,7 +41,12 @@ export async function POST(request: NextRequest) {
       from?: string | null; chatJid?: string; messageId?: string; quotedId?: string | null; text?: string;
     };
     const balasan = bacaBalasanProofing(b.text);
-    if (!balasan || !cfg.enabled) return NextResponse.json({ handled: false });
+    const abaikan = (alasan: string) => {
+      console.warn(`[proofing-reply] diabaikan: ${alasan} (from=${b.from ?? '-'}, quoted=${b.quotedId ?? '-'})`);
+      return NextResponse.json({ handled: false, alasan });
+    };
+    if (!balasan) return abaikan('teks bukan format siap produksi / Revisi:');
+    if (!cfg.enabled) return abaikan('bot WhatsApp nonaktif di Pengaturan');
 
     const db = getSupabaseAdmin();
     const penerima = new Set(cfg.notifyProofingNumbers);
@@ -79,7 +84,8 @@ export async function POST(request: NextRequest) {
 
     if (!req) {
       // Tanpa swipe: hanya nomor terdaftar yang dilayani; nomor lain diabaikan tanpa balasan
-      if (!dari || !penerima.has(dari)) return NextResponse.json({ handled: false });
+      if (!dari) return abaikan('nomor pengirim tidak diketahui dan pesan tidak men-swipe pesan proofing (atau migration 021 belum dijalankan)');
+      if (!penerima.has(dari)) return abaikan(`nomor ${dari} tidak ada di daftar Persetujuan proofing`);
 
       const { data: menunggu } = await db
         .from('wa_proofing_requests')
@@ -99,7 +105,7 @@ export async function POST(request: NextRequest) {
       req = daftar[0];
     }
 
-    if (!req || !nomorBalas) return NextResponse.json({ handled: false });
+    if (!req || !nomorBalas) return abaikan('permintaan proofing tidak ditemukan');
     const kode = String(req.kode_produksi ?? '');
 
     if (balasan.jenis === 'revisi_kosong') {

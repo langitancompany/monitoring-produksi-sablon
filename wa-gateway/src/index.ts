@@ -167,10 +167,23 @@ async function startSocket() {
 
     s.ev.on('creds.update', saveCreds);
 
-    // Pesan masuk: hanya "notify" (pesan baru), bukan sinkron riwayat
+    // Pesan masuk. "notify" = pesan baru; "append" = pesan yang tertahan saat gateway sempat putus.
+    // Pesan lebih tua dari 10 menit diabaikan supaya sinkron riwayat tidak memicu balasan lama.
     s.ev.on('messages.upsert', ({ messages, type }) => {
-      if (type !== 'notify') return;
-      for (const m of messages) void terusPesanMasuk(m).catch((e) => log.error(e));
+      for (const m of messages) {
+        const k = m?.key;
+        if (!k || k.fromMe) continue;
+        const umurDetik = Date.now() / 1000 - Number(m.messageTimestamp ?? 0);
+        const teks = teksPesan(m.message).replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, '');
+        // Diagnosa: isi pesan TIDAK dicatat, hanya jenis & apakah cocok format balasan proofing
+        log.info(
+          { tipe: type, jenisId: String(k.remoteJid ?? '').split('@')[1] ?? null, adaAlt: !!k.remoteJidAlt, cocok: mirip(teks), umurDetik: Math.round(umurDetik) },
+          'pesan masuk',
+        );
+        if (type !== 'notify' && type !== 'append') continue;
+        if (umurDetik > 600) continue;
+        void terusPesanMasuk(m).catch((e) => log.error(e));
+      }
     });
 
     // Anggota/pengaturan grup berubah → buang cache-nya (diambil ulang saat kirim berikutnya)
@@ -274,7 +287,6 @@ async function nomorPengirim(key: any): Promise<string | null> {
 }
 
 async function terusPesanMasuk(m: any) {
-  if (!APP_URL) return;
   const key = m?.key;
   if (!key || key.fromMe || !m.message) return;
   const jid: string = key.remoteJid ?? '';
@@ -283,9 +295,18 @@ async function terusPesanMasuk(m: any) {
   const teks = teksPesan(m.message).replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, '');
   if (!mirip(teks)) return;
 
+  // Mulai dari sini pesan dikenali sebagai balasan proofing: setiap kegagalan WAJIB terlihat di log
+  log.info({ jid, altJid: key.remoteJidAlt ?? null, teks: teks.slice(0, 60) }, 'balasan proofing masuk');
+  if (!APP_URL) {
+    log.error('APP_URL belum diisi di environment wa-gateway → balasan TIDAK diteruskan ke aplikasi');
+    return;
+  }
+
   const ctx = m.message?.extendedTextMessage?.contextInfo ?? m.message?.imageMessage?.contextInfo;
+  const pengirim = await nomorPengirim(key);
+  if (!pengirim) log.warn({ jid }, 'nomor pengirim tidak bisa dipetakan dari ID WhatsApp (LID); hanya balasan swipe yang bisa dicocokkan');
   const body = {
-    from: await nomorPengirim(key),
+    from: pengirim,
     chatJid: jid,
     messageId: key.id ?? null,
     quotedId: ctx?.stanzaId ?? null,
@@ -750,6 +771,8 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => log.info(`HTTP gateway di port ${PORT}`));
+if (APP_URL) log.info({ appUrl: APP_URL }, 'balasan proofing akan diteruskan ke aplikasi');
+else log.warn('APP_URL belum diisi → balasan proofing (siap produksi / Revisi:) TIDAK diteruskan ke aplikasi');
 
 // ───────────────────────── Start & shutdown ─────────────────────────
 
