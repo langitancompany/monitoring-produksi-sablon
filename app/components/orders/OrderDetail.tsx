@@ -9,12 +9,20 @@ import OrderDetailHeader from "./detail/OrderDetailHeader";
 import DetailUkuran from "./detail/DetailUkuran";
 import DetailGesut from "./detail/DetailGesut"; // ── TAMBAHAN ──
 import DetailMerchandise from "./detail/DetailMerchandise"; // ── TAMBAHAN ──
-import { getOrderSteps, isMerchandiseOrder } from "@/lib/utils";
+import { isMerchandiseOrder } from "@/lib/utils";
 import StepApproval from "./detail/StepApproval";
 import StepProduksi from "./detail/StepProduksi";
 import StepFinishing from "./detail/StepFinishing";
 import OrderFinancePanel from "../finance/OrderFinancePanel";
 import { getFinanceCaps } from "@/lib/finance/caps";
+import {
+  getFinishingOwnershipBlock,
+  getPackingBlock,
+  getQcBlock,
+  getShippingBlock,
+  hasProductionStarted,
+  isOrderTeamMember,
+} from "@/lib/stepAccess";
 
 interface OrderDetailProps {
   currentUser: UserData;
@@ -77,10 +85,6 @@ export default function OrderDetail({
   // ── TAMBAHAN ── pesanan merchandise: detail/approval/finishing sedikit berbeda
   const isMerchandise = isMerchandiseOrder(order);
   const isManual = jenisProd === "manual" || jenisProd === "sablon";
-  // Manual / DTF / Merchandise dipilih otomatis lewat helper
-  const currentSteps = getOrderSteps(order);
-  const isProductionFinished =
-    currentSteps.length > 0 && currentSteps.every((s) => s.isCompleted);
   const isRevisi = currentStatus === "Revisi";
 
   // produksi.edit  → update step & lapor kendala
@@ -92,31 +96,37 @@ export default function OrderDetail({
   // harga_pesanan.edit → isi harga, DP, status pembayaran & upload bukti      ── TAMBAHAN ──
   // harga_pesanan.delete → hapus bukti pembayaran                            ── TAMBAHAN ──
 
+  // User non-management hanya boleh mengisi step pesanan yang menjadikannya PJ/Helper
+  // (lihat lib/stepAccess.ts). Urutan antar-step dicek per step di StepProduksi.
+  const isOrderTeam = isOrderTeamMember(order, currentUser);
   const canUpdateStep =
-    isSuperAdmin ||
-    (perms?.produksi?.edit &&
-      (currentStatus === "On Process" ||
-        currentStatus === "Revisi" ||
-        currentStatus === "Ada Kendala"));
-  const canCheckQC =
-    isSuperAdmin ||
-    (perms?.finishing?.edit &&
-      (currentStatus === "Finishing" || isProductionFinished));
-  const canUpdatePacking =
-    isSuperAdmin || (perms?.finishing?.edit && order.finishing_qc.isPassed);
+    isOrderTeam &&
+    (isSuperAdmin ||
+      (perms?.produksi?.edit &&
+        (currentStatus === "On Process" ||
+          currentStatus === "Revisi" ||
+          currentStatus === "Ada Kendala")));
+  // QC, packing, dan pengiriman: urutan + hanya tim QC/Finishing (lib/stepAccess.ts).
+  // Super admin tetap terikat urutan; izin "finishing.edit" dilewati seperti sebelumnya.
+  const canFinish = isSuperAdmin || !!perms?.finishing?.edit;
+  const canCheckQC = canFinish && !getQcBlock(order, currentUser);
+  const canUpdatePacking = canFinish && !getPackingBlock(order, currentUser);
   const canUpdateShipping =
-    isSuperAdmin ||
-    (perms?.finishing?.edit &&
-      (currentStatus === "Kirim" || currentStatus === "Selesai"));
+    canFinish && !getShippingBlock(order, currentUser, "kirim");
+  const isFinishingTeam = !getFinishingOwnershipBlock(currentUser);
   // ── TAMBAHAN ── pesanan merchandise diatur lewat permission `merchandise`,
   // pesanan kaos/sablon tetap lewat `orders`.
   const orderPerms = isMerchandise ? perms?.merchandise : perms?.orders;
   const canEditOrderInfo = isSuperAdmin || orderPerms?.edit;
   const canDeleteOrder = isSuperAdmin || orderPerms?.delete;
   const canUploadApproval = isSuperAdmin || perms?.produksi?.create;
-  const canDeleteApprovalFile = isSuperAdmin || perms?.produksi?.delete;
-  const canResetQC = isSuperAdmin || perms?.finishing?.create;
-  const canDeleteFinishingFile = isSuperAdmin || perms?.finishing?.delete;
+  // Approval tidak bisa dihapus bila produksi/tahap sesudahnya sudah jalan.
+  const canDeleteApprovalFile =
+    (isSuperAdmin || perms?.produksi?.delete) && !hasProductionStarted(order);
+  const canResetQC =
+    isFinishingTeam && (isSuperAdmin || perms?.finishing?.create);
+  const canDeleteFinishingFile =
+    isFinishingTeam && (isSuperAdmin || perms?.finishing?.delete);
   const financeCaps = getFinanceCaps(currentUser);
 
   // ─── Hook ─────────────────────────────────────────────────────────────────

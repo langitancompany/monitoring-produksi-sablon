@@ -4,6 +4,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { getDocumentLabel, generateStorageFilename, getOrderSteps } from '@/lib/utils';
 import imageCompression from 'browser-image-compression';
 import { Order, UserData } from '@/types';
+import { getUploadBlock } from '@/lib/stepAccess';
 
 interface UploadContextState {
   type: string;
@@ -76,6 +77,18 @@ export function useUpload({
     showAlert('Format Tidak Didukung', 'Mockup harus berupa gambar (JPG/PNG).', 'error');
     if (fileInputRef.current) fileInputRef.current.value = '';
     return;
+  }
+
+  // Step produksi, packing, dan resi: harus sesuai urutan & bagian user (lib/stepAccess.ts).
+  // Dicek di sini juga, bukan hanya di tombol, supaya tidak lolos lewat tampilan yang usang.
+  if (currentUser) {
+    const alasan = getUploadBlock(order, currentUser, uploadContext.type, uploadContext.stepId);
+    if (alasan) {
+      showAlert('Belum Bisa Diisi', alasan, 'error');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setUploadContext(null);
+      return;
+    }
   }
 
   setIsUploading(true);

@@ -17,7 +17,8 @@ import {
   User,
 } from "lucide-react";
 import ProductionNotes from "./ProductionNotes";
-import { getOrderSteps, isMerchandiseOrder } from "@/lib/utils";
+import { getOrderSteps } from "@/lib/utils";
+import { getStepSequenceBlock, hasLaterStepStarted } from "@/lib/stepAccess";
 
 interface StepProduksiProps {
   order: Order;
@@ -68,8 +69,6 @@ export default function StepProduksi({
 }: StepProduksiProps) {
   // Manual / DTF / Merchandise dipilih otomatis dari jenis produksi pesanan.
   const currentSteps = getOrderSteps(order);
-  // Merchandise: langkah dikerjakan berurutan (cetak dulu, baru produksi).
-  const isMerchandise = isMerchandiseOrder(order);
 
   return (
     <div className="bg-white dark:bg-zinc-950 p-5 md:p-6 rounded-xl border border-zinc-200 dark:border-zinc-800">
@@ -169,12 +168,11 @@ export default function StepProduksi({
       <div className="space-y-4">
         {currentSteps.map((s, stepIdx) => {
           const step = s as any;
-          // Khusus merchandise: langkah baru bisa ditandai bila langkah sebelumnya sudah selesai,
-          // dan langkah yang sudah selesai tidak bisa di-undo bila langkah sesudahnya sudah selesai.
-          const isLocked =
-            isMerchandise && currentSteps.slice(0, stepIdx).some((p) => !p.isCompleted);
-          const hasLaterDone =
-            isMerchandise && currentSteps.slice(stepIdx + 1).some((n) => n.isCompleted);
+          // Semua jenis produksi dikerjakan berurutan: approval dulu, lalu step 1, 2, dst.
+          // Step yang sudah selesai tidak bisa di-undo bila step sesudahnya sudah dikerjakan.
+          const lockReason = getStepSequenceBlock(order, step.id);
+          const isLocked = lockReason !== null;
+          const hasLaterDone = hasLaterStepStarted(order, step.id);
           const isProofingStep = step.name.toLowerCase().includes("proofing");
           const hasFileUploaded = !!step.fileUrl;
           const isStepCompleted = step.isCompleted;
@@ -227,6 +225,12 @@ export default function StepProduksi({
                     </div>
                   )}
 
+                  {isLocked && !step.isCompleted && (
+                    <div className="mt-1 text-[10px] text-zinc-500 dark:text-zinc-400 italic">
+                      {lockReason}
+                    </div>
+                  )}
+
                   {step.fileUrl && (
                     <a
                       href={step.fileUrl}
@@ -257,7 +261,9 @@ export default function StepProduksi({
                     {isProofingStep && isInRevisionMode && canUpdateStep ? (
                       <button
                         onClick={() => onTriggerUpload("step", step.id)}
-                        className="bg-orange-600 text-white px-4 py-2 rounded-md text-xs font-semibold flex items-center justify-center gap-2 hover:bg-orange-700 transition-colors duration-150 w-full sm:w-auto"
+                        disabled={isLocked}
+                        title={lockReason ?? undefined}
+                        className="bg-orange-600 text-white px-4 py-2 rounded-md text-xs font-semibold flex items-center justify-center gap-2 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 w-full sm:w-auto"
                       >
                         <Upload className="w-4 h-4" /> Upload Ulang (Revisi)
                       </button>
@@ -271,14 +277,16 @@ export default function StepProduksi({
                                 isEditingRevisi ? null : step.id,
                               )
                             }
-                            disabled={isBusy}
+                            disabled={isBusy || isLocked}
+                            title={lockReason ?? undefined}
                             className="flex-1 sm:flex-none bg-white dark:bg-zinc-900 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 px-3 py-2 rounded-md text-xs font-semibold hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 flex items-center justify-center gap-1.5"
                           >
                             <ThumbsDown className="w-3.5 h-3.5" /> Revisi
                           </button>
                           <button
                             onClick={() => onStatusStep(step.id)}
-                            disabled={isBusy}
+                            disabled={isBusy || isLocked}
+                            title={lockReason ?? undefined}
                             className="flex-1 sm:flex-none bg-[#124540] text-white px-3 py-2 rounded-md text-xs font-semibold hover:bg-[#0d332f] disabled:opacity-70 disabled:cursor-not-allowed transition-colors duration-150 flex items-center justify-center gap-1.5"
                           >
                             {isSavingStep ? (
@@ -298,11 +306,7 @@ export default function StepProduksi({
                         <button
                           onClick={() => onStatusStep(step.id)}
                           disabled={isBusy || isLocked}
-                          title={
-                            isLocked
-                              ? "Selesaikan langkah sebelumnya terlebih dahulu"
-                              : undefined
-                          }
+                          title={lockReason ?? undefined}
                           className="bg-[#124540] text-white text-xs px-4 py-2 rounded-md font-semibold hover:bg-[#0d332f] disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 w-full sm:w-auto flex items-center justify-center gap-2"
                         >
                           {isSavingStep ? (
@@ -318,7 +322,9 @@ export default function StepProduksi({
                       ) : (
                         <button
                           onClick={() => onTriggerUpload("step", step.id)}
-                          className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-4 py-2 rounded-md text-xs font-semibold text-zinc-600 dark:text-zinc-300 flex items-center justify-center gap-2 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors duration-150 w-full sm:w-auto"
+                          disabled={isLocked}
+                          title={lockReason ?? undefined}
+                          className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-4 py-2 rounded-md text-xs font-semibold text-zinc-600 dark:text-zinc-300 flex items-center justify-center gap-2 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 w-full sm:w-auto"
                         >
                           <Camera className="w-4 h-4" />{" "}
                           {step.fileUrl ? "Ganti Foto" : "Upload Foto"}

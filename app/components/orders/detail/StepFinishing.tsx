@@ -11,6 +11,13 @@ import {
   Trash2,
 } from "lucide-react";
 import ProductionNotes from "./ProductionNotes";
+import {
+  getFinishingDeleteBlock,
+  getPackingBlock,
+  getQcBlock,
+  getQcResetBlock,
+  getShippingBlock,
+} from "@/lib/stepAccess";
 
 interface StepFinishingProps {
   order: Order;
@@ -52,6 +59,15 @@ export default function StepFinishing({
   onTriggerUpload,
   onFileDelete,
 }: StepFinishingProps) {
+  // Alasan tiap tahap belum bisa diisi / dihapus (urutan + bagian user, lib/stepAccess.ts)
+  const qcBlock = getQcBlock(order, currentUser);
+  const packingBlock = getPackingBlock(order, currentUser);
+  const kirimBlock = getShippingBlock(order, currentUser, "kirim");
+  const terimaBlock = getShippingBlock(order, currentUser, "terima");
+  const qcResetBlock = getQcResetBlock(order);
+  const packingDeleteBlock = getFinishingDeleteBlock(order, "packing");
+  const kirimDeleteBlock = getFinishingDeleteBlock(order, "shipping_kirim");
+
   return (
     <>
       {/* --- STEP 3: QC & PACKING --- */}
@@ -101,7 +117,7 @@ export default function StepFinishing({
                 <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
                   Oleh: {order.finishing_qc.checkedBy}
                 </p>
-                {canResetQC && (
+                {canResetQC && !qcResetBlock && (
                   <button
                     onClick={onDeleteQC}
                     className="text-zinc-400 hover:text-red-600 dark:hover:text-red-400 text-[10px] mt-3 hover:underline transition-colors duration-150"
@@ -152,7 +168,7 @@ export default function StepFinishing({
             ) : (
               <div className="flex-1 flex items-center justify-center text-center py-6 min-h-[140px]">
                 <span className="text-xs text-zinc-400 dark:text-zinc-600 italic">
-                  {!isRevisi ? "Menunggu produksi selesai..." : "Sedang Revisi"}
+                  {qcBlock ?? (!isRevisi ? "Menunggu produksi selesai..." : "Sedang Revisi")}
                 </span>
               </div>
             )}
@@ -193,7 +209,7 @@ export default function StepFinishing({
                       Selesai
                     </span>
                   </div>
-                  {canDeleteFinishingFile && (
+                  {canDeleteFinishingFile && !packingDeleteBlock && (
                     <button
                       onClick={() => onFileDelete("packing")}
                       className="flex items-center gap-1 text-[10px] font-semibold text-zinc-400 hover:text-red-600 dark:hover:text-red-400 px-1.5 py-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors duration-150"
@@ -238,7 +254,7 @@ export default function StepFinishing({
                   <div className="text-center flex flex-col items-center gap-2">
                     <Package className="w-6 h-6 text-zinc-300 dark:text-zinc-600" />
                     <p className="text-xs text-zinc-400 dark:text-zinc-600 italic">
-                      Menunggu QC Lolos
+                      {packingBlock ?? "Menunggu QC Lolos"}
                     </p>
                   </div>
                 )}
@@ -281,7 +297,7 @@ export default function StepFinishing({
                 >
                   Lihat Resi
                 </a>
-                {canDeleteFinishingFile && (
+                {canDeleteFinishingFile && !kirimDeleteBlock && (
                   <button
                     onClick={() => onFileDelete("shipping_kirim")}
                     className="text-zinc-400 hover:text-red-600 dark:hover:text-red-400 p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors duration-150"
@@ -299,9 +315,10 @@ export default function StepFinishing({
               </button>
             ) : (
               <span className="text-[10px] text-zinc-300 dark:text-zinc-600 italic">
-                {showPacking
-                  ? "Menunggu pengerjaan & packing selesai..."
-                  : "Menunggu QC lolos..."}
+                {kirimBlock ??
+                  (showPacking
+                    ? "Menunggu pengerjaan & packing selesai..."
+                    : "Menunggu QC lolos...")}
               </span>
             )}
           </div>
@@ -329,7 +346,7 @@ export default function StepFinishing({
                   </button>
                 )}
               </div>
-            ) : canUpdateShipping && order.shipping.bukti_kirim ? (
+            ) : canUpdateShipping && !terimaBlock ? (
               <button
                 onClick={() => onTriggerUpload("shipping_terima")}
                 className="text-[10px] md:text-xs bg-[#124540] text-white px-3 py-2 rounded-md font-semibold hover:bg-[#0d332f] transition-colors duration-150"
@@ -338,7 +355,7 @@ export default function StepFinishing({
               </button>
             ) : (
               <span className="text-[10px] text-zinc-300 dark:text-zinc-600 italic">
-                -
+                {terimaBlock ?? "-"}
               </span>
             )}
           </div>

@@ -3,6 +3,16 @@
 import { useState, useCallback } from 'react';
 import { Order, UserData, KendalaNote } from '@/types';
 import { getOrderSteps } from '@/lib/utils';
+import {
+  getFinishingDeleteBlock,
+  getFinishingOwnershipBlock,
+  getQcBlock,
+  getQcResetBlock,
+  getStepBlock,
+  getStepOwnershipBlock,
+  hasLaterStepStarted,
+  hasProductionStarted,
+} from '@/lib/stepAccess';
 
 // Sama persis dengan signature writeLog di useOrders.ts — didefinisikan
 // ulang di sini karena writeLog tidak diekspor sebagai type tersendiri.
@@ -40,6 +50,8 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
 
   const handleStatusStep = useCallback(async (stepId: string) => {
     if (loadingAction) return;
+    // Pengaman di luar tampilan: urutan step & kepemilikan pesanan (lib/stepAccess.ts)
+    if (getStepBlock(order, currentUser, stepId)) return;
     const updated = JSON.parse(JSON.stringify(order));
     const steps = getOrderSteps(updated) as any[];
     const idx = steps.findIndex((s: any) => s.id === stepId);
@@ -67,10 +79,11 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
     } finally {
       setLoadingAction(null);
     }
-  }, [order, currentUser.name, onUpdateOrder, writeLog, loadingAction]);
+  }, [order, currentUser, onUpdateOrder, writeLog, loadingAction]);
 
   const handleSaveProofingRevisi = useCallback(async () => {
     if (!proofingRevisiNote.trim() || !proofingStepId || loadingAction) return;
+    if (getStepBlock(order, currentUser, proofingStepId)) return;
     const updated = JSON.parse(JSON.stringify(order));
     const steps = getOrderSteps(updated) as any[];
     const idx = steps.findIndex((s: any) => s.id === proofingStepId);
@@ -95,12 +108,13 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
     } finally {
       setLoadingAction(null);
     }
-  }, [order, proofingRevisiNote, proofingStepId, onUpdateOrder, writeLog, loadingAction]);
+  }, [order, currentUser, proofingRevisiNote, proofingStepId, onUpdateOrder, writeLog, loadingAction]);
 
   // ─── QC Handlers ─────────────────────────────────────────────────────────
 
   const handleQC = useCallback(async (pass: boolean) => {
     if (loadingAction) return;
+    if (getQcBlock(order, currentUser)) return;
     const updated = JSON.parse(JSON.stringify(order));
     updated.finishing_qc = {
       isPassed: pass,
@@ -133,9 +147,10 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
     } finally {
       setLoadingAction(null);
     }
-  }, [order, qcNote, currentUser.name, onUpdateOrder, writeLog, loadingAction]);
+  }, [order, qcNote, currentUser, onUpdateOrder, writeLog, loadingAction]);
 
   const handleDeleteQC = useCallback(() => {
+    if (getFinishingOwnershipBlock(currentUser) || getQcResetBlock(order)) return;
     onConfirm('Reset Status QC?', 'Status QC akan dikembalikan ke belum dicek.', () => {
       const updated = JSON.parse(JSON.stringify(order));
       updated.finishing_qc = { isPassed: false, notes: '', checkedBy: '', timestamp: '' };
@@ -147,9 +162,10 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
         ket: 'Status QC dikembalikan ke belum dicek',
       });
     });
-  }, [order, onConfirm, onUpdateOrder, writeLog]);
+  }, [order, currentUser, onConfirm, onUpdateOrder, writeLog]);
 
   const handleRevisiSelesai = useCallback(() => {
+    if (getQcBlock(order, currentUser)) return;
     onConfirm('Selesaikan Revisi?', 'Status akan kembali ke On Process.', () => {
       const updated = JSON.parse(JSON.stringify(order));
       updated.status = 'On Process';
@@ -163,12 +179,13 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
         newVal: 'On Process',
       });
     });
-  }, [order, onConfirm, onUpdateOrder, writeLog]);
+  }, [order, currentUser, onConfirm, onUpdateOrder, writeLog]);
 
   // ─── Kendala Handlers ─────────────────────────────────────────────────────
 
   const handleAddKendala = useCallback(() => {
     if (!kendalaNote.trim()) return;
+    if (getStepOwnershipBlock(order, currentUser)) return;
     const updated = JSON.parse(JSON.stringify(order));
     if (!updated.kendala) updated.kendala = [];
     updated.kendala.push({
@@ -189,9 +206,10 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
     });
     setKendalaNote('');
     setShowKendalaForm(false);
-  }, [order, kendalaNote, currentUser.name, onUpdateOrder, writeLog]);
+  }, [order, kendalaNote, currentUser, onUpdateOrder, writeLog]);
 
   const handleResolveKendala = useCallback((kendalaId: string) => {
+    if (getStepOwnershipBlock(order, currentUser)) return;
     const updated = JSON.parse(JSON.stringify(order));
     const idx = updated.kendala.findIndex((k: KendalaNote) => k.id === kendalaId);
     const kendalaText = idx >= 0 ? updated.kendala[idx].notes : '';
@@ -214,7 +232,7 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
       ket: kendalaText,
       newVal: updated.status,
     });
-  }, [order, currentUser.name, onUpdateOrder, writeLog]);
+  }, [order, currentUser, onUpdateOrder, writeLog]);
 
   const handleDeleteKendala = useCallback((kendalaId: string) => {
     onConfirm('Hapus Laporan?', 'Laporan kendala ini akan dihapus permanen.', () => {
@@ -241,6 +259,13 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
   // ─── File Delete Handler ──────────────────────────────────────────────────
 
   const handleFileDelete = useCallback((field: string, isStep = false, stepId?: string) => {
+    // Step yang sudah diikuti step sesudahnya, dan approval yang produksinya sudah jalan,
+    // tidak boleh dibatalkan (urutan akan rusak).
+    if (isStep && stepId && hasLaterStepStarted(order, stepId)) return;
+    if (field === 'approval' && hasProductionStarted(order)) return;
+    if (field === 'packing' || field === 'shipping_kirim' || field === 'shipping_terima') {
+      if (getFinishingOwnershipBlock(currentUser) || getFinishingDeleteBlock(order, field)) return;
+    }
     onConfirm('Hapus File/Bukti?', 'File tidak bisa dikembalikan.', () => {
       const updated = JSON.parse(JSON.stringify(order));
       let label = field;
@@ -266,7 +291,7 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
         ket: `File "${label}" dihapus`,
       });
     });
-  }, [order, onConfirm, onUpdateOrder, writeLog]);
+  }, [order, currentUser, onConfirm, onUpdateOrder, writeLog]);
 
   return {
     // State
