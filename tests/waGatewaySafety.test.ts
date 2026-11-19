@@ -2,7 +2,7 @@
 // Menguji logika murni gateway (tanpa WhatsApp & database): wa-gateway/src/safety.ts
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CircuitBreaker, NumberCache, SendLimiter, TtlCache, retry } from "../wa-gateway/src/safety";
+import { CircuitBreaker, NumberCache, SendLimiter, TtlCache, memegangTugas, rancangRute, retry } from "../wa-gateway/src/safety";
 
 const HOUR = 3_600_000;
 
@@ -132,4 +132,34 @@ test("CircuitBreaker: jeda setelah gagal beruntun, durasi berlipat bila gagal la
   assert.equal(b.failure(), true); // mode hati-hati: 1 gagal langsung jeda lagi
   t += 1500;
   assert.equal(b.isPaused(), true); // jeda kedua 2000 ms
+});
+
+test("rancangRute: nomor utama tanpa nomor tambahan mengirim semua pesan", () => {
+  assert.deepEqual(rancangRute(true, [], []), { mode: "semua" });
+});
+
+test("rancangRute: nomor utama mengirim semua KECUALI tugas nomor lain", () => {
+  assert.deepEqual(rancangRute(true, [], ["kendala", "proofing", "kendala"]), {
+    mode: "kecuali",
+    events: ["kendala", "proofing"],
+  });
+});
+
+test("rancangRute: nomor tambahan hanya mengirim tugasnya; tanpa tugas = tidak mengirim", () => {
+  assert.deepEqual(rancangRute(false, ["deadline"], ["kendala"]), { mode: "hanya", events: ["deadline"] });
+  assert.deepEqual(rancangRute(false, [], []), { mode: "tidak" });
+});
+
+test("rancangRute: jenis pesan berkarakter aneh dibuang (masuk ke filter database)", () => {
+  assert.deepEqual(rancangRute(false, ["ok", "a),(b", 'x"y'], []), { mode: "hanya", events: ["ok"] });
+  assert.deepEqual(rancangRute(true, [], ["a,b)"]), { mode: "semua" });
+});
+
+test("memegangTugas: menunggu scan QR / logout / dibatasi tidak memegang tugas", () => {
+  assert.equal(memegangTugas("open", null), true);
+  assert.equal(memegangTugas("starting", null), true);
+  assert.equal(memegangTugas("closed", "disconnected"), true); // putus sesaat: tunggu sambung ulang
+  assert.equal(memegangTugas("qr", null), false);
+  assert.equal(memegangTugas("closed", "logged_out"), false);
+  assert.equal(memegangTugas("closed", "forbidden"), false);
 });

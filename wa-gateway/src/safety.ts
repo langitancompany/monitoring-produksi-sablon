@@ -371,3 +371,40 @@ export function buatLinkPreview(message: string): LinkPreview | null {
   const description = [...rinci, ket, nominal, metode].filter(Boolean).join(' • ');
   return { url, title, description: potong(description, 160) };
 }
+
+
+// ───────────────────────── Pembagian tugas antar nomor pengirim ─────────────────────────
+
+const EVENT_AMAN = /^[a-z0-9_.:-]+$/i;
+
+export type Rute =
+  | { mode: 'semua' }                      // nomor utama tanpa nomor tambahan: semua pesan
+  | { mode: 'tidak' }                      // nomor tambahan tanpa tugas: tidak mengirim apa pun
+  | { mode: 'kecuali'; events: string[] }  // nomor utama: semua pesan KECUALI yang dipegang nomor lain
+  | { mode: 'hanya'; events: string[] };   // nomor tambahan: hanya jenis pesan ini
+
+/**
+ * Menentukan pesan mana yang diambil sebuah nomor pengirim.
+ *  - utama      : true untuk nomor utama
+ *  - tugasSendiri: jenis pesan yang dipilih nomor tambahan ini
+ *  - tugasLain  : jenis pesan yang sedang dipegang nomor tambahan LAIN (yang aktif & siap)
+ * Jenis pesan dengan karakter di luar [a-z0-9_.:-] dibuang (nilai ini masuk ke filter database).
+ */
+export function rancangRute(utama: boolean, tugasSendiri: string[], tugasLain: string[]): Rute {
+  const aman = (a: string[]) => [...new Set(a.filter((e) => EVENT_AMAN.test(e)))];
+  if (utama) {
+    const lain = aman(tugasLain);
+    return lain.length ? { mode: 'kecuali', events: lain } : { mode: 'semua' };
+  }
+  const sendiri = aman(tugasSendiri);
+  return sendiri.length ? { mode: 'hanya', events: sendiri } : { mode: 'tidak' };
+}
+
+/**
+ * Apakah nomor tambahan "memegang" tugasnya sekarang. Nomor yang menunggu scan QR, sudah
+ * logout, atau dibatasi WhatsApp tidak memegang tugas, sehingga nomor utama mengambil alih
+ * dan notifikasi tidak tertahan. Terputus sesaat tetap memegang (menunggu sambung ulang).
+ */
+export function memegangTugas(connState: string, closeReason: string | null): boolean {
+  return connState !== 'qr' && closeReason !== 'forbidden' && closeReason !== 'logged_out';
+}

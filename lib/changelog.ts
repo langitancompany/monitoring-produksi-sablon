@@ -2,11 +2,11 @@
 
 export const APP_INFO = {
   name: "Langitan.co SuperApp",
-  version: "V.18.8",
+  version: "V.18.9",
   purpose: "Aplikasi produksi Sablon, Langitan.co.",
   creator: "abdllahmajid",
   creationDate: "13 Desember 2025",
-  notes: 'Laporan Keuangan: laba rugi bertingkat (HPP, Laba Kotor, Laba Bersih)',
+  notes: 'Banyak nomor pengirim WhatsApp; urutan & hak isi step produksi hingga pengiriman',
 };
 
 export interface ChangelogEntry {
@@ -16,6 +16,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "18.9",
+    date: "2026-11-19",
+    changes: [
+      "WhatsApp Bot → Nomor pengirim: kini bisa menambah banyak nomor pengirim (maks. 10) langsung dari Pengaturan → Notifikasi, lengkap dengan QR, status koneksi, dan pemakaian tiap nomor. Nomor yang ditambah otomatis dijalankan gateway dalam ±30 detik tanpa deploy ulang. Perlu menjalankan migration 023 dan men-deploy ulang wa-gateway.",
+      "Pembagian tugas per nomor: nomor tambahan hanya mengirim jenis pesan yang dipilih (order baru, tahap, kendala, revisi, selesai, deadline, verifikasi, proofing). Nomor utama mengirim sisanya, dan tetap memakai sesi lama (tanpa scan ulang). Nomor yang belum terhubung tidak menahan tugasnya; nomor utama mengambil alih sementara.",
+      "Batas kirim, circuit breaker, dan perlindungan anti-blokir kini berlaku terpisah per nomor.",
+      "Step produksi, QC, packing, dan pengiriman kini wajib berurutan untuk semua role termasuk Super Admin (Approval → step → QC → Packing → Kirim → Terima). Tahap yang sudah diikuti tahap berikutnya tidak bisa dibatalkan.",
+      "Step produksi hanya bisa diisi PJ/Helper pesanan (bila ada); QC, packing, dan pengiriman hanya tim QC. Admin, Manager, dan Super Admin tetap bisa mengisi sebagai pengawas.",
+    ],
+  },
   {
     version: "18.8",
     date: "2026-11-16",
