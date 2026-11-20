@@ -38,6 +38,8 @@ export interface UserPermissions {
   // edit=edit info pesanan · delete=hapus pesanan. Langkah produksi/QC
   // tetap diatur lewat permission `produksi` & `finishing`.
   merchandise:   ModuleFull;
+  // Kalender Produksi punya izin sendiri (dulu selalu tampil untuk semua user).
+  calendar:      ModuleView;
   produksi:      ModuleFull;
   finishing:     ModuleFull;
   salary:        ModuleViewCreateEdit; // ── UBAH ── dulu ModuleView; sekarang
@@ -73,6 +75,7 @@ export const DEFAULT_PERMISSIONS: UserPermissions = {
   dashboard:     { view: true  },
   orders:        { view: true,  create: false, edit: false, delete: false },
   merchandise:   { view: true,  create: false, edit: false, delete: false },
+  calendar:      { view: false },
   produksi:      { view: true,  create: false, edit: false, delete: false },
   finishing:     { view: true,  create: false, edit: false, delete: false },
   salary:        { view: false, create: false, edit: false },
@@ -101,17 +104,28 @@ export function resolvePermissions(
   raw?: Partial<UserPermissions> | null,
 ): UserPermissions {
   if (!raw) return DEFAULT_PERMISSIONS;
-  if (raw.merchandise) return raw as UserPermissions;
   const o = raw.orders;
   return {
     ...(raw as UserPermissions),
-    merchandise: {
+    merchandise: raw.merchandise ?? {
       view: !!o?.view,
       create: !!o?.create,
       edit: !!o?.edit,
       delete: !!o?.delete,
     },
+    calendar: raw.calendar ?? { view: legacyCalendarView(raw) },
   };
+}
+
+/**
+ * Kalender Produksi dulu selalu tampil untuk semua user, jadi user lama tidak
+ * punya key `calendar`. Supaya akses mereka tidak hilang, user lama yang punya
+ * Dashboard atau Pesanan tetap melihat kalender sampai admin menyimpan ulang
+ * izinnya. User yang tidak punya keduanya (mis. hanya PO Management) tidak.
+ */
+export function legacyCalendarView(raw: unknown): boolean {
+  const r = (raw ?? {}) as { orders?: { view?: unknown }; dashboard?: { view?: unknown } };
+  return r.orders?.view === true || r.dashboard?.view === true;
 }
 
 // ─── User ────────────────────────────────────────────────────────────────────

@@ -113,6 +113,7 @@ import {
 } from "@/types";
 import { DEFAULT_PRODUCTION_TYPES, isMerchandiseOrder } from "@/lib/utils";
 import { buildCustomerList } from "@/lib/customers";
+import { canAccessTab, firstAccessibleTab } from "@/lib/menuAccess";
 import { Loader2 } from "lucide-react";
 
 type ActiveTab =
@@ -470,6 +471,19 @@ export default function ProductionApp() {
       newUrl,
     );
   }, [activeTab, view, selectedOrderId, selectedPoId, isRestored]);
+
+  // ─── Halaman awal sesuai akses ──────────────────────────────────────────────
+  // Tab awal selalu "dashboard" (atau dari URL). Kalau user tidak punya akses ke
+  // tab itu, layar jadi kosong. Di sini diarahkan ke menu pertama yang boleh dibuka
+  // (paling bawah: "Tentang App", yang selalu ada).
+  useEffect(() => {
+    if (!currentUser || !isRestored) return;
+    if (canAccessTab(currentUser.permissions, activeTab)) return;
+    setActiveTab(firstAccessibleTab(currentUser.permissions));
+    setView("list");
+    setSelectedOrderId(null);
+    setSelectedPoId(null);
+  }, [currentUser, isRestored, activeTab]);
 
   // ─── Scroll to top saat view atau tab berubah ───────────────────────────────
   useEffect(() => {
@@ -844,7 +858,7 @@ export default function ProductionApp() {
               />
             )}
 
-            {activeTab === "calendar" && (
+            {activeTab === "calendar" && p?.calendar?.view && (
               <CalendarView
                 orders={activeOrders}
                 users={usersList}
@@ -885,6 +899,7 @@ export default function ProductionApp() {
               <FinanceModule currentUser={currentUser} />
             )}
             {activeTab === "po_management" &&
+              p?.po_management?.view &&
               (selectedPoId ? (
                 <POManagementView
                   poId={selectedPoId}
