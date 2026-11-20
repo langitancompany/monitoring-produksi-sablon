@@ -1,11 +1,13 @@
 // app/api/wa/queue/route.ts
-// Ringkasan antrian WhatsApp (tabel wa_outbox) untuk kartu "Pemakaian kirim" di Pengaturan → Notifikasi.
+// Ringkasan antrian WhatsApp (tabel wa_outbox) untuk kartu tiap nomor pengirim di Pengaturan → Notifikasi.
 //
 //  GET → {
 //    pending           jumlah pesan yang masih menunggu dikirim
 //    oldest_pending_at pesan tertua yang masih menunggu (ISO) atau null
 //    failed_24h        jumlah pesan gagal permanen dalam 24 jam terakhir
-//    recent_failed     maks. 5 pesan gagal terakhir beserta alasannya (nomor disamarkan)
+//    recent_failed     maks. 20 pesan gagal terakhir beserta alasannya (nomor disamarkan)
+//    pending_by_event  { [jenis pesan]: { n, oldest } }  → dibagi ke nomor pengirim oleh WaSenders
+//    failed_by_event   { [jenis pesan]: jumlah }          (jenis kosong = "")
 //  }
 //
 // Hanya baca. Hanya admin / manager / Super Admin. Hanya hitungan ringan (head count),
@@ -35,38 +37,45 @@ export async function GET(request: NextRequest) {
     const db = getSupabaseAdmin();
     const since = new Date(Date.now() - DAY_MS).toISOString();
 
-    const [pending, oldest, failed, recent] = await Promise.all([
-      db.from('wa_outbox').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-      db
-        .from('wa_outbox')
-        .select('created_at')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle(),
-      db
-        .from('wa_outbox')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'failed')
-        .gte('created_at', since),
+    // Antrian umumnya kecil; batas baris menjaga query tetap ringan bila antrian membludak
+    const [pending, failed, recent] = await Promise.all([
+      db.from('wa_outbox').select('event_type, created_at', { count: 'exact' }).eq('status', 'pending')
+        .order('created_at', { ascending: true }).limit(2000),
+      db.from('wa_outbox').select('event_type', { count: 'exact' }).eq('status', 'failed')
+        .gte('created_at', since).limit(2000),
       db
         .from('wa_outbox')
         .select('id, event_type, target_type, target, last_error, created_at')
         .eq('status', 'failed')
         .gte('created_at', since)
         .order('created_at', { ascending: false })
-        .limit(5),
+        .limit(20),
     ]);
 
-    const err = pending.error || oldest.error || failed.error || recent.error;
+    const err = pending.error || failed.error || recent.error;
     if (err) {
       return NextResponse.json({ error: 'Gagal membaca antrian WhatsApp.' }, { status: 500 });
     }
 
+    // Terurut dari yang tertua, jadi kemunculan pertama tiap jenis = yang tertua
+    const pendingByEvent: Record<string, { n: number; oldest: string }> = {};
+    for (const r of (pending.data ?? []) as { event_type: string | null; created_at: string }[]) {
+      const k = String(r.event_type ?? '');
+      if (pendingByEvent[k]) pendingByEvent[k].n += 1;
+      else pendingByEvent[k] = { n: 1, oldest: r.created_at };
+    }
+    const failedByEvent: Record<string, number> = {};
+    for (const r of (failed.data ?? []) as { event_type: string | null }[]) {
+      const k = String(r.event_type ?? '');
+      failedByEvent[k] = (failedByEvent[k] ?? 0) + 1;
+    }
+
     return NextResponse.json({
       pending: pending.count ?? 0,
-      oldest_pending_at: (oldest.data as { created_at?: string } | null)?.created_at ?? null,
+      oldest_pending_at: (pending.data?.[0] as { created_at?: string } | undefined)?.created_at ?? null,
       failed_24h: failed.count ?? 0,
+      pending_by_event: pendingByEvent,
+      failed_by_event: failedByEvent,
       recent_failed: (recent.data ?? []).map((r: any) => ({
         id: String(r.id),
         event_type: String(r.event_type ?? ''),

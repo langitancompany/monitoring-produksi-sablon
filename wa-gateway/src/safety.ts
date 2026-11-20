@@ -381,18 +381,28 @@ export type Rute =
   | { mode: 'semua' }                      // nomor utama tanpa nomor tambahan: semua pesan
   | { mode: 'tidak' }                      // nomor tambahan tanpa tugas: tidak mengirim apa pun
   | { mode: 'kecuali'; events: string[] }  // nomor utama: semua pesan KECUALI yang dipegang nomor lain
-  | { mode: 'hanya'; events: string[] };   // nomor tambahan: hanya jenis pesan ini
+  | { mode: 'hanya'; events: string[] };   // hanya jenis pesan ini (nomor tambahan, atau nomor utama yang dibatasi)
 
 /**
  * Menentukan pesan mana yang diambil sebuah nomor pengirim.
  *  - utama      : true untuk nomor utama
- *  - tugasSendiri: jenis pesan yang dipilih nomor tambahan ini
+ *  - tugasSendiri: jenis pesan yang dipilih nomor ini. Nomor utama dengan daftar KOSONG = mengirim semua
+ *                  yang tidak dipegang nomor lain; dengan daftar terisi = hanya itu (dibatasi).
  *  - tugasLain  : jenis pesan yang sedang dipegang nomor tambahan LAIN (yang aktif & siap)
+ *  - tugasAmbilAlih: (nomor utama yang dibatasi) jenis pesan milik nomor tambahan yang sedang tidak siap atau
+ *                  dimatikan; diambil alih nomor utama supaya notifikasi tidak tertahan
  * Jenis pesan dengan karakter di luar [a-z0-9_.:-] dibuang (nilai ini masuk ke filter database).
  */
-export function rancangRute(utama: boolean, tugasSendiri: string[], tugasLain: string[]): Rute {
+export function rancangRute(
+  utama: boolean,
+  tugasSendiri: string[],
+  tugasLain: string[],
+  tugasAmbilAlih: string[] = [],
+): Rute {
   const aman = (a: string[]) => [...new Set(a.filter((e) => EVENT_AMAN.test(e)))];
   if (utama) {
+    const sendiri = aman(tugasSendiri);
+    if (sendiri.length) return { mode: 'hanya', events: aman([...sendiri, ...tugasAmbilAlih]) };
     const lain = aman(tugasLain);
     return lain.length ? { mode: 'kecuali', events: lain } : { mode: 'semua' };
   }

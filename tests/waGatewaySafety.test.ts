@@ -163,3 +163,15 @@ test("memegangTugas: menunggu scan QR / logout / dibatasi tidak memegang tugas",
   assert.equal(memegangTugas("closed", "logged_out"), false);
   assert.equal(memegangTugas("closed", "forbidden"), false);
 });
+
+test("rancangRute: nomor utama dibatasi hanya mengirim pilihannya + tugas nomor tambahan yang tidak siap", () => {
+  assert.deepEqual(rancangRute(true, ["order_baru", "tahap"], ["kendala"]), { mode: "hanya", events: ["order_baru", "tahap"] });
+  assert.deepEqual(rancangRute(true, ["order_baru"], [], ["proofing", "order_baru"]), {
+    mode: "hanya",
+    events: ["order_baru", "proofing"],
+  });
+  // karakter berbahaya dibuang
+  assert.deepEqual(rancangRute(true, ["a)b", "ok"], []), { mode: "hanya", events: ["ok"] });
+  // daftar kosong = perilaku lama
+  assert.deepEqual(rancangRute(true, [], ["kendala"], ["x"]), { mode: "kecuali", events: ["kendala"] });
+});

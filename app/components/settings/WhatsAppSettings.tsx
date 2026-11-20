@@ -11,10 +11,10 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Plus, X, ShieldCheck, TriangleAlert, Image as ImageIcon } from "lucide-react";
 import WaSenders from "@/app/components/settings/WaSenders";
-import WaUsageCard, {
+import {
   type WaQueueInfo,
   type WaUsage,
-} from "@/app/components/settings/WaUsageCard";
+} from "@/app/components/settings/waUsageShared";
 
 interface WaSettingsData {
   enabled: boolean;
@@ -541,9 +541,6 @@ export default function WhatsAppSettings() {
         </div>
       </div>
 
-      {/* Pemakaian kirim (progress bar batas per jam / per hari) */}
-      {configured && gw.usage && <WaUsageCard usage={gw.usage} queue={queue} />}
-
       {/* Koneksi gateway */}
       <div className={`${cardCls} p-5 md:p-6 space-y-4`}>
         <div>
@@ -680,7 +677,7 @@ export default function WhatsAppSettings() {
       </div>
 
       {/* Nomor pengirim: tambah nomor WhatsApp pengirim & bagi tugasnya */}
-      <WaSenders configured={configured} />
+      <WaSenders configured={configured} enabled={settings.enabled} queue={queue} />
 
       {/* Penerima notifikasi: verifikasi keuangan & kendala (daftar nomor terpisah) */}
       <div className={`${cardCls} p-5 md:p-6 space-y-4`}>

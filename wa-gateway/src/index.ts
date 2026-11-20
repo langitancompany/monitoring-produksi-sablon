@@ -299,6 +299,20 @@ function tugasNomorLain(kecuali: string): string[] {
   return [...hasil];
 }
 
+// Jenis pesan milik nomor tambahan yang DIMATIKAN (sesinya tidak ada, barisnya masih di tabel). Diisi syncSenders.
+let tugasNonaktif: string[] = [];
+
+// Jenis pesan yang harus diambil alih nomor utama bila ia dibatasi: milik nomor tambahan yang belum siap
+// (menunggu QR / logout / dibatasi WhatsApp) dan yang dimatikan.
+function tugasDiambilAlih(): string[] {
+  const hasil = new Set<string>(tugasNonaktif);
+  for (const s of sessions.values()) {
+    if (s.id === DEFAULT_ID || s.memegangTugas) continue;
+    for (const t of s.tasks) hasil.add(t);
+  }
+  return [...hasil];
+}
+
 class Session {
   readonly id: string;
   label: string;
@@ -651,7 +665,7 @@ class Session {
 
   // Filter antrian menurut pembagian tugas. null = nomor ini tidak punya tugas (tidak perlu query).
   private rutekan(q: any): any | null {
-    const r = rancangRute(this.isDefault, this.tasks, this.isDefault ? tugasNomorLain(this.id) : []);
+    const r = rancangRute(this.isDefault, this.tasks, this.isDefault ? tugasNomorLain(this.id) : [], this.isDefault ? tugasDiambilAlih() : []);
     if (r.mode === 'semua') return q;
     if (r.mode === 'tidak') return null;
     if (r.mode === 'hanya') return q.in('event_type', r.events);
@@ -844,6 +858,11 @@ async function syncSenders() {
     const utama: any = rows.find((r: any) => r.id === DEFAULT_ID);
     const sUtama = sessions.get(DEFAULT_ID) ?? mulaiSesi(DEFAULT_ID, utama?.label || 'Nomor Utama', []);
     if (utama?.label) sUtama.label = utama.label;
+    // Daftar tugas nomor utama: kosong = semua yang tidak dipegang nomor lain; terisi = hanya itu
+    sUtama.tasks = Array.isArray(utama?.tasks) ? utama.tasks.map(String) : [];
+    tugasNonaktif = (rows as any[])
+      .filter((r) => r.id !== DEFAULT_ID && r.enabled === false)
+      .flatMap((r) => (Array.isArray(r.tasks) ? r.tasks.map(String) : []));
 
     for (const r of rows as any[]) {
       if (r.id === DEFAULT_ID) continue;

@@ -7,8 +7,9 @@
 //  DELETE  {id}                      → hapus nomor (gateway memutus sesinya & menghapus folder sesi)
 //
 // `tasks` di sini berupa KUNCI tugas (lihat lib/waSenders.ts); yang disimpan ke database adalah
-// jenis pesannya. Nomor 'utama' tidak bisa dihapus/dimatikan dan tidak punya daftar tugas: ia
-// mengirim semua jenis pesan yang tidak dialihkan ke nomor lain.
+// jenis pesannya. Nomor 'utama' tidak bisa dihapus/dimatikan. Daftar tugasnya boleh kosong: ia
+// mengirim semua jenis pesan yang tidak dialihkan ke nomor lain. Bila diisi, ia hanya mengirim yang dipilih
+// (tugas nomor tambahan yang sedang tidak siap tetap diambil alih gateway).
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { requireUser } from '@/lib/apiAuth';
@@ -39,7 +40,7 @@ const tampil = (r: Row) => ({
   tasks: tugasDariEvents(r.tasks ?? []),
 });
 
-const katalog = () => WA_TUGAS.map(({ key, label, desc }) => ({ key, label, desc }));
+const katalog = () => WA_TUGAS.map(({ key, label, desc, events }) => ({ key, label, desc, events }));
 
 async function muat(): Promise<{ rows: Row[]; migrated: boolean }> {
   const { data, error } = await getSupabaseAdmin()
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
     if (rows.length >= MAKS_SENDER) {
       return NextResponse.json({ error: `Maksimal ${MAKS_SENDER} nomor pengirim.` }, { status: 400 });
     }
-    const bentrok = cariBentrok(rows.filter((r) => r.id !== DEFAULT_SENDER_ID && r.enabled !== false), events);
+    const bentrok = cariBentrok(rows.filter((r) => r.enabled !== false), events);
     if (bentrok) return NextResponse.json({ error: bentrok }, { status: 400 });
 
     let id = buatSenderId();
@@ -133,23 +134,23 @@ export async function PATCH(request: NextRequest) {
       if (!label) return NextResponse.json({ error: 'Nama nomor wajib diisi.' }, { status: 400 });
       patch.label = label;
     }
-    if (!utama) {
-      if (typeof b.enabled === 'boolean') patch.enabled = b.enabled;
-      let events: string[] | null = null;
-      if (b.tasks !== undefined) {
-        events = bacaTugas(b.tasks);
-        if (!events) return NextResponse.json({ error: 'Daftar tugas tidak valid.' }, { status: 400 });
-        patch.tasks = events;
-      }
-      // Cek bentrok hanya bila nomor ini aktif setelah perubahan
-      const aktif = (patch.enabled as boolean | undefined) ?? target.enabled !== false;
-      const efektif = events ?? target.tasks ?? [];
-      if (aktif && efektif.length) {
-        const bentrok = cariBentrok(rows.filter((r) => r.id !== b.id && r.id !== DEFAULT_SENDER_ID && r.enabled !== false), efektif);
-        if (bentrok) return NextResponse.json({ error: bentrok }, { status: 400 });
-      }
-    } else if (b.tasks !== undefined || b.enabled !== undefined) {
-      return NextResponse.json({ error: 'Nomor utama tidak punya daftar tugas dan tidak bisa dimatikan.' }, { status: 400 });
+    if (utama && b.enabled !== undefined) {
+      return NextResponse.json({ error: 'Nomor utama tidak bisa dimatikan.' }, { status: 400 });
+    }
+    if (!utama && typeof b.enabled === 'boolean') patch.enabled = b.enabled;
+    let events: string[] | null = null;
+    if (b.tasks !== undefined) {
+      events = bacaTugas(b.tasks);
+      if (!events) return NextResponse.json({ error: 'Daftar tugas tidak valid.' }, { status: 400 });
+      patch.tasks = events; // nomor utama: kosong = semua yang tidak dipegang nomor lain
+    }
+    // Cek bentrok hanya bila nomor ini aktif setelah perubahan. Nomor utama yang daftarnya kosong tidak
+    // memegang tugas apa pun secara khusus, jadi tidak ikut dihitung sebagai pemegang.
+    const aktif = utama ? true : ((patch.enabled as boolean | undefined) ?? target.enabled !== false);
+    const efektif = events ?? target.tasks ?? [];
+    if (aktif && efektif.length) {
+      const bentrok = cariBentrok(rows.filter((r) => r.id !== b.id && r.enabled !== false), efektif);
+      if (bentrok) return NextResponse.json({ error: bentrok }, { status: 400 });
     }
     if (!Object.keys(patch).length) return NextResponse.json({ ok: true });
 

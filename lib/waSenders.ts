@@ -68,3 +68,31 @@ export function buatSenderId(acak: () => number = Math.random): string {
   for (let i = 0; i < 5; i++) s += abjad[Math.floor(acak() * abjad.length)];
   return s;
 }
+
+export interface PemegangNomor {
+  id: string;
+  utama: boolean;
+  enabled: boolean;
+  /** Terhubung / siap mengirim. Menunggu QR, logout, atau dibatasi WhatsApp = tidak siap. */
+  siap: boolean;
+  /** Jenis pesan (event_type) pilihan nomor ini. Nomor utama kosong = semua yang tidak dipegang nomor lain. */
+  events: string[];
+}
+
+/**
+ * Nomor mana yang mengirim sebuah jenis pesan, mengikuti aturan wa-gateway (rancangRute):
+ *  - nomor tambahan yang aktif & siap memegang jenis pesan pilihannya;
+ *  - sisanya jatuh ke nomor utama. Bila nomor utama dibatasi (daftarnya terisi), ia hanya mengirim
+ *    pilihannya + tugas nomor tambahan yang tidak siap / dimatikan;
+ *  - di luar itu: null (belum dipegang siapa pun, pesan menunggu di antrian).
+ */
+export function pemilikEvent(ev: string, nomor: PemegangNomor[]): string | null {
+  const utama = nomor.find((n) => n.utama);
+  const ekstra = nomor.filter((n) => !n.utama);
+  const pemegang = ekstra.find((n) => n.enabled && n.siap && n.events.includes(ev));
+  if (pemegang) return pemegang.id;
+  if (!utama) return null;
+  if (utama.events.length === 0) return utama.id;
+  if (utama.events.includes(ev)) return utama.id;
+  return ekstra.some((n) => (!n.enabled || !n.siap) && n.events.includes(ev)) ? utama.id : null;
+}
