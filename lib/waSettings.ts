@@ -12,13 +12,16 @@ export interface WaSettings {
   // Nomor pribadi penerima (sudah 62xxx). Dua daftar terpisah; kosong = jenis itu tidak dikirim.
   notifyVerifikasiNumbers: string[];
   notifyKendalaNumbers: string[];
-  // Nomor yang dikirimi proofing dan boleh membalas "ACC" / "Revisi: ..."
+  // Nomor internal yang dikirimi proofing dan boleh membalas "ACC" / "Revisi: ..."
   notifyProofingNumbers: string[];
+  // Saklar pesan otomatis ke PELANGGAN (nomor `no_hp` di detail pesanan): link tracking saat approval
+  // terbit, dan gambar proofing saat diupload. DEFAULT MATI. Kolom ada sejak migration 024.
+  notifyPelanggan: boolean;
 }
 
 const KOSONG: WaSettings = {
   enabled: false, gatewayUrl: '', gatewayToken: '', groupJid: '',
-  notifyVerifikasiNumbers: [], notifyKendalaNumbers: [], notifyProofingNumbers: [],
+  notifyVerifikasiNumbers: [], notifyKendalaNumbers: [], notifyProofingNumbers: [], notifyPelanggan: false,
 };
 
 const daftarNomor = (v: unknown): string[] =>
@@ -46,6 +49,8 @@ export async function getWaSettings(): Promise<WaSettings> {
       notifyVerifikasiNumbers: daftarNomor(data.notify_verifikasi_numbers),
       notifyKendalaNumbers: daftarNomor(data.notify_kendala_numbers),
       notifyProofingNumbers: daftarNomor(data.notify_proofing_numbers),
+      // Kolom belum ada (migration 024 belum jalan) → undefined → mati, aman.
+      notifyPelanggan: data.notify_pelanggan === true,
     };
   } catch (e) {
     console.error('getWaSettings exception:', e);

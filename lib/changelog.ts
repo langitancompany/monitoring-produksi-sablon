@@ -2,11 +2,11 @@
 
 export const APP_INFO = {
   name: "Langitan.co SuperApp",
-  version: "V.18.9",
+  version: "V.18.10",
   purpose: "Aplikasi produksi Sablon, Langitan.co.",
   creator: "abdllahmajid",
   creationDate: "13 Desember 2025",
-  notes: 'Banyak nomor pengirim WhatsApp; urutan & hak isi step produksi hingga pengiriman',
+  notes: 'Pesan otomatis ke pelanggan lewat WhatsApp (link tracking & ACC proofing)',
 };
 
 export interface ChangelogEntry {
@@ -16,6 +16,15 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "18.10",
+    date: "2026-11-20",
+    changes: [
+      "WhatsApp Bot → Pesan otomatis ke pelanggan (saklar baru di Pengaturan → WhatsApp Bot, default mati): pelanggan (nomor di detail pesanan) dikirimi link tracking saat approval terbit, dan gambar proofing saat diupload. Perlu menjalankan migration 024.",
+      "Pelanggan membalas ACC atau Revisi: alasan. ACC menandai step proofing selesai; Revisi membuat step masuk mode revisi dengan alasan dari pelanggan. PJ dan helper pesanan dikabari lewat WhatsApp, dan keputusan tercatat di riwayat order. Balasan yang formatnya salah dijawab petunjuk format.",
+      "Nomor internal Persetujuan proofing tetap berfungsi seperti sebelumnya; pelanggan hanya tambahan penerima. Nomor pengirim bisa dibagi tugas Link tracking ke pelanggan.",
+    ],
+  },
   {
     version: "18.9",
     date: "2026-11-19",

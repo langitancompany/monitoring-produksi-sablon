@@ -25,6 +25,7 @@ interface WaSettingsData {
   notify_verifikasi_numbers: string[];
   notify_kendala_numbers: string[];
   notify_proofing_numbers: string[];
+  notify_pelanggan: boolean;
 }
 
 type GwState = "starting" | "qr" | "open" | "closed";
@@ -168,6 +169,7 @@ export default function WhatsAppSettings() {
   const [groupJid, setGroupJid] = useState("");
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [togglingPelanggan, setTogglingPelanggan] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
 
   // Penerima notifikasi
@@ -336,6 +338,24 @@ export default function WhatsAppSettings() {
     setSettings(data);
   };
 
+  // Saklar pesan otomatis ke pelanggan (tracking & proofing). Tersimpan langsung.
+  const togglePelanggan = async () => {
+    if (!settings) return;
+    setTogglingPelanggan(true);
+    setMsg(null);
+    const { ok, data } = await api("/api/wa/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notify_pelanggan: !settings.notify_pelanggan }),
+    });
+    setTogglingPelanggan(false);
+    if (!ok) {
+      setMsg({ type: "err", text: data?.error || "Gagal mengubah pengaturan pesan pelanggan." });
+      return;
+    }
+    setSettings(data);
+  };
+
   // ─── Penerima notifikasi ──────────────────────────────────────────────────
   const penerimaDirty =
     !!settings &&
@@ -490,6 +510,32 @@ export default function WhatsAppSettings() {
           >
             <span
               className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform duration-150 ${settings.enabled ? "translate-x-6" : "translate-x-0"}`}
+            />
+          </button>
+        </div>
+
+        <div className="p-5 md:p-6 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+              Pesan otomatis ke pelanggan
+            </p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              {settings.notify_pelanggan
+                ? "Aktif. Pelanggan (nomor di detail pesanan) dikirimi link tracking saat approval terbit, dan gambar proofing saat diupload. Pelanggan membalas ACC atau Revisi: alasan (butuh APP_URL di wa-gateway)."
+                : "Nonaktif. Tidak ada pesan yang dikirim ke pelanggan. Pesan untuk tim tidak terpengaruh."}
+              {!settings.enabled && " Ikut mati selama saklar WhatsApp di atas nonaktif."}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings.notify_pelanggan}
+            disabled={togglingPelanggan}
+            onClick={togglePelanggan}
+            className={`shrink-0 w-12 h-6 flex items-center rounded-full p-1 transition-colors duration-150 disabled:opacity-60 ${settings.notify_pelanggan ? "bg-emerald-600" : "bg-zinc-300 dark:bg-zinc-700"}`}
+          >
+            <span
+              className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform duration-150 ${settings.notify_pelanggan ? "translate-x-6" : "translate-x-0"}`}
             />
           </button>
         </div>

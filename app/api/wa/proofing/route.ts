@@ -1,17 +1,19 @@
 // app/api/wa/proofing/route.ts
 // Dipanggil dari browser (hooks/useUpload.ts) tepat setelah file PROOFING diupload.
 // Membuat 1 permintaan persetujuan (wa_proofing_requests) lalu mengantrekan pesan berisi link
-// gambar ke semua nomor "Persetujuan proofing" di Pengaturan. Balasan ditangani oleh
-// /api/wa/proofing-reply (dipanggil wa-gateway).
+// gambar ke penerima:
+//   - semua nomor "Persetujuan proofing" di Pengaturan (internal), dan
+//   - nomor PELANGGAN (`no_hp` di detail pesanan) bila saklar "Pesan otomatis ke pelanggan" aktif.
+// Balasan ("ACC" / "Revisi: alasan") ditangani oleh /api/wa/proofing-reply (dipanggil wa-gateway).
 //
 // Teks pesan & link gambar dibuat DI SINI dari data database, bukan dari browser.
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { requireUser } from '@/lib/apiAuth';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { enqueueWa, type WaItem } from '@/lib/waQueue';
+import { enqueueWa, normalizeWa, type WaItem } from '@/lib/waQueue';
 import { getWaSettings } from '@/lib/waSettings';
-import { pesanProofing } from '@/lib/waMessages';
+import { pesanProofing, pesanProofingPelanggan } from '@/lib/waMessages';
 import { getOrderSteps } from '@/lib/utils';
 import { linkProofing } from '@/lib/waAppUrl';
 import { randomBytes } from 'node:crypto';
@@ -33,13 +35,25 @@ export async function POST(request: NextRequest) {
 
     const cfg = await getWaSettings();
     if (!cfg.enabled) return NextResponse.json({ success: true, queued: 0, skipped: 'nonaktif' });
-    if (cfg.notifyProofingNumbers.length === 0) {
-      return NextResponse.json({ success: true, queued: 0, skipped: 'tidak_ada_penerima' });
-    }
 
     const db = getSupabaseAdmin();
     const { data: o, error } = await db.from('orders').select('*').eq('id', orderId).single();
     if (error || !o) return NextResponse.json({ error: 'Order tidak ditemukan' }, { status: 404 });
+    if (o.deleted_at) return NextResponse.json({ success: true, queued: 0, skipped: 'order_dihapus' });
+
+    // Penerima: nomor internal + (bila saklar aktif) pelanggan. normalizeWa memberi 62xxxxxxxxxx; batas
+    // panjang mencegah salah ketik / dua nomor tertempel jadi satu.
+    let nomorPelanggan: string | null = null;
+    if (cfg.notifyPelanggan) {
+      const n = normalizeWa(o.no_hp);
+      if (n && n.length >= 10 && n.length <= 15) nomorPelanggan = n;
+      else console.warn(`[wa/proofing] ${o.kode_produksi}: nomor HP pelanggan tidak valid (${o.no_hp ?? 'kosong'}), pesan ke pelanggan tidak dikirim`);
+    }
+    // Set: nomor yang sama di dua daftar hanya dikirimi sekali
+    const penerima = [...new Set([...cfg.notifyProofingNumbers, ...(nomorPelanggan ? [nomorPelanggan] : [])])];
+    if (penerima.length === 0) {
+      return NextResponse.json({ success: true, queued: 0, skipped: 'tidak_ada_penerima' });
+    }
 
     const step = (getOrderSteps(o) as any[]).find((s) => s.id === stepId);
     if (!step || !String(step.name ?? '').toLowerCase().includes('proofing')) {
@@ -60,7 +74,7 @@ export async function POST(request: NextRequest) {
       step_id: stepId,
       kode_produksi: o.kode_produksi,
       file_url: step.fileUrl,
-      numbers: cfg.notifyProofingNumbers,
+      numbers: penerima,
     };
     // Link pendek: butuh kolom short_code (migration 022). Belum dijalankan → pakai link panjang apa adanya.
     const kodePendek = buatKode();
@@ -74,13 +88,15 @@ export async function POST(request: NextRequest) {
     }
     if (reqErr || !req) throw new Error(reqErr?.message ?? 'Gagal membuat permintaan proofing');
 
-    const message = pesanProofing(o, step.name, step.uploadedBy, linkGambar);
-    const items: WaItem[] = cfg.notifyProofingNumbers.map((nomor) => ({
+    // Internal: detail lengkap + nama pengupload. Pelanggan: sapaan & ajakan membalas ACC / Revisi.
+    const pesanInternal = pesanProofing(o, step.name, step.uploadedBy, linkGambar);
+    const pesanPelanggan = pesanProofingPelanggan(o, linkGambar);
+    const items: WaItem[] = penerima.map((nomor) => ({
       order_id: o.id as string,
       target_type: 'user',
       target: nomor,
       event_type: 'proofing',
-      message,
+      message: nomor === nomorPelanggan && !cfg.notifyProofingNumbers.includes(nomor) ? pesanPelanggan : pesanInternal,
       dedupe_key: `proofing:${req.id}:${nomor}`,
     }));
 

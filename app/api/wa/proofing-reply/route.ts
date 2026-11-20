@@ -6,7 +6,10 @@
 //   "ACC"                  → step Proofing ditandai selesai (ACC)
 //   "Revisi: <alasan>"     → step Proofing masuk mode revisi, alasan = teks setelah titik dua
 //
-// Pesan lain / dari nomor yang tidak terdaftar diabaikan TANPA balasan (handled: false).
+// Yang boleh memutuskan = nomor yang DIKIRIMI permintaan itu (kolom numbers di wa_proofing_requests):
+// nomor internal "Persetujuan proofing" dan, bila saklar aktif, pelanggan.
+// Pesan lain / dari nomor yang tidak pernah dikirimi proofing diabaikan TANPA balasan (handled: false).
+// Balasan pada pesan proofing yang isinya bukan "ACC" / "Revisi: …" dijawab petunjuk format.
 // Alur revisi sama dengan tombol "Revisi" di aplikasi (step.proofing_note), jadi tombol
 // "Upload Ulang (Revisi)" yang sudah ada tetap dipakai.
 
@@ -18,9 +21,11 @@ import { getWaSettings } from '@/lib/waSettings';
 import { bacaBalasanProofing } from '@/lib/waProofing';
 import {
   pesanProofingAcc, pesanProofingRevisi, pesanProofingMintaAlasan, pesanProofingTidakAda,
-  pesanProofingBanyak, pesanProofingSudah, pesanTahapPersonal,
+  pesanProofingBanyak, pesanProofingSudah, pesanTahapPersonal, pesanProofingFormat,
+  pesanAccUntukTim, pesanRevisiUntukTim,
 } from '@/lib/waMessages';
-import { getOrderSteps, getStepsKey } from '@/lib/utils';
+import { linkPesanan } from '@/lib/waAppUrl';
+import { getOrderSteps, getStepsKey, isMerchandiseOrder } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,11 +50,10 @@ export async function POST(request: NextRequest) {
       console.warn(`[proofing-reply] diabaikan: ${alasan} (from=${b.from ?? '-'}, quoted=${b.quotedId ?? '-'})`);
       return NextResponse.json({ handled: false, alasan });
     };
-    if (!balasan) return abaikan('teks bukan format ACC / Revisi:');
     if (!cfg.enabled) return abaikan('bot WhatsApp nonaktif di Pengaturan');
 
     const db = getSupabaseAdmin();
-    const penerima = new Set(cfg.notifyProofingNumbers);
+    const penerima = new Set(cfg.notifyProofingNumbers); // nomor internal; pelanggan dikenali dari request
     const dari = normalizeWa(b.from);
     const msgId = String(b.messageId ?? Date.now());
 
@@ -62,32 +66,59 @@ export async function POST(request: NextRequest) {
       try { await enqueueWa([item], cfg); } catch (e) { console.error('proofing-reply: gagal antre balasan', e); }
     };
 
+    // Id permintaan proofing dari pesan yang di-swipe (pesan itu pasti pesan proofing kita) + nomor tujuannya
+    const cariPesanDikutip = async (quotedId: string) => {
+      const { data: out } = await db
+        .from('wa_outbox')
+        .select('target, dedupe_key')
+        .eq('wa_message_id', quotedId).eq('event_type', 'proofing')
+        .maybeSingle();
+      return {
+        ada: !!out,
+        target: out ? normalizeWa(out.target) : null,
+        id: /^proofing:([0-9a-f-]{36}):/i.exec(String(out?.dedupe_key ?? ''))?.[1] ?? null,
+      };
+    };
+
+    // Isi balasan bukan "ACC" / "Revisi: …": diabaikan, KECUALI membalas (swipe) pesan proofing yang masih
+    // menunggu keputusan → beri petunjuk format (pelanggan sering menulis bebas, mis. "oke kak").
+    // "ACC dulu ya" sengaja TIDAK dianggap ACC (artinya bisa "tunggu").
+    if (!balasan) {
+      if (!b.quotedId) return abaikan('teks bukan format ACC / Revisi:');
+      const q = await cariPesanDikutip(b.quotedId);
+      if (!q.id || !q.target) return abaikan('teks bukan format ACC / Revisi: dan bukan balasan ke pesan proofing');
+      const { data: r } = await db.from('wa_proofing_requests').select('status, numbers').eq('id', q.id).maybeSingle();
+      if (!r || r.status !== 'menunggu' || !(r.numbers ?? []).includes(q.target)) {
+        return abaikan('teks bukan format ACC / Revisi: dan proofing itu sudah tidak menunggu');
+      }
+      await balas(q.target, pesanProofingFormat());
+      return NextResponse.json({ handled: true, hasil: 'petunjuk_format' });
+    }
+
     // ── 1. Tentukan permintaan proofing yang dimaksud ─────────────────────────
     let req: any = null;
     let nomorBalas: string | null = dari;
 
     if (b.quotedId) {
       // Pembalas men-swipe pesan proofing tertentu → pasti pesanan yang benar
-      const { data: out } = await db
-        .from('wa_outbox')
-        .select('target, dedupe_key')
-        .eq('wa_message_id', b.quotedId).eq('event_type', 'proofing')
-        .maybeSingle();
-      const target = out ? normalizeWa(out.target) : null;
-      const id = /^proofing:([0-9a-f-]{36}):/i.exec(String(out?.dedupe_key ?? ''))?.[1];
-      if (id && target && penerima.has(target)) {
-        const { data } = await db.from('wa_proofing_requests').select('*').eq('id', id).maybeSingle();
-        req = data;
-        nomorBalas = target;
+      const q = await cariPesanDikutip(b.quotedId);
+      if (q.id && q.target) {
+        const { data } = await db.from('wa_proofing_requests').select('*').eq('id', q.id).maybeSingle();
+        // Hanya nomor yang memang dikirimi permintaan ini yang boleh memutuskan
+        if (data && (data.numbers ?? []).includes(q.target)) {
+          req = data;
+          nomorBalas = q.target;
+        } else {
+          console.warn(`[proofing-reply] swipe ditolak: nomor ${q.target} tidak ada di daftar penerima permintaan ${q.id}`);
+        }
       } else {
-        console.warn(`[proofing-reply] swipe tidak cocok: pesan ${b.quotedId} ${out ? 'ditemukan di wa_outbox tapi bukan pesan proofing / nomor tidak terdaftar' : 'TIDAK ditemukan di wa_outbox (kolom wa_message_id kosong untuk pesan itu)'}`);
+        console.warn(`[proofing-reply] swipe tidak cocok: pesan ${b.quotedId} ${q.ada ? 'ditemukan di wa_outbox tapi bukan pesan proofing yang valid' : 'TIDAK ditemukan di wa_outbox (kolom wa_message_id kosong untuk pesan itu)'}`);
       }
     }
 
     if (!req) {
       // Tanpa swipe: hanya nomor terdaftar yang dilayani; nomor lain diabaikan tanpa balasan
       if (!dari) return abaikan('nomor pengirim tidak diketahui dan pesan tidak men-swipe pesan proofing (atau migration 021 belum dijalankan)');
-      if (!penerima.has(dari)) return abaikan(`nomor ${dari} tidak ada di daftar Persetujuan proofing`);
 
       const { data: menunggu } = await db
         .from('wa_proofing_requests')
@@ -97,6 +128,12 @@ export async function POST(request: NextRequest) {
       const daftar = menunggu ?? [];
 
       if (daftar.length === 0) {
+        // Nomor yang tidak pernah dikirimi proofing (bukan penerima internal, bukan pelanggan yang
+        // pernah dikirimi) diabaikan tanpa balasan.
+        if (!penerima.has(dari)) {
+          const { data: pernah } = await db.from('wa_proofing_requests').select('id').contains('numbers', [dari]).limit(1);
+          if (!pernah || pernah.length === 0) return abaikan(`nomor ${dari} bukan penerima proofing`);
+        }
         await balas(dari, pesanProofingTidakAda());
         return NextResponse.json({ handled: true, hasil: 'tidak_ada' });
       }
@@ -194,7 +231,11 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 5. Log aktivitas, notifikasi aplikasi, balasan WhatsApp ───────────────
-    const oleh = `WhatsApp (+${nomorBalas})`;
+    // Pelanggan = nomor di detail pesanan; selain itu penerima internal
+    const dariPelanggan = normalizeWa(o.no_hp) === nomorBalas;
+    const oleh = dariPelanggan
+      ? `Pelanggan ${o.nama_pemesan || ''} via WhatsApp (+${nomorBalas})`.replace(/\s{2,}/g, ' ')
+      : `WhatsApp (+${nomorBalas})`;
     await db.from('order_logs').insert([
       balasan.jenis === 'acc'
         ? {
@@ -233,6 +274,28 @@ export async function POST(request: NextRequest) {
         });
       }
       if (tahap.length) { try { await enqueueWa(tahap, cfg); } catch (e) { console.error(e); } }
+    }
+
+    // Pelanggan memutuskan → PJ & helper dikabari: ACC = mulai produksi, Revisi = upload ulang proofing.
+    // (Penerima internal sudah tahu sendiri, jadi tidak dikabari lagi.) Gagal mengantre tidak membatalkan keputusan.
+    if (dariPelanggan) {
+      try {
+        const { pj, helper } = orang(o);
+        const link = linkPesanan(o.id as string, isMerchandiseOrder(o));
+        const kabar: WaItem[] = [];
+        for (const [peran, p] of [['pj', pj], ['helper', helper]] as const) {
+          if (!p?.wa) continue;
+          kabar.push({
+            order_id: o.id, target_type: 'user', target: p.wa,
+            event_type: balasan.jenis === 'acc' ? 'proofing_acc' : 'proofing_revisi',
+            message: balasan.jenis === 'acc'
+              ? pesanAccUntukTim(p.nama, o, step.name, link)
+              : pesanRevisiUntukTim(p.nama, o, step.name, balasan.alasan, link),
+            dedupe_key: `proofing-${balasan.jenis}:${req.id}:${peran}`,
+          });
+        }
+        if (kabar.length) await enqueueWa(kabar, cfg);
+      } catch (e) { console.error('proofing-reply: gagal antre kabar ke tim', e); }
     }
 
     await balas(nomorBalas, balasan.jenis === 'acc' ? pesanProofingAcc(kode) : pesanProofingRevisi(kode, balasan.alasan));

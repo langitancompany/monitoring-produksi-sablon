@@ -23,6 +23,7 @@ export const WA_TUGAS: WaTugas[] = [
   { key: 'deadline', label: 'Pengingat deadline', desc: 'Pengingat deadline ke PJ/helper dan grup.', events: ['deadline'] },
   { key: 'verifikasi', label: 'Verifikasi keuangan', desc: 'Pembayaran, refund, atau pengeluaran menunggu verifikasi.', events: ['verifikasi'] },
   { key: 'proofing', label: 'Persetujuan proofing', desc: 'Kirim proofing dan konfirmasi balasan ACC/Revisi. Balasan masuk ke nomor yang mengirim, jadi keduanya satu paket.', events: ['proofing', 'proofing_balasan'] },
+  { key: 'tracking', label: 'Link tracking ke pelanggan', desc: 'Link tracking yang dikirim ke nomor pelanggan saat approval terbit.', events: ['tracking'] },
 ];
 
 const EVENT_RE = /^[a-z0-9_.:-]+$/i;

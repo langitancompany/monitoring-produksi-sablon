@@ -59,6 +59,7 @@ Struktur di bawah mengikuti isi repositori saat ini (`node_modules/`, `.next/`, 
 │   │   └── wa/                       #   integrasi WhatsApp
 │   │       ├── gateway/              #     proxy ke service wa-gateway (status, QR, grup)
 │   │       ├── notify/               #     masukkan notifikasi order ke antrian wa_outbox
+│   │       ├── pelanggan/            #     kirim link tracking ke nomor pelanggan saat approval terbit (dipanggil setelah upload)
 │   │       └── settings/             #     saklar & pengaturan WhatsApp Bot
 │   ├── components/                   # Komponen UI, dikelompokkan per modul
 │   │   ├── apps/                     #   Kalkulator, Kalender, Config Harga, Nota, Gaji (SalaryView,
@@ -177,6 +178,34 @@ Struktur di bawah mengikuti isi repositori saat ini (`node_modules/`, `.next/`, 
 | `GET/POST /api/sync-sheets`   | Sinkronisasi data pesanan ke Google Sheets.                                                                                   |
 | `GET /api/test-migrate`       | Trigger script migrasi data massal (development/maintenance tool — **sebaiknya dihapus atau dilindungi sebelum production**). |
 | `GET /api/version`            | Info versi aplikasi (dipakai untuk `UpdateBanner`).                                                                           |
+
+### Pesan otomatis ke pelanggan: tracking & ACC proofing lewat WhatsApp (opsional)
+
+Penerima = nomor **`no_hp` di detail pesanan** (pelanggan). Berjalan berdampingan dengan nomor internal
+"Persetujuan proofing": pelanggan hanya **tambahan penerima**, alur dan tabel `wa_proofing_requests` sama.
+
+1. **Approval terbit** (mockup diupload) → pelanggan dikirimi **link tracking** (`/tracking?kode=…`; pelanggan memasukkan
+   4 digit terakhir nomor HP-nya). Dikirim sekali per pesanan (`/api/wa/pelanggan`).
+2. **Proofing diupload** → gambar proofing dikirim ke nomor internal **dan** pelanggan (`/api/wa/proofing`). Pelanggan membalas:
+   - `ACC` → step proofing di-ACC; PJ & helper dikabari lewat WA + lonceng untuk mulai produksi.
+     Bila semua step selesai, status pindah ke Finishing.
+   - `Revisi: alasan` → step proofing berstatus revisi, alasan = teks setelah tanda titik dua; PJ & helper dikabari
+     untuk upload ulang.
+   Upload ulang proofing mengirim pesan baru; balasan ke gambar lama ditolak.
+
+Aturan balasan (`/api/wa/proofing-reply`): paling aman dengan **reply (swipe) pada pesan proofing**. Tanpa reply, balasan
+diterima bila nomor itu punya tepat satu proofing menunggu; bila lebih, bot meminta reply. Reply yang isinya bukan
+`ACC` / `Revisi: …` dijawab petunjuk format. Nomor yang tidak pernah dikirimi proofing diabaikan tanpa balasan.
+Keputusan tercatat di riwayat order ("Pelanggan … via WhatsApp").
+
+Cara menyalakan:
+1. Jalankan `supabase/migrations/024_wa_pelanggan.sql` (setelah 021–023).
+2. Pastikan service **wa-gateway** punya env `APP_URL` (mis. `https://sablon.langitan.co`), lalu redeploy gateway bila ada perubahan.
+   Tanpa `APP_URL`, pengiriman pesan tetap normal tetapi balasan masuk tidak diteruskan.
+3. Nyalakan saklar **Pesan otomatis ke pelanggan** di Pengaturan → WhatsApp Bot (default MATI; ikut mati bila saklar
+   WhatsApp Bot utama mati). Token gateway di Pengaturan harus sama dengan `GATEWAY_TOKEN`.
+
+Disarankan mencoba dulu dengan satu pesanan yang `no_hp`-nya nomor Anda sendiri.
 
 ### Login sidik jari / passkey (opsional)
 

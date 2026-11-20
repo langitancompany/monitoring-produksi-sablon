@@ -16,6 +16,6 @@ test("seragamkanBaris: semua baris punya kolom mentions yang sama", () => {
 
 test("seragamkanBaris: tidak mengubah data asli", () => {
   const asli = [{ target: "x" }];
-  seragamkanBaris(asli);
+  seragamkanBaris(asli as unknown as { mentions?: string[] }[]);
   assert.equal("mentions" in asli[0], false);
 });

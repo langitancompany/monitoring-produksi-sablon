@@ -269,3 +269,80 @@ export const pesanProofingSudah = (kode: string, keadaan: 'acc' | 'revisi' | 'di
     : keadaan === 'revisi'
       ? `Proofing *${kode}* sudah berstatus revisi dan menunggu upload ulang, tidak ada yang diubah.`
       : `Proofing *${kode}* sudah diganti dengan upload yang lebih baru. Balas pesan proofing yang terbaru.`;
+
+
+// ─── Pesan ke PELANGGAN (nomor `no_hp` di detail pesanan) ─────────────────────
+// Nada & sapaan mengikuti pesan konfirmasi manual di OrderDetailHeader.
+
+const ringkasPesananPelanggan = (o: WaOrder) => {
+  const produk = labelProduk(o);
+  return [
+    '📦 *Detail Pesanan*',
+    `Kode  : *${o.kode_produksi}*`,
+    o.jumlah ? `Item  : ${o.jumlah} pcs${produk ? ` (${produk})` : ''}` : produk ? `Item  : ${produk}` : null,
+    o.deadline ? `Estimasi selesai: *${fmtTanggal(o.deadline)}*` : null,
+  ].filter((x): x is string => x !== null);
+};
+
+/** Approval terbit → link tracking. Pelanggan memasukkan 4 digit terakhir nomor HP-nya di halaman itu. */
+export const pesanTrackingPelanggan = (o: WaOrder, urlTracking: string) =>
+  [
+    `Assalamu'alaikum, *${o.nama_pemesan}* 👋`,
+    '',
+    'Approval pesanan Anda sudah kami terbitkan dan pesanan mulai kami proses.',
+    '',
+    ...ringkasPesananPelanggan(o),
+    '',
+    '🔍 *Pantau progres produksi Anda di:*',
+    urlTracking,
+    '(Masukkan 4 digit terakhir nomor HP ini untuk membuka.)',
+    '',
+    'Terima kasih telah mempercayai Langitan.co 🙏',
+  ].join('\n');
+
+/** Proofing diupload → gambar + cara membalas. Dibalas "ACC" atau "Revisi: alasan" (diproses /api/wa/proofing-reply). */
+export const pesanProofingPelanggan = (o: WaOrder, urlGambar: string) =>
+  [
+    `Assalamu'alaikum, *${o.nama_pemesan}* 👋`,
+    '',
+    `Proofing (contoh hasil) untuk pesanan *${o.kode_produksi}* sudah siap. Mohon dicek ya:`,
+    urlGambar,
+    '',
+    'Balas pesan ini dengan:',
+    '• *ACC* → jika sudah sesuai, kami langsung mulai produksi',
+    '• *Revisi: bagian yang ingin diubah* → jika perlu perbaikan',
+    '',
+    'Terima kasih 🙏',
+  ].join('\n');
+
+/** Pelanggan membalas pesan proofing, tetapi isinya bukan "ACC" / "Revisi: …" → petunjuk format. */
+export const pesanProofingFormat = () =>
+  'Mohon balas dengan:\n• *ACC* → jika proofing sudah sesuai\n• *Revisi: bagian yang ingin diubah* → jika perlu perbaikan';
+
+// ─── Kabar ke TIM (PJ & helper) saat PELANGGAN memutuskan proofing ─────────────
+
+export const pesanAccUntukTim = (nama: string, o: WaOrder, namaStep: string, link: string) =>
+  [
+    `✅ Halo ${nama}, pelanggan sudah *ACC* proofing.`,
+    '',
+    `*Kode:* ${o.kode_produksi}`,
+    `*Pemesan:* ${o.nama_pemesan || '-'}`,
+    `*Tahap:* ${namaStep}`,
+    '',
+    'Silakan mulai produksi:',
+    link,
+  ].join('\n');
+
+export const pesanRevisiUntukTim = (nama: string, o: WaOrder, namaStep: string, alasan: string, link: string) =>
+  [
+    `📝 Halo ${nama}, pelanggan meminta *revisi* proofing.`,
+    '',
+    `*Kode:* ${o.kode_produksi}`,
+    `*Pemesan:* ${o.nama_pemesan || '-'}`,
+    `*Tahap:* ${namaStep}`,
+    `*Permintaan revisi:* ${alasan}`,
+    '',
+    'Mohon upload ulang proofing di aplikasi:',
+    link,
+  ].join('\n');
+

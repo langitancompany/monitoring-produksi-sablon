@@ -127,9 +127,14 @@ const teksPesan = (m: any): string =>
       '',
   );
 
-// Cepat & murah: hanya pesan yang tampak seperti balasan proofing yang diteruskan ke aplikasi.
-// Penilaian akhir (nomor terdaftar, pesanan yang dimaksud) dilakukan aplikasi.
+// Cepat & murah: hanya pesan yang tampak seperti balasan proofing ATAU yang me-reply (swipe) sebuah pesan
+// yang diteruskan ke aplikasi. Penilaian akhir (nomor penerima, pesanan yang dimaksud, perlu petunjuk
+// format atau tidak) dilakukan aplikasi; obrolan biasa tanpa reply tidak pernah menghubungi aplikasi.
 const mirip = (t: string) => /^\s*(acc[\s.!]*$|revisi\s*:)/i.test(t);
+
+// Peta LID → nomor yang dipelajari dari event 'lid-mapping.update' (Baileys 7). Pelanggan baru hampir
+// selalu masuk sebagai LID; tanpa peta ini balasan tanpa swipe dari mereka tidak bisa dicocokkan.
+const lidKeNomor = new Map<string, string>();
 
 // Pengirim bisa berupa JID nomor (62xxx@s.whatsapp.net) atau LID (xxxx@lid). LID dipetakan ke nomor
 // lewat remoteJidAlt / pemetaan Baileys. Gagal dipetakan → null (aplikasi masih bisa mencocokkan lewat swipe-reply).
@@ -140,9 +145,12 @@ async function nomorPengirim(key: any, sock: WASocket | null): Promise<string | 
   if (langsung) return langsung;
   const lid: string | undefined = key?.remoteJid?.endsWith('@lid') ? key.remoteJid : undefined;
   if (lid) {
+    const dipelajari = lidKeNomor.get(lid);
+    if (dipelajari) return dipelajari;
     try {
-      const pn = await (sock as any)?.signalRepository?.lidMapping?.getPNForLID?.(lid);
-      return ambil(pn);
+      const pn = ambil(await (sock as any)?.signalRepository?.lidMapping?.getPNForLID?.(lid));
+      if (pn) lidKeNomor.set(lid, pn);
+      return pn;
     } catch { /* tidak terpetakan */ }
   }
   return null;
@@ -378,6 +386,13 @@ class Session {
 
       s.ev.on('creds.update', saveCreds);
 
+      // Nama event bisa berbeda antar versi Baileys → listener tambahan ini tidak berbahaya bila event tidak muncul.
+      (s.ev as any).on('lid-mapping.update', (u: any) => {
+        const pn = typeof (u?.pn ?? u?.phoneNumber) === 'string' ? String(u.pn ?? u.phoneNumber).split('@')[0].split(':')[0].replace(/\D/g, '') : '';
+        const lid = typeof u?.lid === 'string' ? u.lid : null;
+        if (pn.length >= 8 && lid) lidKeNomor.set(lid, pn);
+      });
+
       // Pesan masuk. "notify" = pesan baru; "append" = pesan yang tertahan saat gateway sempat putus.
       // Pesan lebih tua dari 10 menit diabaikan supaya sinkron riwayat tidak memicu balasan lama.
       s.ev.on('messages.upsert', ({ messages, type }) => {
@@ -489,10 +504,12 @@ class Session {
     if (!jid || jid.endsWith('@g.us') || jid === 'status@broadcast') return; // hanya chat pribadi
 
     const teks = teksPesan(m.message).replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, '');
-    if (!mirip(teks)) return;
+    const ctx = m.message?.extendedTextMessage?.contextInfo ?? m.message?.imageMessage?.contextInfo;
+    // Format ACC / Revisi: → teruskan. Reply pada pesan apa pun → teruskan juga (aplikasi yang menilai: hanya
+    // reply pada pesan proofing yang masih menunggu yang dijawab, dengan petunjuk format; sisanya diabaikan).
+    if (!mirip(teks) && !ctx?.stanzaId) return;
 
     // Mulai dari sini pesan dikenali sebagai balasan proofing: setiap kegagalan WAJIB terlihat di log
-    const ctx = m.message?.extendedTextMessage?.contextInfo ?? m.message?.imageMessage?.contextInfo;
     this.log.info({ jid, altJid: key.remoteJidAlt ?? null, teks: teks.slice(0, 60), swipe: !!ctx?.stanzaId }, 'balasan proofing masuk');
     if (!APP_URL) {
       this.log.error('APP_URL belum diisi di environment wa-gateway → balasan TIDAK diteruskan ke aplikasi');

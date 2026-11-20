@@ -223,6 +223,21 @@ export function useUpload({
         .catch((e) => console.error('[wa/proofing] gagal terhubung', e));
     }
 
+    // Approval terbit (mockup diupload) → kirim link tracking ke pelanggan (WhatsApp, bila saklarnya aktif).
+    // Tidak di-await & gagal diam-diam. Server memeriksa sendiri ke database (saklar aktif, approval memang
+    // sudah terbit, dikirim sekali per pesanan), jadi aman dipanggil tiap upload approval.
+    if (uploadContext.type === 'approval') {
+      fetch('/api/wa/pelanggan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: order.id, event: 'approval' }),
+      })
+        .then(async (r) => {
+          if (!r.ok) console.error('[wa/pelanggan] gagal', r.status, await r.text().catch(() => ''));
+        })
+        .catch((e) => console.error('[wa/pelanggan] gagal terhubung', e));
+    }
+
     setIsUploading(false);
     setUploadContext(null);
     if (fileInputRef.current) fileInputRef.current.value = '';

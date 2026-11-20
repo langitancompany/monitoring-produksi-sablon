@@ -23,6 +23,7 @@ const tampil = (s: Awaited<ReturnType<typeof getWaSettings>>) => ({
   notify_verifikasi_numbers: s.notifyVerifikasiNumbers,
   notify_kendala_numbers: s.notifyKendalaNumbers,
   notify_proofing_numbers: s.notifyProofingNumbers,
+  notify_pelanggan: s.notifyPelanggan,
 });
 
 // Validasi + normalisasi daftar nomor. Mengembalikan string error bila ada yang tidak valid.
@@ -63,6 +64,7 @@ export async function PUT(request: NextRequest) {
       notify_verifikasi_numbers?: string[];
       notify_kendala_numbers?: string[];
       notify_proofing_numbers?: string[];
+      notify_pelanggan?: boolean;
     };
 
     const sekarang = await getWaSettings();
@@ -99,6 +101,8 @@ export async function PUT(request: NextRequest) {
       if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
       patch[kolom] = r.nomor;
     }
+
+    if (typeof body.notify_pelanggan === 'boolean') patch.notify_pelanggan = body.notify_pelanggan;
 
     if (typeof body.enabled === 'boolean') {
       if (body.enabled) {

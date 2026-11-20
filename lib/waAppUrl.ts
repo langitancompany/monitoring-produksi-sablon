@@ -6,6 +6,9 @@ const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'https://sablon.langitan.co'
 /** Membuka menu Keuangan langsung di sub-tab Verifikasi. */
 export const linkVerifikasi = () => `${APP_URL}/?tab=finance&ftab=verify`;
 
+/** Halaman tracking publik untuk pelanggan (pelanggan memasukkan 4 digit terakhir nomor HP-nya). */
+export const linkTracking = (kode: string) => `${APP_URL}/tracking?kode=${encodeURIComponent(kode)}`;
+
 /** Membuka detail pesanan (Merchandise punya tab sendiri). */
 export const linkPesanan = (orderId: string, merchandise: boolean) =>
   `${APP_URL}/?tab=${merchandise ? 'merchandise' : 'orders'}&view=detail&orderId=${encodeURIComponent(orderId)}`;
