@@ -79,7 +79,7 @@ export default function Sidebar({
           id: "calendar",
           label: "Kalender Produksi",
           icon: CalendarDays,
-          visible: p?.calendar?.view,
+          visible: true,
         },
         {
           id: "completed_orders",

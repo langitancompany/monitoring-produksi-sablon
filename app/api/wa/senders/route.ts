@@ -7,7 +7,8 @@
 //  DELETE  {id}                      → hapus nomor (gateway memutus sesinya & menghapus folder sesi)
 //
 // `tasks` di sini berupa KUNCI tugas (lihat lib/waSenders.ts); yang disimpan ke database adalah
-// jenis pesannya. Nomor 'utama' tidak bisa dihapus/dimatikan. Daftar tugasnya boleh kosong: ia
+// jenis pesannya. Nomor 'utama' tidak bisa dimatikan. Menghapusnya = memutus perangkat & menghapus sesinya
+// (gateway memulai sesi utama baru yang menunggu scan QR; nama & tugas kembali ke bawaan). Daftar tugasnya boleh kosong: ia
 // mengirim semua jenis pesan yang tidak dialihkan ke nomor lain. Bila diisi, ia hanya mengirim yang dipilih
 // (tugas nomor tambahan yang sedang tidak siap tetap diambil alih gateway).
 
@@ -154,7 +155,11 @@ export async function PATCH(request: NextRequest) {
     }
     if (!Object.keys(patch).length) return NextResponse.json({ ok: true });
 
-    const { error } = await getSupabaseAdmin().from('wa_senders').update(patch).eq('id', b.id);
+    const db = getSupabaseAdmin();
+    const { error } = utama
+      // Baris utama bisa belum ada (mis. setelah dihapus) → upsert; kolom yang tak disebut tidak berubah
+      ? await db.from('wa_senders').upsert({ id: b.id, label: target.label || 'Nomor Utama', ...patch }, { onConflict: 'id' })
+      : await db.from('wa_senders').update(patch).eq('id', b.id);
     if (error) throw new Error(error.message);
     return NextResponse.json({ ok: true });
   } catch (e: any) {
@@ -169,7 +174,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const b = (await request.json().catch(() => ({}))) as { id?: string };
     if (!b.id || !SENDER_ID_RE.test(b.id)) return NextResponse.json({ error: 'ID nomor tidak valid.' }, { status: 400 });
-    if (b.id === DEFAULT_SENDER_ID) return NextResponse.json({ error: 'Nomor utama tidak bisa dihapus.' }, { status: 400 });
+    // Nomor utama boleh dihapus: barisnya dibuang, gateway memutus & menghapus sesinya lalu menunggu QR baru
     const { error } = await getSupabaseAdmin().from('wa_senders').delete().eq('id', b.id);
     if (error) throw new Error(error.message);
     return NextResponse.json({ ok: true });

@@ -2,8 +2,9 @@
 // Daftar kartu "Nomor pengirim" di Pengaturan → Notifikasi. Satu kartu per nomor WhatsApp:
 // nama, status koneksi, bar sisa pemakaian (per jam & per 24 jam, ditumpuk atas-bawah) khusus nomor itu,
 // ringkasan tugasnya, dan antrian pesan yang menjadi bagian nomor itu (menunggu & gagal). Antrian dibagi
-// per nomor menurut jenis pesannya, mengikuti aturan gateway. Semua pengaturan nomor (nama, tugas, hidup/mati, hapus, QR) ada di panel "Atur" tiap kartu,
-// jadi daftar tetap pendek.
+// per nomor menurut jenis pesannya, mengikuti aturan gateway. Kartu hanya punya dua tombol ikon: pena (buka
+// pop-up pengaturan: nama, tugas, hidup/mati, QR) dan tong sampah (hapus, dengan konfirmasi). Menambah nomor
+// juga lewat pop-up, jadi daftar tetap pendek.
 // - Nomor utama = nomor yang sudah ada (QR-nya di kartu koneksi di atas). Tugasnya boleh dibiarkan
 //   "semua pesan yang tidak dipegang nomor lain" atau dibatasi ke jenis pesan tertentu.
 // - Nomor tambahan hanya mengirim jenis pesan yang dicentang. Selama belum terhubung (menunggu scan QR,
@@ -12,7 +13,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { Plus, Trash2, Power, ChevronDown, Smartphone, SlidersHorizontal, TriangleAlert, Inbox, XCircle } from "lucide-react";
+import { Plus, Trash2, Power, Pencil, X, Smartphone, TriangleAlert, Inbox, XCircle } from "lucide-react";
 import { pemilikEvent, type PemegangNomor } from "@/lib/waSenders";
 import { kapan, lamaMenunggu, namaEvent, warnaPemakaian, type WaQueueInfo } from "@/app/components/settings/waUsageShared";
 
@@ -46,6 +47,9 @@ const btnPrimary =
   "shrink-0 flex items-center justify-center gap-2 bg-[#124540] hover:bg-[#0d332f] text-white px-4 py-2 rounded-md text-sm font-semibold transition-colors duration-150 disabled:opacity-50";
 const btnGhost =
   "shrink-0 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-semibold border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors duration-150 disabled:opacity-50";
+
+const btnIcon =
+  "shrink-0 flex items-center justify-center w-8 h-8 rounded-md border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors duration-150 disabled:opacity-50";
 
 function Status({ live, enabled }: { live?: Live; enabled: boolean }) {
   let teks = "Menunggu gateway";
@@ -168,6 +172,55 @@ function RingkasTugas({ s, tugas }: { s: Sender; tugas: Tugas[] }) {
   );
 }
 
+// Pop-up di atas halaman: tutup dengan tombol X, Escape, atau klik latar.
+function Modal({
+  judul, subjudul, onClose, children, footer,
+}: {
+  judul: string;
+  subjudul?: React.ReactNode;
+  onClose: () => void;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+}) {
+  useEffect(() => {
+    const tutup = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", tutup);
+    const lama = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", tutup); document.body.style.overflow = lama; };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={judul}
+        className="w-full sm:max-w-xl max-h-[92vh] flex flex-col bg-white dark:bg-zinc-950 rounded-t-xl sm:rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xl"
+      >
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-zinc-200 dark:border-zinc-800">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{judul}</p>
+            {subjudul && <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{subjudul}</div>}
+          </div>
+          <button type="button" className={btnIcon} onClick={onClose} aria-label="Tutup">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">{children}</div>
+        {footer && (
+          <div className="px-5 py-3 border-t border-zinc-200 dark:border-zinc-800 flex items-center gap-2 flex-wrap">{footer}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+type Dialog = { mode: "tambah" } | { mode: "atur"; id: string } | { mode: "hapus"; id: string } | null;
+
 export default function WaSenders({
   configured, enabled, queue,
 }: {
@@ -185,18 +238,18 @@ export default function WaSenders({
   const [qr, setQr] = useState<Record<string, string | null>>({});
   const [msg, setMsg] = useState<Msg>(null);
   const [busy, setBusy] = useState(false);
+  const [dialog, setDialog] = useState<Dialog>(null);
+  const [dialogErr, setDialogErr] = useState("");
 
-  // Form tambah (dilipat sampai tombol "Tambah nomor" ditekan)
-  const [tambahBuka, setTambahBuka] = useState(false);
+  // Isi form pop-up
   const [labelBaru, setLabelBaru] = useState("");
   const [tugasBaru, setTugasBaru] = useState<string[]>([]);
-  // Panel atur per kartu
-  const [aturId, setAturId] = useState<string | null>(null);
   const [draftLabel, setDraftLabel] = useState("");
   const [draftTugas, setDraftTugas] = useState<string[]>([]);
   const [draftSemua, setDraftSemua] = useState(true); // khusus nomor utama
-  const [hapusId, setHapusId] = useState<string | null>(null);
   const [gagalBuka, setGagalBuka] = useState<string | null>(null); // kartu yang daftar gagalnya terbuka
+
+  const tutupDialog = useCallback(() => { setDialog(null); setDialogErr(""); }, []);
 
   const muat = useCallback(async () => {
     const { ok, data } = await api("/api/wa/senders");
@@ -232,7 +285,7 @@ export default function WaSenders({
       setLive(peta);
       const qrBaru: Record<string, string | null> = {};
       for (const l of r.data as Live[]) {
-        if (l.wa === "qr" && l.id !== "utama") {
+        if (l.wa === "qr") {
           const q = await api(`/api/wa/gateway?action=qr&sender=${encodeURIComponent(l.id)}`);
           qrBaru[l.id] = q.ok ? (q.data?.qr ?? null) : null;
         }
@@ -264,9 +317,7 @@ export default function WaSenders({
   })();
 
   // ── Antrian per nomor ──────────────────────────────────────────────────────
-  // Meniru aturan gateway: nomor tambahan yang aktif & siap memegang jenis pesan pilihannya. Sisanya
-  // jatuh ke nomor utama; bila nomor utama dibatasi, hanya pilihannya + tugas nomor tambahan yang tidak
-  // siap / dimatikan. Jenis pesan di luar itu belum dipegang siapa pun.
+  // Meniru aturan gateway (lihat pemilikEvent di lib/waSenders.ts).
   const eventsDari = (s: Sender) => s.tasks.flatMap((k) => tugas.find((t) => t.key === k)?.events ?? []);
   const siap = (id: string) => {
     const l = live[id];
@@ -296,49 +347,71 @@ export default function WaSenders({
   const gagalMilik = (id: string) =>
     (queue?.recent_failed ?? []).filter((f) => (pemilik(f.event_type) ?? utama?.id) === id);
 
+  // Jalankan aksi. Gagal: pesan tampil di dalam pop-up bila terbuka, kalau tidak di bawah daftar.
   const jalankan = async (fn: () => Promise<{ ok: boolean; data: any }>, sukses: string) => {
     setBusy(true);
     setMsg(null);
+    setDialogErr("");
     const { ok, data } = await fn();
     setBusy(false);
-    if (!ok) { setMsg({ type: "err", text: data?.error || "Gagal." }); return false; }
+    if (!ok) {
+      const teks = data?.error || "Gagal.";
+      if (dialog) setDialogErr(teks); else setMsg({ type: "err", text: teks });
+      return false;
+    }
     setMsg({ type: "ok", text: sukses });
     await muat();
     return true;
   };
 
-  const tambah = async () => {
-    const okTambah = await jalankan(
-      () => kirim("POST", { label: labelBaru, tasks: tugasBaru }),
-      "Nomor ditambahkan. Kodenya muncul di kartu barunya dalam ±30 detik; scan dengan WhatsApp nomor itu.",
-    );
-    if (okTambah) { setLabelBaru(""); setTugasBaru([]); setTambahBuka(false); }
-  };
+  const bukaTambah = () => { setLabelBaru(""); setTugasBaru([]); setDialogErr(""); setDialog({ mode: "tambah" }); };
 
   const bukaAtur = (s: Sender) => {
-    if (aturId === s.id) { setAturId(null); return; }
-    setAturId(s.id);
     setDraftLabel(s.label);
     setDraftTugas(s.tasks);
     setDraftSemua(s.tasks.length === 0);
-    setHapusId(null);
+    setDialogErr("");
+    setDialog({ mode: "atur", id: s.id });
+  };
+
+  const tambah = async () => {
+    const ok = await jalankan(
+      () => kirim("POST", { label: labelBaru, tasks: tugasBaru }),
+      "Nomor ditambahkan. Kodenya muncul di Atur pada kartu barunya dalam ±30 detik; scan dengan WhatsApp nomor itu.",
+    );
+    if (ok) tutupDialog();
   };
 
   const simpanAtur = async () => {
-    if (!aturId) return;
-    const s = senders.find((x) => x.id === aturId);
+    if (dialog?.mode !== "atur") return;
+    const s = senders.find((x) => x.id === dialog.id);
     if (!s) return;
     const tasks = s.is_default && draftSemua ? [] : draftTugas;
-    const okSimpan = await jalankan(
-      () => kirim("PATCH", { id: aturId, label: draftLabel, tasks }),
+    const ok = await jalankan(
+      () => kirim("PATCH", { id: s.id, label: draftLabel, tasks }),
       "Perubahan tersimpan. Gateway menerapkannya dalam ±30 detik.",
     );
-    if (okSimpan) setAturId(null);
+    if (ok) tutupDialog();
+  };
+
+  const hapus = async () => {
+    if (dialog?.mode !== "hapus") return;
+    const s = senders.find((x) => x.id === dialog.id);
+    if (!s) return;
+    const ok = await jalankan(
+      () => kirim("DELETE", { id: s.id }),
+      s.is_default
+        ? "Nomor utama dihapus. Gateway memutus sesinya dalam ±30 detik, lalu menampilkan QR untuk nomor baru."
+        : "Nomor dihapus. Gateway memutus sesinya dalam ±30 detik.",
+    );
+    if (ok) tutupDialog();
   };
 
   if (loadErr) {
     return <div className={`${cardCls} p-5 md:p-6`}><p className="text-xs text-red-600 dark:text-red-400">{loadErr}</p></div>;
   }
+
+  const dlgSender = dialog && dialog.mode !== "tambah" ? senders.find((x) => x.id === dialog.id) : undefined;
 
   return (
     <div className={`${cardCls} p-5 md:p-6 space-y-4`}>
@@ -346,13 +419,13 @@ export default function WaSenders({
         <div className="min-w-0">
           <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Nomor pengirim</p>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 max-w-prose">
-            Satu kartu per nomor: status, sisa pemakaian, dan tugasnya. Tekan Atur pada kartu untuk mengubah
-            nama dan tugas. Tiap nomor punya batas kirim dan perlindungan sendiri. Sebaiknya gunakan nomor khusus bot,
-            bukan nomor pribadi.
+            Satu kartu per nomor: status, sisa pemakaian, antrian, dan tugasnya. Ikon pena membuka pengaturan nomor
+            (nama, tugas, QR). Tiap nomor punya batas kirim dan perlindungan sendiri. Sebaiknya gunakan nomor khusus
+            bot, bukan nomor pribadi.
           </p>
         </div>
         {migrated && senders.length < maks && (
-          <button type="button" className={btnPrimary} onClick={() => setTambahBuka((v) => !v)} aria-expanded={tambahBuka}>
+          <button type="button" className={btnPrimary} onClick={bukaTambah}>
             <Plus size={14} />
             Tambah nomor
           </button>
@@ -385,35 +458,15 @@ export default function WaSenders({
         </div>
       )}
 
-      {tambahBuka && migrated && (
-        <div className="space-y-3 rounded-lg border border-zinc-200 dark:border-zinc-800 p-4">
-          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Nomor pengirim baru</p>
-          <input className={inputCls} value={labelBaru} maxLength={40} onChange={(e) => setLabelBaru(e.target.value)} placeholder="Nama nomor, mis. Admin Gudang" aria-label="Nama nomor baru" />
-          <PilihTugas tugas={tugas} dipilih={tugasBaru} onChange={setTugasBaru} dipakaiLain={dipakaiOleh()} />
-          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-            Tugas boleh dikosongkan dulu dan diisi nanti. Nomor tanpa tugas tidak mengirim apa pun.
-          </p>
-          <div className="flex gap-2">
-            <button type="button" className={btnPrimary} disabled={busy || !labelBaru.trim()} onClick={tambah}>
-              <Plus size={14} />
-              Tambah nomor
-            </button>
-            <button type="button" className={btnGhost} onClick={() => setTambahBuka(false)}>Batal</button>
-          </div>
-        </div>
-      )}
-
       <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {senders.map((s) => {
           const l = live[s.id];
-          const atur = aturId === s.id;
-          const dipakaiLain = dipakaiOleh(s.id);
           return (
             <li
               key={s.id}
-              className={`rounded-lg border border-zinc-200 dark:border-zinc-800 p-3.5 space-y-3 ${atur ? "col-span-full" : ""} ${s.enabled ? "" : "bg-zinc-50 dark:bg-zinc-900/50"}`}
+              className={`rounded-lg border border-zinc-200 dark:border-zinc-800 p-3.5 space-y-3 ${s.enabled ? "" : "bg-zinc-50 dark:bg-zinc-900/50"}`}
             >
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start justify-between gap-2">
                 <div className="flex items-start gap-2.5 min-w-0">
                   <span className="mt-0.5 shrink-0 text-zinc-500 dark:text-zinc-400"><Smartphone size={16} /></span>
                   <div className="min-w-0 space-y-1.5">
@@ -427,18 +480,28 @@ export default function WaSenders({
                     <RingkasTugas s={s} tugas={tugas} />
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className={btnGhost}
-                  disabled={busy}
-                  onClick={() => bukaAtur(s)}
-                  aria-expanded={atur}
-                  aria-label={`Atur ${s.label}`}
-                >
-                  <SlidersHorizontal size={14} />
-                  <span className="hidden sm:inline">Atur</span>
-                  <ChevronDown size={14} className={`transition-transform duration-150 ${atur ? "rotate-180" : ""}`} />
-                </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    className={btnIcon}
+                    disabled={busy}
+                    onClick={() => bukaAtur(s)}
+                    aria-label={`Atur ${s.label}`}
+                    title="Atur"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className={`${btnIcon} hover:!bg-red-50 hover:!text-red-600 dark:hover:!bg-red-950/40`}
+                    disabled={busy}
+                    onClick={() => { setDialogErr(""); setDialog({ mode: "hapus", id: s.id }); }}
+                    aria-label={`Hapus ${s.label}`}
+                    title="Hapus"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
 
               {s.enabled && l?.limits ? (
@@ -501,107 +564,14 @@ export default function WaSenders({
                 </p>
               )}
 
-              {s.is_default && l?.wa === "qr" && (
-                <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                  Nomor utama menunggu scan QR. Kodenya ada di kartu sambungan gateway di atas.
-                </p>
-              )}
-
-              {atur && (
-                <div className="space-y-3 pt-3 border-t border-zinc-200 dark:border-zinc-800">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 mb-1">Nama nomor</label>
-                    <input className={inputCls} value={draftLabel} maxLength={40} onChange={(e) => setDraftLabel(e.target.value)} placeholder="Nama nomor" aria-label="Nama nomor" />
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">Tugas nomor ini</p>
-                    {s.is_default && (
-                      <label className="flex items-start gap-2 rounded-md border border-zinc-200 dark:border-zinc-800 p-2.5 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900">
-                        <input type="checkbox" className="mt-0.5" checked={draftSemua} onChange={(e) => setDraftSemua(e.target.checked)} />
-                        <span>
-                          <span className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">Kirim semua jenis pesan yang tidak dipegang nomor lain</span>
-                          <span className="block text-[11px] text-zinc-500 dark:text-zinc-400">
-                            Matikan pilihan ini untuk memilih sendiri jenis pesan yang dikirim nomor utama.
-                          </span>
-                        </span>
-                      </label>
-                    )}
-                    {(!s.is_default || !draftSemua) && (
-                      <PilihTugas tugas={tugas} dipilih={draftTugas} onChange={setDraftTugas} dipakaiLain={dipakaiLain} />
-                    )}
-                    {s.is_default && !draftSemua && draftTugas.length === 0 && (
-                      <p className="text-[11px] text-amber-700 dark:text-amber-400">Pilih minimal satu jenis pesan, atau nyalakan lagi pilihan di atas.</p>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      type="button"
-                      className={btnPrimary}
-                      disabled={busy || !draftLabel.trim() || (s.is_default && !draftSemua && draftTugas.length === 0)}
-                      onClick={simpanAtur}
-                    >
-                      Simpan
-                    </button>
-                    <button type="button" className={btnGhost} onClick={() => setAturId(null)}>Batal</button>
-
-                    {!s.is_default && (
-                      <div className="flex items-center gap-2 ml-auto">
-                        <button
-                          type="button"
-                          className={btnGhost}
-                          disabled={busy}
-                          onClick={() => jalankan(() => kirim("PATCH", { id: s.id, enabled: !s.enabled }), s.enabled ? "Nomor dimatikan." : "Nomor dihidupkan.")}
-                          title={s.enabled ? "Matikan (sesi dipertahankan)" : "Hidupkan"}
-                        >
-                          <Power size={14} />
-                          {s.enabled ? "Matikan" : "Hidupkan"}
-                        </button>
-                        {hapusId === s.id ? (
-                          <button
-                            type="button"
-                            className="shrink-0 px-3 py-2 rounded-md text-sm font-semibold bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
-                            disabled={busy}
-                            onClick={async () => { const ok = await jalankan(() => kirim("DELETE", { id: s.id }), "Nomor dihapus. Gateway memutus sesinya dalam ±30 detik."); setHapusId(null); if (ok) setAturId(null); }}
-                          >
-                            Yakin hapus?
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className={btnGhost}
-                            disabled={busy}
-                            onClick={() => setHapusId(s.id)}
-                            onBlur={() => setHapusId((v) => (v === s.id ? null : v))}
-                          >
-                            <Trash2 size={14} />
-                            Hapus
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {!s.is_default && s.enabled && l?.wa === "qr" && (
-                <div className="flex flex-col sm:flex-row items-center gap-4 rounded-md bg-zinc-50 dark:bg-zinc-900 p-3">
-                  <div className="w-[200px] h-[200px] shrink-0 rounded-lg bg-white border border-zinc-200 p-2 flex items-center justify-center">
-                    {qr[s.id] ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={qr[s.id] as string} alt={`QR ${s.label}`} width={184} height={184} className="w-full h-full" />
-                    ) : (
-                      <span className="w-6 h-6 border-2 border-zinc-300 border-t-[#124540] rounded-full animate-spin" />
-                    )}
-                  </div>
-                  <ol className="text-sm text-zinc-600 dark:text-zinc-300 space-y-1 list-decimal list-inside">
-                    <li>Buka WhatsApp di HP untuk nomor ini.</li>
-                    <li>Pengaturan → Perangkat tertaut.</li>
-                    <li>Tautkan perangkat, arahkan kamera ke kode ini.</li>
-                    <li className="text-[11px] text-zinc-500 dark:text-zinc-400 list-none -ml-4">Selama belum terhubung, tugasnya dikerjakan nomor utama.</li>
-                  </ol>
-                </div>
+              {s.enabled && l?.wa === "qr" && (
+                <button
+                  type="button"
+                  className="text-[11px] font-semibold text-amber-700 dark:text-amber-400 hover:underline text-left"
+                  onClick={() => bukaAtur(s)}
+                >
+                  Menunggu scan QR. Buka pengaturan untuk memindai kodenya.
+                </button>
               )}
             </li>
           );
@@ -614,6 +584,183 @@ export default function WaSenders({
 
       {msg && (
         <p className={`text-xs ${msg.type === "ok" ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>{msg.text}</p>
+      )}
+
+      {/* ── Pop-up: tambah nomor ── */}
+      {dialog?.mode === "tambah" && (
+        <Modal
+          judul="Tambah nomor pengirim"
+          subjudul="Nomor baru muncul sebagai kartu, lalu scan QR-nya dengan WhatsApp nomor itu."
+          onClose={tutupDialog}
+          footer={
+            <>
+              <button type="button" className={btnPrimary} disabled={busy || !labelBaru.trim()} onClick={tambah}>
+                <Plus size={14} />
+                Tambah nomor
+              </button>
+              <button type="button" className={btnGhost} onClick={tutupDialog}>Batal</button>
+              {dialogErr && <p className="w-full text-xs text-red-600 dark:text-red-400">{dialogErr}</p>}
+            </>
+          }
+        >
+          <div>
+            <label className="block text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 mb-1">Nama nomor</label>
+            <input className={inputCls} value={labelBaru} maxLength={40} autoFocus onChange={(e) => setLabelBaru(e.target.value)} placeholder="Mis. Admin Gudang" aria-label="Nama nomor baru" />
+          </div>
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">Tugas nomor ini</p>
+            <PilihTugas tugas={tugas} dipilih={tugasBaru} onChange={setTugasBaru} dipakaiLain={dipakaiOleh()} />
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+              Tugas boleh dikosongkan dulu dan diisi nanti. Nomor tanpa tugas tidak mengirim apa pun.
+            </p>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Pop-up: atur nomor (nama, lalu tugas/perizinan, status, QR) ── */}
+      {dialog?.mode === "atur" && dlgSender && (
+        <Modal
+          judul={`Atur ${dlgSender.label}`}
+          subjudul={
+            <span className="flex items-center gap-2 flex-wrap">
+              {dlgSender.is_default && <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-[#124540] text-white">Utama</span>}
+              <Status live={live[dlgSender.id]} enabled={dlgSender.enabled} />
+            </span>
+          }
+          onClose={tutupDialog}
+          footer={
+            <>
+              <button
+                type="button"
+                className={btnPrimary}
+                disabled={busy || !draftLabel.trim() || (dlgSender.is_default && !draftSemua && draftTugas.length === 0)}
+                onClick={simpanAtur}
+              >
+                Simpan
+              </button>
+              <button type="button" className={btnGhost} onClick={tutupDialog}>Batal</button>
+              {dialogErr && <p className="w-full text-xs text-red-600 dark:text-red-400">{dialogErr}</p>}
+            </>
+          }
+        >
+          <div>
+            <label className="block text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 mb-1">Nama nomor</label>
+            <input className={inputCls} value={draftLabel} maxLength={40} onChange={(e) => setDraftLabel(e.target.value)} placeholder="Nama nomor" aria-label="Nama nomor" />
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">Tugas nomor ini</p>
+            {dlgSender.is_default && (
+              <label className="flex items-start gap-2 rounded-md border border-zinc-200 dark:border-zinc-800 p-2.5 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900">
+                <input type="checkbox" className="mt-0.5" checked={draftSemua} onChange={(e) => setDraftSemua(e.target.checked)} />
+                <span>
+                  <span className="block text-sm font-medium text-zinc-800 dark:text-zinc-200">Kirim semua jenis pesan yang tidak dipegang nomor lain</span>
+                  <span className="block text-[11px] text-zinc-500 dark:text-zinc-400">
+                    Matikan pilihan ini untuk memilih sendiri jenis pesan yang dikirim nomor utama.
+                  </span>
+                </span>
+              </label>
+            )}
+            {(!dlgSender.is_default || !draftSemua) && (
+              <PilihTugas tugas={tugas} dipilih={draftTugas} onChange={setDraftTugas} dipakaiLain={dipakaiOleh(dlgSender.id)} />
+            )}
+            {dlgSender.is_default && !draftSemua && draftTugas.length === 0 && (
+              <p className="text-[11px] text-amber-700 dark:text-amber-400">Pilih minimal satu jenis pesan, atau nyalakan lagi pilihan di atas.</p>
+            )}
+          </div>
+
+          {!dlgSender.is_default && (
+            <div className="flex items-center justify-between gap-3 rounded-md border border-zinc-200 dark:border-zinc-800 p-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{dlgSender.enabled ? "Nomor aktif" : "Nomor dimatikan"}</p>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  {dlgSender.enabled
+                    ? "Dimatikan = sesi dihentikan, tapi tidak perlu scan QR lagi saat dihidupkan. Tugasnya dikerjakan nomor utama."
+                    : "Tidak mengirim pesan. Hidupkan untuk memakainya lagi."}
+                </p>
+              </div>
+              <button
+                type="button"
+                className={btnGhost}
+                disabled={busy}
+                onClick={() => jalankan(() => kirim("PATCH", { id: dlgSender.id, enabled: !dlgSender.enabled }), dlgSender.enabled ? "Nomor dimatikan." : "Nomor dihidupkan.")}
+              >
+                <Power size={14} />
+                {dlgSender.enabled ? "Matikan" : "Hidupkan"}
+              </button>
+            </div>
+          )}
+
+          {dlgSender.enabled && live[dlgSender.id]?.wa === "qr" && (
+            <div className="flex flex-col sm:flex-row items-center gap-4 rounded-md bg-zinc-50 dark:bg-zinc-900 p-3">
+              <div className="w-[200px] h-[200px] shrink-0 rounded-lg bg-white border border-zinc-200 p-2 flex items-center justify-center">
+                {qr[dlgSender.id] ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={qr[dlgSender.id] as string} alt={`QR ${dlgSender.label}`} width={184} height={184} className="w-full h-full" />
+                ) : (
+                  <span className="w-6 h-6 border-2 border-zinc-300 border-t-[#124540] rounded-full animate-spin" />
+                )}
+              </div>
+              <ol className="text-sm text-zinc-600 dark:text-zinc-300 space-y-1 list-decimal list-inside">
+                <li>Buka WhatsApp di HP untuk nomor ini.</li>
+                <li>Pengaturan → Perangkat tertaut.</li>
+                <li>Tautkan perangkat, arahkan kamera ke kode ini.</li>
+                <li className="text-[11px] text-zinc-500 dark:text-zinc-400 list-none -ml-4">
+                  {dlgSender.is_default ? "Selama belum terhubung, pesan tertahan di antrian." : "Selama belum terhubung, tugasnya dikerjakan nomor utama."}
+                </li>
+              </ol>
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {/* ── Pop-up: konfirmasi hapus ── */}
+      {dialog?.mode === "hapus" && dlgSender && (
+        <Modal
+          judul={`Hapus ${dlgSender.label}?`}
+          onClose={tutupDialog}
+          footer={
+            <>
+              <button
+                type="button"
+                className="shrink-0 flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-semibold bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+                disabled={busy}
+                onClick={hapus}
+              >
+                <Trash2 size={14} />
+                Ya, hapus nomor
+              </button>
+              <button type="button" className={btnGhost} onClick={tutupDialog}>Batal</button>
+              {dialogErr && <p className="w-full text-xs text-red-600 dark:text-red-400">{dialogErr}</p>}
+            </>
+          }
+        >
+          <div className="space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
+            {dlgSender.is_default ? (
+              <>
+                <p>
+                  Perangkat nomor utama diputus dari WhatsApp dan sesinya dihapus. Nama dan tugasnya kembali ke
+                  bawaan, dan untuk memakainya lagi harus scan QR ulang.
+                </p>
+                <p>
+                  Kartu ini tetap ada sebagai tempat nomor utama, karena gateway selalu membutuhkan satu nomor.
+                  Setelah dihapus kartu menampilkan QR untuk menghubungkan nomor baru.
+                </p>
+              </>
+            ) : (
+              <p>
+                Perangkat nomor ini diputus dari WhatsApp dan sesinya dihapus. Untuk memakainya lagi harus scan QR
+                ulang. Tugasnya kembali dikerjakan nomor lain.
+              </p>
+            )}
+            {senders.length <= 1 && (
+              <p className="text-amber-700 dark:text-amber-400">
+                Ini satu-satunya nomor. Tidak ada pesan yang terkirim sampai ada nomor yang terhubung lagi; pesan
+                baru menunggu di antrian.
+              </p>
+            )}
+          </div>
+        </Modal>
       )}
     </div>
   );

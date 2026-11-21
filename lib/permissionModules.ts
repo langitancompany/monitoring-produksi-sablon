@@ -10,7 +10,7 @@
 // Tambah modul baru: tambah di UserPermissions + DEFAULT_PERMISSIONS (types/index.ts),
 // lalu satu objek di MODULE_DEFS di bawah.
 
-import { DEFAULT_PERMISSIONS, legacyCalendarView, type UserPermissions } from "@/types";
+import { DEFAULT_PERMISSIONS, type UserPermissions } from "@/types";
 
 export type PermKey = keyof UserPermissions;
 
@@ -34,7 +34,6 @@ export const MODULE_DEFS: ModuleDef[] = [
     label: "Pesanan",
     columns: { create: "Buat pesanan", edit: "Edit pesanan", delete: "Hapus pesanan" },
   },
-  { key: "calendar", label: "Kalender Produksi", columns: {} },
   {
     key: "merchandise",
     label: "Merchandise",
@@ -207,7 +206,6 @@ export function normalizePermissions(raw: unknown): UserPermissions {
     out[mod] = {};
     for (const f of Object.keys(defaults)) out[mod][f] = base?.[f] === true;
   }
-  if (!src.calendar) out.calendar.view = legacyCalendarView(src);
   const k = src.keuangan;
   if (k) {
     if (typeof k.maker !== "boolean") out.keuangan.maker = k.create === true;

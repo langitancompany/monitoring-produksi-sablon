@@ -838,6 +838,10 @@ function mulaiSesi(id: string, label: string, tasks: string[]): Session {
 // Samakan sesi yang berjalan dengan tabel wa_senders. Nomor utama selalu ada.
 // Gagal membaca tabel TIDAK boleh menghentikan / menghapus sesi apa pun (mis. gangguan sesaat).
 let syncing = false;
+// Baris 'utama' pernah terlihat di tabel wa_senders. Bila kemudian hilang (dihapus dari Pengaturan), sesi utama
+// diputus & dihapus lalu dimulai ulang dari awal (menunggu scan QR). Tanpa penanda ini, baris yang memang
+// belum ada (tabel lama / belum migrasi) akan salah dikira dihapus.
+let utamaAdaBaris = false;
 async function syncSenders() {
   if (syncing || shuttingDown) return;
   syncing = true;
@@ -856,6 +860,18 @@ async function syncSenders() {
 
     // Nomor utama selalu berjalan, ada barisnya atau tidak
     const utama: any = rows.find((r: any) => r.id === DEFAULT_ID);
+    if (utama) {
+      utamaAdaBaris = true;
+    } else if (utamaAdaBaris) {
+      // Nomor utama dihapus dari Pengaturan → putuskan perangkat & hapus sesinya; sesi baru dibuat di bawah
+      utamaAdaBaris = false;
+      const lama = sessions.get(DEFAULT_ID);
+      if (lama) {
+        sessions.delete(DEFAULT_ID);
+        await lama.stop(true);
+        log.info({ nomor: DEFAULT_ID }, 'sesi utama dihapus (dihapus dari Pengaturan) — menunggu scan QR baru');
+      }
+    }
     const sUtama = sessions.get(DEFAULT_ID) ?? mulaiSesi(DEFAULT_ID, utama?.label || 'Nomor Utama', []);
     if (utama?.label) sUtama.label = utama.label;
     // Daftar tugas nomor utama: kosong = semua yang tidak dipegang nomor lain; terisi = hanya itu

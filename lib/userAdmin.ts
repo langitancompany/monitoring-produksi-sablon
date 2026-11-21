@@ -9,7 +9,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ROLE_OPTIONS } from '@/lib/roles';
-import { DEFAULT_PERMISSIONS, legacyCalendarView, type UserPermissions } from '@/types';
+import { DEFAULT_PERMISSIONS, type UserPermissions } from '@/types';
 
 /** Role yang boleh menambah/ubah/hapus user (selaras dengan policy RLS tabel users). */
 export const USER_MANAGER_ROLES = ['admin', 'super_admin'];
@@ -52,8 +52,6 @@ export function sanitizePermissions(raw: unknown): UserPermissions {
       out[mod][action] = typeof v === 'boolean' ? v : defaults[action];
     }
   }
-  // User lama (sebelum izin Kalender Produksi ada): warisi dari Dashboard/Pesanan.
-  if (!src?.calendar) out.calendar.view = legacyCalendarView(src);
   // User lama (sebelum Maker/Approver): create -> maker, edit -> approver. Sama dengan
   // normalizePermissions (UI) & resolveFinanceCaps, supaya data lama tidak hilang saat disimpan.
   const k = src?.keuangan;

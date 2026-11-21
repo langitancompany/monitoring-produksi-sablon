@@ -15,8 +15,6 @@ import {
 } from "../lib/permissionModules";
 import { resolveFinanceCaps } from "../lib/finance/caps";
 import { sanitizePermissions } from "../lib/userAdmin";
-import { canAccessTab, firstAccessibleTab } from "../lib/menuAccess";
-import { resolvePermissions } from "../types";
 
 let passed = 0;
 function test(name: string, fn: () => void) {
@@ -109,41 +107,6 @@ test("sanitizePermissions (server) membaca data lama sama seperti normalizePermi
 test("permissionsEqual: izin yang tidak ada dianggap false", () => {
   assert.equal(permissionsEqual({ a: { x: true } }, { a: { x: true, y: false } }), true);
   assert.equal(permissionsEqual({ a: { x: true } }, { a: { x: false } }), false);
-});
-
-console.log("Kalender Produksi & halaman awal");
-test("user baru tanpa izin Kalender: kalender tidak tampil; hanya PO Management", () => {
-  const p = grantModules(empty(), ["po_management"], NONE);
-  assert.equal(canAccessTab(p, "calendar"), false);
-  assert.equal(canAccessTab(p, "po_management"), true);
-  assert.equal(firstAccessibleTab(p), "po_management");
-});
-test("izin Kalender diberikan eksplisit lewat modul calendar", () => {
-  const p = grantModules(empty(), ["calendar"], NONE);
-  assert.equal(canAccessTab(p, "calendar"), true);
-  assert.equal(firstAccessibleTab(p), "calendar");
-});
-test("Tentang App selalu bisa dibuka; tanpa izin apa pun halaman awal = about", () => {
-  assert.equal(canAccessTab(empty(), "about"), true);
-  assert.equal(firstAccessibleTab(empty()), "about");
-});
-test("tab tidak dikenal ditolak", () => {
-  assert.equal(canAccessTab(empty(), "tidak-ada"), false);
-});
-test("data lama tanpa kunci calendar: warisi dari Dashboard/Pesanan; PO-only tidak", () => {
-  const lama = { dashboard: { view: true }, orders: { view: false } };
-  assert.equal(getField(normalizePermissions(lama), "calendar", "view"), true);
-  assert.equal(resolvePermissions(lama as any).calendar.view, true);
-  assert.equal((sanitizePermissions(lama).calendar as any).view, true);
-  const poOnly = { po_management: { view: true } };
-  assert.equal(getField(normalizePermissions(poOnly), "calendar", "view"), false);
-  assert.equal(resolvePermissions(poOnly as any).calendar.view, false);
-  assert.equal((sanitizePermissions(poOnly).calendar as any).view, false);
-});
-test("kunci calendar yang sudah tertulis menang atas pewarisan", () => {
-  const p = { dashboard: { view: true }, calendar: { view: false } };
-  assert.equal(getField(normalizePermissions(p), "calendar", "view"), false);
-  assert.equal(resolvePermissions(p as any).calendar.view, false);
 });
 
 console.log("Hak keuangan (caps)");
