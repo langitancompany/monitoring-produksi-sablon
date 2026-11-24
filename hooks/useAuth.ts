@@ -38,6 +38,8 @@ export function useAuth({ supabase, showAlert, showConfirm }: UseAuthProps) {
             username: userData.username || '',
             name: userData.name || 'User',
             role: userData.role || 'produksi',
+            // role ganda (QC + Produksi, dst). Tanpa ini, hasRole() jatuh ke `role` utama saja.
+            roles: userData.roles ?? null,
             password: '',
             permissions: resolvePermissions(userData.permissions),
             address: userData.address,

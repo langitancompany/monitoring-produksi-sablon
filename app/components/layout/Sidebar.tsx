@@ -28,7 +28,7 @@ import { UserData } from "@/types";
 import { APP_INFO, CHANGELOG } from "@/lib/changelog";
 import ThemedLogo from "@/app/components/ui/ThemedLogo";
 
-import { roleLabel } from "@/lib/roles";
+import { getUserRoles, roleLabel } from "@/lib/roles";
 import { useMenuUpdates } from "@/hooks/useMenuUpdates";
 import { MenuUpdate } from "@/lib/menuUpdates";
 interface SidebarProps {
@@ -328,7 +328,7 @@ const ProfileCardDesktopMemo = memo(
               {currentUser.name}
             </p>
             <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate capitalize">
-              {roleLabel(currentUser.role)}
+              {getUserRoles(currentUser).map(roleLabel).join(" · ")}
             </p>
           </div>
         </div>

@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { UserData } from "@/types";
 
-import { roleLabel } from "@/lib/roles";
+import { getUserRoles, roleLabel } from "@/lib/roles";
 import UnitSwitcher from "@/app/components/layout/UnitSwitcher";
 
 // Kode unit aplikasi ini — harus sama dengan `code` di ALL_UNITS (hooks/useUnitAccess.ts)
@@ -345,7 +345,7 @@ export default function Header({
                     {currentUser.name}
                   </p>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500 dark:text-zinc-400">
-                    {roleLabel(currentUser.role)}
+                    {getUserRoles(currentUser).map(roleLabel).join(" · ")}
                   </p>
                 </div>
                 {onOpenProfile && (
