@@ -113,6 +113,7 @@ import {
 } from "@/types";
 import { DEFAULT_PRODUCTION_TYPES, isMerchandiseOrder } from "@/lib/utils";
 import { buildCustomerList } from "@/lib/customers";
+import { canAccessTab, firstAccessibleTab } from "@/lib/menuAccess";
 import { Loader2 } from "lucide-react";
 
 type ActiveTab =
@@ -441,6 +442,19 @@ export default function ProductionApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ─── Guard akses tab ────────────────────────────────────────────────────────
+  // Tab terakhir dipulihkan dari URL (?tab=settings). Kalau user yang login
+  // sekarang tidak punya izin untuk tab itu (mis. habis ganti akun dari Super
+  // Admin), layar jadi kosong. Alihkan ke tab pertama yang boleh dibuka.
+  useEffect(() => {
+    if (!isRestored || !currentUser) return;
+    if (canAccessTab(currentUser.permissions, activeTab)) return;
+    setActiveTab(firstAccessibleTab(currentUser.permissions));
+    setView("list");
+    setSelectedOrderId(null);
+    setSelectedPoId(null);
+  }, [isRestored, currentUser, activeTab]);
+
   // ─── Sinkronkan state ke URL setiap kali berubah ─────────────────────────────
   useEffect(() => {
     // jangan push history sebelum restore awal selesai,
@@ -508,6 +522,8 @@ export default function ProductionApp() {
   const handleLogout = useCallback(async () => {
     showConfirm("Logout", "Keluar aplikasi?", async () => {
       await supabase.auth.signOut();
+      // Bersihkan ?tab=... supaya akun berikutnya tidak mewarisi tab akun ini.
+      window.history.replaceState(null, "", window.location.pathname);
       // Reload halaman ini sendiri — otomatis akan menampilkan
       // <LoginScreen /> lokal karena sesi sudah terhapus (lihat baris
       // "if (!currentUser) return <LoginScreen />" di bawah).
@@ -846,7 +862,7 @@ export default function ProductionApp() {
               />
             )}
 
-            {activeTab === "calendar" && (
+            {activeTab === "calendar" && p?.calendar?.view && (
               <CalendarView
                 orders={activeOrders}
                 users={usersList}
@@ -887,6 +903,7 @@ export default function ProductionApp() {
               <FinanceModule currentUser={currentUser} />
             )}
             {activeTab === "po_management" &&
+              p?.po_management?.view &&
               (selectedPoId ? (
                 <POManagementView
                   poId={selectedPoId}
