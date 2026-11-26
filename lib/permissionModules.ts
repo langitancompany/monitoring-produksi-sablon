@@ -34,7 +34,11 @@ export const MODULE_DEFS: ModuleDef[] = [
     label: "Pesanan",
     columns: { create: "Buat pesanan", edit: "Edit pesanan", delete: "Hapus pesanan" },
   },
-  { key: "calendar", label: "Kalender Produksi", columns: {} },
+  {
+    key: "calendar",
+    label: "Kalender Produksi",
+    columns: { edit: "Atur jadwal naik meja produksi" },
+  },
   {
     key: "merchandise",
     label: "Merchandise",

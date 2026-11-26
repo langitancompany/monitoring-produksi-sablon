@@ -8,6 +8,7 @@ import {
   Eye,
   Loader2,
   MessageSquare,
+  Play,
   Send,
   ThumbsDown,
   ThumbsUp,
@@ -19,6 +20,24 @@ import {
 import ProductionNotes from "./ProductionNotes";
 import { getOrderSteps } from "@/lib/utils";
 import { getStepSequenceBlock, hasLaterStepStarted } from "@/lib/stepAccess";
+import {
+  durasiMs,
+  fasePM,
+  formatDurasi,
+  isProduksiMassalStep,
+} from "@/lib/produksiMassal";
+
+const fmtWaktu = (iso?: string | null) => {
+  const d = iso ? new Date(iso) : null;
+  return d && !isNaN(d.getTime())
+    ? d.toLocaleString("id-ID", {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "-";
+};
 
 interface StepProduksiProps {
   order: Order;
@@ -37,6 +56,8 @@ interface StepProduksiProps {
   loadingAction: string | null; // ── TAMBAHAN ──
   onTriggerUpload: (type: string, stepId?: string) => void;
   onStatusStep: (stepId: string) => void | Promise<void>;
+  onMulaiStep: (stepId: string) => void | Promise<void>;
+  onBatalMulai: (stepId: string) => void;
   onSaveProofingRevisi: () => void | Promise<void>;
   onAddKendala: () => void;
   onResolveKendala: (id: string) => void;
@@ -61,6 +82,8 @@ export default function StepProduksi({
   loadingAction,
   onTriggerUpload,
   onStatusStep,
+  onMulaiStep,
+  onBatalMulai,
   onSaveProofingRevisi,
   onAddKendala,
   onResolveKendala,
@@ -174,6 +197,9 @@ export default function StepProduksi({
           const isLocked = lockReason !== null;
           const hasLaterDone = hasLaterStepStarted(order, step.id);
           const isProofingStep = step.name.toLowerCase().includes("proofing");
+          const isPM = isProduksiMassalStep(step);
+          const fase = fasePM(step);
+          const lamaPM = isPM ? durasiMs(step, new Date()) : null;
           const hasFileUploaded = !!step.fileUrl;
           const isStepCompleted = step.isCompleted;
           const hasRevisionNote = step.proofing_note;
@@ -228,6 +254,27 @@ export default function StepProduksi({
                   {isLocked && !step.isCompleted && (
                     <div className="mt-1 text-[10px] text-zinc-500 dark:text-zinc-400 italic">
                       {lockReason}
+                    </div>
+                  )}
+
+                  {isPM && fase === "berjalan" && (
+                    <div className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-400">
+                      Berjalan sejak{" "}
+                      <span className="font-semibold">{fmtWaktu(step.mulaiAt)}</span>
+                      {step.mulaiBy ? ` oleh ${step.mulaiBy}` : ""}
+                      {lamaPM !== null && ` (${formatDurasi(lamaPM)})`}
+                    </div>
+                  )}
+
+                  {isPM && fase === "selesai" && step.mulaiAt && lamaPM !== null && (
+                    <div className="mt-1 text-[11px] text-zinc-600 dark:text-zinc-400">
+                      Durasi pengerjaan{" "}
+                      <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                        {formatDurasi(lamaPM)}
+                      </span>{" "}
+                      <span className="font-mono tabular-nums text-[10px]">
+                        ({fmtWaktu(step.mulaiAt)} sampai {fmtWaktu(step.completedAt)})
+                      </span>
                     </div>
                   )}
 
@@ -301,6 +348,46 @@ export default function StepProduksi({
                               </>
                             )}
                           </button>
+                        </div>
+                      ) : isPM ? (
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+                          {fase === "belum" ? (
+                            <button
+                              onClick={() => onMulaiStep(step.id)}
+                              disabled={isBusy || isLocked}
+                              title={lockReason ?? undefined}
+                              className="bg-[#124540] text-white text-xs px-4 py-2 rounded-md font-semibold hover:bg-[#0d332f] disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 w-full sm:w-auto flex items-center justify-center gap-2"
+                            >
+                              {loadingAction === `mulai:${step.id}` ? (
+                                <>
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />{" "}
+                                  Memproses...
+                                </>
+                              ) : (
+                                <>
+                                  <Play className="w-3.5 h-3.5" /> Mulai Produksi
+                                </>
+                              )}
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => onTriggerUpload("step", step.id)}
+                                disabled={isLocked || isBusy}
+                                title={lockReason ?? undefined}
+                                className="bg-[#124540] text-white text-xs px-4 py-2 rounded-md font-semibold hover:bg-[#0d332f] disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 w-full sm:w-auto flex items-center justify-center gap-2"
+                              >
+                                <Camera className="w-4 h-4" /> Selesai &amp; Upload Foto
+                              </button>
+                              <button
+                                onClick={() => onBatalMulai(step.id)}
+                                disabled={isBusy}
+                                className="text-[11px] font-semibold text-zinc-500 hover:text-red-600 dark:hover:text-red-400 px-2 py-2 transition-colors duration-150 disabled:opacity-50"
+                              >
+                                Batal mulai
+                              </button>
+                            </>
+                          )}
                         </div>
                       ) : step.type === "status_update" ? (
                         <button

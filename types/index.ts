@@ -39,7 +39,8 @@ export interface UserPermissions {
   // tetap diatur lewat permission `produksi` & `finishing`.
   merchandise:   ModuleFull;
   // Kalender Produksi punya izin sendiri (dulu selalu tampil untuk semua user).
-  calendar:      ModuleView;
+  // view=lihat kalender · edit=atur jadwal naik meja produksi per order.
+  calendar:      ModuleViewEdit;
   produksi:      ModuleFull;
   finishing:     ModuleFull;
   salary:        ModuleViewCreateEdit; // ── UBAH ── dulu ModuleView; sekarang
@@ -75,7 +76,7 @@ export const DEFAULT_PERMISSIONS: UserPermissions = {
   dashboard:     { view: true  },
   orders:        { view: true,  create: false, edit: false, delete: false },
   merchandise:   { view: true,  create: false, edit: false, delete: false },
-  calendar:      { view: false },
+  calendar:      { view: false, edit: false },
   produksi:      { view: true,  create: false, edit: false, delete: false },
   finishing:     { view: true,  create: false, edit: false, delete: false },
   salary:        { view: false, create: false, edit: false },
@@ -113,7 +114,9 @@ export function resolvePermissions(
       edit: !!o?.edit,
       delete: !!o?.delete,
     },
-    calendar: raw.calendar ?? { view: legacyCalendarView(raw) },
+    calendar: raw.calendar
+      ? { view: !!raw.calendar.view, edit: !!raw.calendar.edit }
+      : { view: legacyCalendarView(raw), edit: false },
   };
 }
 
@@ -191,6 +194,11 @@ export interface Order {
   jumlah: number;
   tanggal_masuk: string;
   deadline: string;
+  // Jadwal naik meja produksi (yyyy-MM-dd) dan lama pengerjaan dalam hari. Keduanya null = belum dijadwalkan.
+  meja_mulai?: string | null;
+  meja_durasi?: number | null;
+  // Boleh berbagi meja dengan order lain di tanggal yang sama.
+  meja_gabung?: boolean;
   jenis_produksi: string;
   detail_ukuran?: SizeEntry[] | null;
   status: OrderStatus;
@@ -314,6 +322,9 @@ export interface ProductionStep {
   // ISO 8601 — waktu step diselesaikan, dipakai menentukan bulan gaji (SalaryView).
   completedAt?: string | null;
   // Diisi saat proofing diputuskan lewat balasan WhatsApp (lihat /api/wa/proofing-reply)
+  // Produksi Massal: waktu tombol Mulai ditekan (ISO). Selesai = completedAt.
+  mulaiAt?: string | null;
+  mulaiBy?: string | null;
   approved_via?: 'whatsapp';
   approved_by?: string;
   revisi_via?: 'whatsapp';

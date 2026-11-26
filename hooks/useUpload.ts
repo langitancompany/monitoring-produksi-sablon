@@ -4,6 +4,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { getDocumentLabel, generateStorageFilename, getOrderSteps } from '@/lib/utils';
 import imageCompression from 'browser-image-compression';
 import { Order, UserData } from '@/types';
+import { durasiMs, formatDurasi, isProduksiMassalStep } from '@/lib/produksiMassal';
 import { getUploadBlock } from '@/lib/stepAccess';
 
 interface UploadContextState {
@@ -157,6 +158,8 @@ export function useUpload({
     const updatedOrder = JSON.parse(JSON.stringify(order));
     // Diisi bila yang diupload adalah step Proofing → setelah tersimpan, kirim WA persetujuan
     let proofingStepId: string | null = null;
+    // Diisi saat Produksi Massal selesai lewat upload foto → dicatat di riwayat beserta durasinya.
+    let produksiMassalLog: string | null = null;
     const common = {
       fileUrl: urlData.publicUrl,
       timestamp: new Date().toLocaleString(),
@@ -185,6 +188,12 @@ export function useUpload({
           completedAt: isProofing ? null : new Date().toISOString(),
           proofing_note: isProofing ? undefined : steps[idx].proofing_note,
         };
+        if (isProduksiMassalStep(steps[idx])) {
+          const ms = durasiMs(steps[idx]);
+          produksiMassalLog = ms === null
+            ? `Step "${steps[idx].name}" selesai`
+            : `Step "${steps[idx].name}" selesai. Durasi pengerjaan ${formatDurasi(ms)}`;
+        }
       }
     } else if (uploadContext.type === 'packing') {
       updatedOrder.finishing_packing = { isPacked: true, ...common, completedAt: new Date().toISOString() };
@@ -208,6 +217,10 @@ export function useUpload({
     }
 
     await checkAutoStatus(updatedOrder);
+
+    if (produksiMassalLog) {
+      await writeLog({ order: updatedOrder, category: 'STATUS', event: 'Produksi Massal Selesai', ket: produksiMassalLog });
+    }
 
     // Proofing baru diupload → kirim link gambar ke nomor persetujuan proofing (WhatsApp).
     // Tidak di-await & gagal diam-diam: WA bermasalah tidak boleh mengganggu upload.

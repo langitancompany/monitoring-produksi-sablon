@@ -9,6 +9,9 @@ import {
   orderTypeLabel,
 } from "@/lib/utils";
 import { Order, UserData } from "@/types";
+import { jadwalOf, labelPutusan, nilaiJadwal } from "@/lib/mejaProduksi";
+import { format } from "date-fns";
+import { id as idLocale } from "date-fns/locale";
 import {
   ChevronRight,
   MessageCircle,
@@ -168,6 +171,22 @@ export default function OrderDetailHeader({
               <MessageCircle className="w-3 h-3" /> Konfirmasi WA
             </button>
           </div>
+
+          {(() => {
+            const j = jadwalOf(order);
+            if (!j) return null;
+            const n = nilaiJadwal(j.selesai, order.deadline);
+            return (
+              <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">
+                Jadwal naik meja{" "}
+                <span className="font-semibold text-zinc-800 dark:text-zinc-100">
+                  {format(j.mulai, "d MMM", { locale: idLocale })} sampai{" "}
+                  {format(j.selesai, "d MMM yyyy", { locale: idLocale })}
+                </span>{" "}
+                ({j.durasi} hari) · {labelPutusan(n)}
+              </p>
+            );
+          })()}
 
           {isManagement && (
             <div className="mt-3 flex items-center gap-3">

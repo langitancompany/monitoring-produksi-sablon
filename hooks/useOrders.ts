@@ -3,6 +3,7 @@ import { useState, useCallback, useMemo, useRef } from 'react';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Order, OrderStatus, UserData } from '@/types';
 import { triggerOrderNotifications } from '@/lib/orderLogic';
+import { DURASI_MAX, estimasiSelesai, isDurasiValid, labelPutusan, nilaiJadwal, parseTanggal, tglIso } from '@/lib/mejaProduksi';
 import { finFetch } from '@/hooks/useFinanceApi';
 import { MERCHANDISE_JENIS, getInitialMerchandiseSteps, getOrderSteps, orderNeedsPacking } from '@/lib/utils';
 
@@ -574,6 +575,39 @@ export function useOrders({
     });
   }, [showConfirm, supabase, fetchOrders, showAlert, trashBusy]);
 
+  // ─── Jadwal naik meja produksi ─────────────────────────────────────────────
+  // `jadwal` null = hapus jadwal. Mengembalikan true bila tersimpan.
+  const handleSetJadwalMeja = useCallback(async (
+    order: Order,
+    jadwal: { mulai: string; durasi: number; gabung: boolean } | null,
+  ): Promise<boolean> => {
+    if (jadwal && (!parseTanggal(jadwal.mulai) || !isDurasiValid(jadwal.durasi))) {
+      showAlert('Jadwal Tidak Valid', `Isi tanggal naik meja dan durasi 1 sampai ${DURASI_MAX} hari.`, 'error');
+      return false;
+    }
+    const { error } = await supabase
+      .from('orders')
+      .update({
+        meja_mulai: jadwal?.mulai ?? null,
+        meja_durasi: jadwal?.durasi ?? null,
+        meja_gabung: jadwal?.gabung ?? false,
+      })
+      .eq('id', order.id);
+    if (error) {
+      showAlert('Gagal Menyimpan Jadwal', error.message, 'error');
+      return false;
+    }
+
+    let ket = 'Jadwal naik meja dihapus';
+    if (jadwal) {
+      const selesai = estimasiSelesai(parseTanggal(jadwal.mulai)!, jadwal.durasi);
+      ket = `Naik meja ${jadwal.mulai}, ${jadwal.durasi} hari${jadwal.gabung ? ', bisa digabung' : ''}, estimasi selesai ${tglIso(selesai)} (${labelPutusan(nilaiJadwal(selesai, order.deadline))})`;
+    }
+    await writeLog({ order, category: 'SISTEM', event: 'Jadwal Meja Produksi', ket });
+    await fetchOrders();
+    return true;
+  }, [supabase, showAlert, writeLog, fetchOrders]);
+
   return {
     orders,
     activeOrders,
@@ -593,5 +627,6 @@ export function useOrders({
     handleDeleteOrder,
     handleRestoreOrder,
     handlePermanentDelete,
+    handleSetJadwalMeja,
   };
 }

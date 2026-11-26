@@ -22,6 +22,7 @@
 import type { Order, UserData } from "@/types";
 import { getOrderSteps, orderNeedsPacking } from "@/lib/utils";
 import { hasRole } from "@/lib/roles";
+import { isProduksiMassalStep } from "@/lib/produksiMassal";
 
 const MANAGEMENT_ROLES = ["admin", "manager", "super_admin"];
 
@@ -60,7 +61,7 @@ export function hasLaterStepStarted(order: Order, stepId: string): boolean {
   const idx = steps.findIndex((s) => s.id === stepId);
   if (idx < 0) return false;
   return (
-    steps.slice(idx + 1).some((s) => s.isCompleted || !!s.fileUrl) ||
+    steps.slice(idx + 1).some((s) => s.isCompleted || !!s.fileUrl || !!s.mulaiAt) ||
     hasFinishingStarted(order)
   );
 }
@@ -68,7 +69,7 @@ export function hasLaterStepStarted(order: Order, stepId: string): boolean {
 /** True bila ada step produksi yang sudah selesai atau sudah punya file. */
 export function hasProductionStarted(order: Order): boolean {
   return (
-    getOrderSteps(order).some((s) => s.isCompleted || !!s.fileUrl) ||
+    getOrderSteps(order).some((s) => s.isCompleted || !!s.fileUrl || !!s.mulaiAt) ||
     hasFinishingStarted(order)
   );
 }
@@ -94,6 +95,19 @@ export function getStepOwnershipBlock(
   return isOrderTeamMember(order, user)
     ? null
     : "Step ini hanya bisa diisi oleh PJ atau Helper pesanan";
+}
+
+/** Alasan Produksi Massal belum boleh dimulai, atau null. */
+export function getMulaiBlock(
+  order: Order,
+  user: Pick<UserData, "id" | "role" | "roles">,
+  stepId: string,
+): string | null {
+  const step = getOrderSteps(order).find((s) => s.id === stepId);
+  if (!step || !isProduksiMassalStep(step)) return "Langkah ini tidak memakai tombol Mulai";
+  if (step.isCompleted) return "Langkah ini sudah selesai";
+  if (step.mulaiAt) return "Produksi sudah dimulai";
+  return getStepBlock(order, user, stepId);
 }
 
 /** Gabungan urutan + kepemilikan untuk satu step. Dipakai handler sebelum menulis. */
@@ -197,8 +211,14 @@ export function getUploadBlock(
   stepId?: string,
 ): string | null {
   switch (type) {
-    case "step":
-      return stepId ? getStepBlock(order, user, stepId) : null;
+    case "step": {
+      if (!stepId) return null;
+      const blok = getStepBlock(order, user, stepId);
+      if (blok) return blok;
+      const step = getOrderSteps(order).find((s) => s.id === stepId);
+      if (isProduksiMassalStep(step) && !step?.mulaiAt) return "Tekan Mulai terlebih dahulu";
+      return null;
+    }
     case "packing":
       return getPackingBlock(order, user);
     case "shipping_kirim":

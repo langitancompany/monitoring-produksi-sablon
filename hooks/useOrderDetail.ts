@@ -6,6 +6,7 @@ import { getOrderSteps } from '@/lib/utils';
 import {
   getFinishingDeleteBlock,
   getFinishingOwnershipBlock,
+  getMulaiBlock,
   getQcBlock,
   getQcResetBlock,
   getStepBlock,
@@ -13,6 +14,7 @@ import {
   hasLaterStepStarted,
   hasProductionStarted,
 } from '@/lib/stepAccess';
+import { isProduksiMassalStep } from '@/lib/produksiMassal';
 
 // Sama persis dengan signature writeLog di useOrders.ts — didefinisikan
 // ulang di sini karena writeLog tidak diekspor sebagai type tersendiri.
@@ -80,6 +82,54 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
       setLoadingAction(null);
     }
   }, [order, currentUser, onUpdateOrder, writeLog, loadingAction]);
+
+  // Produksi Massal: tombol Mulai mencatat waktu mulai; selesainya lewat upload foto (useUpload).
+  const handleMulaiStep = useCallback(async (stepId: string) => {
+    if (loadingAction) return;
+    if (getMulaiBlock(order, currentUser, stepId)) return;
+    const updated = JSON.parse(JSON.stringify(order));
+    const steps = getOrderSteps(updated) as any[];
+    const idx = steps.findIndex((s: any) => s.id === stepId);
+    if (idx < 0) return;
+    steps[idx].mulaiAt = new Date().toISOString();
+    steps[idx].mulaiBy = currentUser.name;
+    setLoadingAction(`mulai:${stepId}`);
+    try {
+      await Promise.all([
+        onUpdateOrder(updated),
+        writeLog({
+          order: updated,
+          category: 'STATUS',
+          event: 'Produksi Massal Dimulai',
+          ket: `Step "${steps[idx].name}" dimulai oleh ${currentUser.name}`,
+        }),
+      ]);
+    } finally {
+      setLoadingAction(null);
+    }
+  }, [order, currentUser, onUpdateOrder, writeLog, loadingAction]);
+
+  const handleBatalMulai = useCallback((stepId: string) => {
+    if (loadingAction) return;
+    if (getStepBlock(order, currentUser, stepId)) return;
+    const step = (getOrderSteps(order) as any[]).find((s) => s.id === stepId);
+    if (!step || !isProduksiMassalStep(step) || step.isCompleted || !step.mulaiAt) return;
+    onConfirm('Batalkan Mulai?', 'Waktu mulai dihapus. Tekan Mulai lagi saat produksi benar-benar dimulai.', () => {
+      const updated = JSON.parse(JSON.stringify(order));
+      const steps = getOrderSteps(updated) as any[];
+      const idx = steps.findIndex((s: any) => s.id === stepId);
+      if (idx < 0) return;
+      steps[idx].mulaiAt = null;
+      steps[idx].mulaiBy = null;
+      onUpdateOrder(updated);
+      writeLog({
+        order: updated,
+        category: 'STATUS',
+        event: 'Mulai Produksi Massal Dibatalkan',
+        ket: `Waktu mulai step "${steps[idx].name}" dihapus`,
+      });
+    });
+  }, [order, currentUser, onConfirm, onUpdateOrder, writeLog, loadingAction]);
 
   const handleSaveProofingRevisi = useCallback(async () => {
     if (!proofingRevisiNote.trim() || !proofingStepId || loadingAction) return;
@@ -272,7 +322,7 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
       if (isStep && stepId) {
         const steps = getOrderSteps(updated);
         const idx = steps.findIndex((s: any) => s.id === stepId);
-        if (idx >= 0) { label = steps[idx].name; steps[idx].isCompleted = false; steps[idx].fileUrl = null; }
+        if (idx >= 0) { label = steps[idx].name; steps[idx].isCompleted = false; steps[idx].fileUrl = null; steps[idx].completedAt = null; }
       } else if (field === 'approval') {
         updated.link_approval = null;
       } else if (field === 'packing') {
@@ -303,6 +353,8 @@ export function useOrderDetail({ order, currentUser, onUpdateOrder, onConfirm, w
     loadingAction, // ── TAMBAHAN ──
     // Handlers
     handleStatusStep,
+    handleMulaiStep,
+    handleBatalMulai,
     handleSaveProofingRevisi,
     handleQC,
     handleDeleteQC,

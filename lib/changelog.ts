@@ -2,7 +2,7 @@
 
 export const APP_INFO = {
   name: "Langitan.co SuperApp",
-  version: "V.18.10",
+  version: "V.18.12",
   purpose: "Aplikasi produksi Sablon, Langitan.co.",
   creator: "abdllahmajid",
   creationDate: "13 Desember 2025",
@@ -16,6 +16,26 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "18.12",
+    date: "2026-11-26",
+    changes: [
+      "Produksi Massal kini punya tombol Mulai Produksi. Foto baru bisa diupload setelah Mulai, dan upload foto itu sekaligus menyelesaikan langkah (tombol Selesai & Upload Foto). Sebelumnya upload foto pertama langsung menyelesaikan langkah, padahal produksi masih berlanjut.",
+      "Setelah selesai, durasi pengerjaan tampil di langkah (mis. 2 hari 3 jam) dan tercatat di riwayat order. Selama berjalan, langkah menampilkan sejak kapan dan sudah berapa lama. Batal mulai tersedia selama belum selesai. Langkah sebelumnya tidak bisa dibatalkan selagi Produksi Massal berjalan.",
+      "Order yang Produksi Massal-nya belum selesai saat update ini dipasang perlu menekan Mulai dulu sebelum upload foto. DTF dan merchandise tidak berubah. Tidak perlu migration.",
+    ],
+  },
+  {
+    version: "18.11",
+    date: "2026-11-26",
+    changes: [
+      "Kalender Produksi → mode baru Jadwal Meja (bawaan): admin menandai tanggal sebuah order naik ke meja produksi dan lama pengerjaannya (hari). Kalender menampilkan order yang sedang di meja tiap hari, ditandai Naik dan Selesai di tanggalnya, dan diwarnai terhadap deadline customer: hijau tepat, merah mundur, biru maju. Mode Deadline yang lama tetap ada. Perlu menjalankan migration 025 dan 026.",
+      "Jadwal meja hanya untuk order Sablon Manual; DTF tetap seperti biasa. Daftar Belum naik meja memuat order Manual yang Approval-nya sudah terbit dan belum dijadwalkan, urut dari tanggal masuk.",
+      "Form jadwal menampilkan estimasi selesai, selisih dengan deadline, tanggal naik meja paling lambat agar tidak mundur, dan isi meja 7 hari ke depan. Tanda Bisa digabung (sesuai jawaban petugas produksi) menentukan apakah order boleh berbagi meja di tanggal yang sama; tumpukan yang tidak bisa digabung diberi peringatan, tetapi jadwal tetap bisa disimpan.",
+      "Jadwal naik meja juga tampil di detail pesanan.",
+      "Izin baru Kalender Produksi → Edit untuk mengatur jadwal. User yang sudah punya akses lihat tetap hanya bisa melihat sampai izin Edit diberikan di Pengaturan → Pengguna. Perubahan jadwal tercatat di riwayat order.",
+    ],
+  },
   {
     version: "18.10",
     date: "2026-11-20",

@@ -307,6 +307,7 @@ export default function ProductionApp() {
     handleDeleteOrder,
     handleRestoreOrder,
     handlePermanentDelete,
+    handleSetJadwalMeja,
   } = useOrders({
     supabase,
     currentUser,
@@ -866,6 +867,8 @@ export default function ProductionApp() {
               <CalendarView
                 orders={activeOrders}
                 users={usersList}
+                canEditJadwal={!!p?.calendar?.edit}
+                onSaveJadwal={handleSetJadwalMeja}
                 onSelectOrder={(id) => openOrderDetail(id, activeTab)}
               />
             )}

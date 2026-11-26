@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import {
   getFinishingDeleteBlock,
+  getMulaiBlock,
   getPackingBlock,
   getQcBlock,
   getQcResetBlock,
@@ -212,6 +213,50 @@ test("getUploadBlock meneruskan ke aturan yang tepat", () => {
   assert.match(getUploadBlock(o, qcUser, "shipping_kirim")!, /QC lolos/);
   assert.match(getUploadBlock(o, orang, "step", "m1")!, /PJ atau Helper/);
   assert.equal(getUploadBlock(o, orang, "approval"), null);
+});
+
+const siapProduksiMassal = () => {
+  const o = order();
+  for (const i of [0, 1, 2]) o.steps_manual[i].isCompleted = true;
+  return o;
+};
+
+test("Mulai: hanya Produksi Massal, setelah step sebelumnya selesai, oleh PJ/Helper", () => {
+  assert.match(getMulaiBlock(order(), pj, "m1")!, /tidak memakai/);
+  assert.match(getMulaiBlock(order(), pj, "m4")!, /Pecah Gambar/);
+  const o = siapProduksiMassal();
+  assert.equal(getMulaiBlock(o, pj, "m4"), null);
+  assert.equal(getMulaiBlock(o, helper, "m4"), null);
+  assert.match(getMulaiBlock(o, orang, "m4")!, /PJ atau Helper/);
+});
+
+test("Mulai tidak bisa dua kali dan tidak bisa setelah selesai", () => {
+  const o = siapProduksiMassal();
+  o.steps_manual[3].mulaiAt = "2026-12-01T01:00:00Z";
+  assert.match(getMulaiBlock(o, pj, "m4")!, /sudah dimulai/);
+  o.steps_manual[3].isCompleted = true;
+  assert.match(getMulaiBlock(o, pj, "m4")!, /sudah selesai/);
+});
+
+test("upload foto Produksi Massal diblok sebelum Mulai, boleh sesudahnya", () => {
+  const o = siapProduksiMassal();
+  assert.match(getUploadBlock(o, pj, "step", "m4")!, /Mulai/);
+  o.steps_manual[3].mulaiAt = "2026-12-01T01:00:00Z";
+  assert.equal(getUploadBlock(o, pj, "step", "m4"), null);
+});
+
+test("step lain tidak butuh Mulai untuk upload", () => {
+  const o = order();
+  assert.equal(getUploadBlock(o, pj, "step", "m1"), null);
+});
+
+test("Produksi Massal yang sedang berjalan mengunci pembatalan step sebelumnya dan approval", () => {
+  const o = siapProduksiMassal();
+  assert.equal(hasLaterStepStarted(o, "m3"), false);
+  o.steps_manual[3].mulaiAt = "2026-12-01T01:00:00Z";
+  assert.equal(hasLaterStepStarted(o, "m3"), true);
+  assert.equal(hasProductionStarted(order()), false);
+  assert.equal(hasProductionStarted(o), true);
 });
 
 console.log(`\n${passed} test lolos`);

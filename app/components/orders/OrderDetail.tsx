@@ -143,6 +143,8 @@ export default function OrderDetail({
     setProofingStepId,
     loadingAction, // ── TAMBAHAN ──
     handleStatusStep,
+    handleMulaiStep,
+    handleBatalMulai,
     handleSaveProofingRevisi,
     handleQC,
     handleDeleteQC,
@@ -245,6 +247,8 @@ export default function OrderDetail({
         loadingAction={loadingAction}
         onTriggerUpload={onTriggerUpload}
         onStatusStep={handleStatusStep}
+        onMulaiStep={handleMulaiStep}
+        onBatalMulai={handleBatalMulai}
         onSaveProofingRevisi={handleSaveProofingRevisi}
         onAddKendala={handleAddKendala}
         onResolveKendala={handleResolveKendala}

@@ -145,6 +145,18 @@ test("kunci calendar yang sudah tertulis menang atas pewarisan", () => {
   assert.equal(getField(normalizePermissions(p), "calendar", "view"), false);
   assert.equal(resolvePermissions(p as any).calendar.view, false);
 });
+test("hak Edit kalender (atur jadwal meja) tidak diwarisi dan tidak ikut dari Lihat", () => {
+  const lama = { orders: { view: true, edit: true } };
+  assert.equal(getField(normalizePermissions(lama), "calendar", "edit"), false);
+  assert.equal(resolvePermissions(lama as any).calendar.edit, false);
+  assert.equal((sanitizePermissions(lama).calendar as any).edit, false);
+  const lihat = { calendar: { view: true } };
+  assert.equal(resolvePermissions(lihat as any).calendar.edit, false);
+  const atur = { calendar: { view: true, edit: true } };
+  assert.equal(resolvePermissions(atur as any).calendar.edit, true);
+  assert.equal((sanitizePermissions(atur).calendar as any).edit, true);
+  assert.equal(MODULE_DEFS.find((m) => m.key === "calendar")!.columns.edit != null, true);
+});
 
 console.log("Hak keuangan (caps)");
 test("Lihat saja tidak memberi Maker/Approver; keduanya terpisah", () => {
